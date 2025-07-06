@@ -1,10 +1,10 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
+import yfinance as yf  # ✅ Needed for live price lookup
 
 # Fix path so we can import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -34,6 +34,20 @@ n_days = st.slider("Number of Days to Simulate", 30, 365, 252, 10)
 # Analyze Portfolio
 if st.button("Analyze Portfolio"):
     try:
+        # ✅ Show latest stock prices before historical analysis
+        st.subheader("📋 Latest Stock Prices")
+        latest_prices = {}
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                price = stock.history(period='1d')['Close'].iloc[-1]
+                latest_prices[ticker] = round(price, 2)
+            except:
+                latest_prices[ticker] = "N/A"
+        price_df = pd.DataFrame(list(latest_prices.items()), columns=['Ticker', 'Latest Price ($)'])
+        st.dataframe(price_df)
+
+        # Historical analysis
         prices = download_data(tickers, start_date, end_date)
         returns = calculate_returns(prices)
 
