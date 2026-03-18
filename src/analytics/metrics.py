@@ -3,8 +3,9 @@
 
 import numpy as np
 import pandas as pd
+import yfinance as yf
 
-from config import RISK_FREE_RATE, VAR_CONFIDENCE_LEVEL, TRADING_DAYS
+from config import RISK_FREE_RATE, VAR_CONFIDENCE_LEVEL, TRADING_DAYS, ROLLING_WINDOW, BENCHMARK_TICKER, BENCHMARK_NAME
 
 
 # ── Core metrics ─────────────────────────────────────────────────────────────
@@ -96,6 +97,124 @@ def portfolio_health_score(
     return round(total, 1), components
 
 
+# ── Additional metrics ───────────────────────────────────────────────────────
+
+def max_drawdown(portfolio_returns: pd.Series) -> float:
+    """Maximum peak-to-trough drawdown (negative number, e.g. -0.42 = -42%)."""
+    cumulative = (1 + portfolio_returns).cumprod()
+    rolling_max = cumulative.cummax()
+    drawdown = (cumulative - rolling_max) / rolling_max
+    return float(drawdown.min())
+
+
+def drawdown_series(portfolio_returns: pd.Series) -> pd.Series:
+    """Full drawdown series for charting."""
+    cumulative = (1 + portfolio_returns).cumprod()
+    rolling_max = cumulative.cummax()
+    return (cumulative - rolling_max) / rolling_max
+
+
+def sortino_ratio(portfolio_returns: pd.Series, risk_free_rate: float = RISK_FREE_RATE) -> float:
+    """Annualised Sortino ratio — penalises only downside volatility."""
+    daily_rf = risk_free_rate / TRADING_DAYS
+    excess = portfolio_returns - daily_rf
+    downside = excess[excess < 0]
+    if len(downside) == 0 or downside.std() == 0:
+        return 0.0
+    return float((excess.mean() / downside.std()) * np.sqrt(TRADING_DAYS))
+
+
+def rolling_sharpe(portfolio_returns: pd.Series,
+                   window: int = ROLLING_WINDOW,
+                   risk_free_rate: float = RISK_FREE_RATE) -> pd.Series:
+    """Rolling Sharpe ratio over a given window (trading days)."""
+    daily_rf = risk_free_rate / TRADING_DAYS
+    excess = portfolio_returns - daily_rf
+    roll_mean = excess.rolling(window).mean()
+    roll_std  = excess.rolling(window).std()
+    return (roll_mean / roll_std) * np.sqrt(TRADING_DAYS)
+
+
+def benchmark_comparison(portfolio_returns: pd.Series,
+                         start_date, end_date,
+                         risk_free_rate: float = RISK_FREE_RATE) -> dict:
+    """
+    Compare portfolio metrics against S&P 500 benchmark.
+
+    Returns dict with keys:
+        bmark_return, bmark_sharpe, bmark_vol,
+        alpha, relative_sharpe, outperformed
+    """
+    try:
+        raw = yf.download(BENCHMARK_TICKER, start=str(start_date),
+                          end=str(end_date), progress=False, auto_adjust=True)
+        if raw.empty:
+            return {}
+        close = raw["Close"].squeeze()
+        bmark_ret = close.pct_change().dropna()
+
+        # Normalize both indexes to date-only (no time component).
+        # fetcher.py strips tz via tz_convert(None) which preserves the UTC
+        # wall-clock offset (e.g. 05:00:00), while yf.download returns
+        # midnight timestamps — the two never intersect without normalization.
+        port_idx  = pd.DatetimeIndex(portfolio_returns.index).normalize()
+        bmark_idx = pd.DatetimeIndex(bmark_ret.index).normalize()
+
+        port_norm  = portfolio_returns.copy()
+        port_norm.index = port_idx
+        bmark_norm = bmark_ret.copy()
+        bmark_norm.index = bmark_idx
+
+        common = port_norm.index.intersection(bmark_norm.index)
+        if len(common) < 10:
+            return {}
+
+        p_ret = port_norm.loc[common]
+        b_ret = bmark_norm.loc[common]
+
+        # Keep bmark_returns with normalized index for the overlay chart
+        bmark_ret_aligned = bmark_norm
+
+        p_ann  = float(p_ret.mean() * TRADING_DAYS)
+        b_ann  = float(b_ret.mean() * TRADING_DAYS)
+        p_vol  = float(p_ret.std() * np.sqrt(TRADING_DAYS))
+        b_vol  = float(b_ret.std() * np.sqrt(TRADING_DAYS))
+        p_shrp = sharpe_ratio(p_ret, risk_free_rate)
+        b_shrp = sharpe_ratio(b_ret, risk_free_rate)
+        alpha  = p_ann - b_ann
+
+        return {
+            "name":             BENCHMARK_NAME,
+            "bmark_return":     b_ann,
+            "bmark_sharpe":     b_shrp,
+            "bmark_vol":        b_vol,
+            "port_return":      p_ann,
+            "port_sharpe":      p_shrp,
+            "port_vol":         p_vol,
+            "alpha":            alpha,
+            "outperformed":     p_shrp > b_shrp,
+            "bmark_returns":    bmark_ret_aligned,
+        }
+    except Exception:
+        return {}
+
+
+def diversification_score(returns: pd.DataFrame) -> float:
+    """
+    Score 0–100 based on average pairwise correlation.
+    Low correlation = high diversification = high score.
+    """
+    if returns.shape[1] < 2:
+        return 50.0
+    corr = returns.corr().values
+    n = corr.shape[0]
+    mask = ~np.eye(n, dtype=bool)
+    avg_corr = float(corr[mask].mean())
+    # Map avg_corr from [-1, 1] to [100, 0]
+    score = (1 - avg_corr) / 2 * 100
+    return float(np.clip(score, 0, 100))
+
+
 # ── Plain-English interpretations ────────────────────────────────────────────
 
 def interpret_return(ann_return: float, investment: float = 10_000) -> str:
@@ -142,3 +261,24 @@ def interpret_var(var: float, investment: float = 10_000) -> str:
         f"On a bad day (worst 5% of days), your portfolio could lose more than {abs(var):.2%} — "
         f"about ${dollar_loss:,.0f} on a ${investment:,.0f} portfolio."
     )
+
+
+def interpret_max_drawdown(mdd: float, investment: float = 10_000) -> str:
+    dollar_loss = abs(mdd) * investment
+    label = "severe" if mdd < -0.40 else ("significant" if mdd < -0.20 else "moderate")
+    return (
+        f"The worst historical peak-to-trough loss was {abs(mdd):.1%} ({label}). "
+        f"On a ${investment:,.0f} portfolio that would have been a ${dollar_loss:,.0f} drawdown."
+    )
+
+
+def interpret_sortino(sortino: float) -> str:
+    if sortino > 2:
+        quality = "excellent — strong returns with limited downside"
+    elif sortino > 1:
+        quality = "good — downside risk is well-compensated"
+    elif sortino > 0:
+        quality = "below average — limited reward for the downside risk taken"
+    else:
+        quality = "poor — returns don't justify the downside volatility"
+    return f"Sortino of {sortino:.2f} is {quality}."
