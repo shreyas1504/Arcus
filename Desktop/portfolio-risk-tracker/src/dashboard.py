@@ -59,13 +59,13 @@ if st.button("Analyze Portfolio"):
         st.write(f"🔹 Beta: `{port_beta:.2f}`")
         st.write(f"🔹 Value at Risk (95%): `{port_var:.4f}`")
 
-        # 🔷 Portfolio Optimization
+        # Portfolio Optimization
         opt_weights = optimize_portfolio(returns)
         st.subheader("📈 Optimal Portfolio Weights (Sharpe Maximized)")
         for ticker, weight in zip(tickers, opt_weights):
             st.write(f"{ticker}: {weight:.2%}")
 
-        # 🔷 Portfolio-Level Monte Carlo Simulation
+        # Portfolio-Level Monte Carlo Simulation
         simulations = monte_carlo_simulation(prices, n_simulations=n_simulations, n_days=n_days)
         fig, ax = plt.subplots(figsize=(10, 4))
         for i in range(simulations.shape[0]):
@@ -73,7 +73,7 @@ if st.button("Analyze Portfolio"):
         ax.set_title("Monte Carlo Simulation (Portfolio Price Paths)")
         st.pyplot(fig)
 
-        # 🔷 Individual Stock Simulations
+        #  Individual Stock Simulations
         sim_dict = monte_carlo_simulation_individual(prices, n_simulations=n_simulations, n_days=n_days)
         st.subheader("📉 Individual Stock Monte Carlo Simulations")
         for ticker in tickers:

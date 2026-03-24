@@ -16,13 +16,13 @@ Page modules:
 
 import datetime
 
-import streamlit as st
+import streamlit as st  # type: ignore
 
-from config import BRAND_NAME, BRAND_ICON, DEFAULT_SIMULATIONS
-from src.ui.components import inject_global_css
-from src.pages.welcome import render_welcome
-from src.pages.setup import render_setup
-from src.pages.results import render_results
+from config import BRAND_NAME, BRAND_ICON, DEFAULT_SIMULATIONS  # type: ignore
+from src.ui.components import inject_global_css  # type: ignore
+from src.pages.welcome import render_welcome  # type: ignore
+from src.pages.setup import render_setup  # type: ignore
+from src.pages.results import render_results  # type: ignore
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(

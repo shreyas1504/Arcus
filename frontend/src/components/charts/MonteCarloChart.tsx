@@ -1,0 +1,32 @@
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { MOCK_MONTE_CARLO } from '@/lib/mock-data';
+
+const MonteCarloChart = ({ data }: { data?: typeof MOCK_MONTE_CARLO }) => {
+  const chartData = data ?? MOCK_MONTE_CARLO;
+  return (
+    <div className="glass rounded-xl p-5">
+      <span className="label-mono">MONTE CARLO SIMULATION — 1,000 PATHS</span>
+      <ResponsiveContainer width="100%" height={240} className="mt-4">
+        <AreaChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(48,54,61,0.5)" />
+          <XAxis dataKey="month" tick={{ fill: '#8B949E', fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fill: '#8B949E', fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <Tooltip contentStyle={{ background: '#161B22', border: '1px solid rgba(56,189,148,0.2)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }} />
+          <defs>
+            <linearGradient id="mcGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#38BDA4" stopOpacity={0.1} />
+              <stop offset="100%" stopColor="#38BDA4" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="p90" stackId="1" stroke="none" fill="rgba(56,189,148,0.05)" name="90th %ile" />
+          <Area type="monotone" dataKey="p75" stackId="2" stroke="none" fill="rgba(56,189,148,0.08)" name="75th %ile" />
+          <Area type="monotone" dataKey="p50" stroke="#38BDA4" strokeWidth={2} fill="url(#mcGrad)" name="Median" />
+          <Area type="monotone" dataKey="p25" stackId="3" stroke="none" fill="rgba(78,204,163,0.06)" name="25th %ile" />
+          <Area type="monotone" dataKey="p10" stackId="4" stroke="none" fill="rgba(240,81,79,0.05)" name="10th %ile" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+export default MonteCarloChart;

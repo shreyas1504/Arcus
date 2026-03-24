@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 28% 7%;
+    --foreground: 213 31% 91%;
+
+    --card: 216 22% 11%;
+    --card-foreground: 213 31% 91%;
+    --card-elevated: 216 18% 13%;
+
+    --popover: 216 22% 11%;
+    --popover-foreground: 213 31% 91%;
+
+    --primary: 166 52% 47%;
+    --primary-foreground: 216 28% 7%;
+
+    --secondary: 216 18% 13%;
+    --secondary-foreground: 213 31% 91%;
+
+    --muted: 215 14% 25%;
+    --muted-foreground: 214 10% 57%;
+
+    --accent: 166 52% 47%;
+    --accent-foreground: 216 28% 7%;
+    --accent-bright: 157 56% 55%;
+    --accent-dim: 166 52% 35%;
+    --accent-bg: 166 52% 47% / 0.08;
+    --accent-bg-strong: 166 52% 47% / 0.15;
+
+    --destructive: 1 84% 63%;
+    --destructive-foreground: 210 40% 98%;
+
+    --signal-green: 153 49% 48%;
+    --signal-red: 1 84% 63%;
+    --signal-amber: 30 84% 63%;
+    --signal-blue: 216 84% 63%;
+
+    --border: 215 12% 21%;
+    --border-glow: 166 52% 47% / 0.15;
+    --input: 215 12% 21%;
+    --ring: 166 52% 47%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 216 22% 11%;
+    --sidebar-foreground: 213 31% 91%;
+    --sidebar-primary: 166 52% 47%;
+    --sidebar-primary-foreground: 216 28% 7%;
+    --sidebar-accent: 216 18% 13%;
+    --sidebar-accent-foreground: 213 31% 91%;
+    --sidebar-border: 215 12% 21%;
+    --sidebar-ring: 166 52% 47%;
+
+    --text-primary: 213 31% 91%;
+    --text-secondary: 214 10% 57%;
+    --text-muted: 215 11% 31%;
+
+    --chart-teal: #38BDA4;
+    --chart-blue: #4F9CF0;
+    --chart-green: #3FB68B;
+    --chart-red: #F0514F;
+    --chart-amber: #F0A44F;
+    --chart-area: rgba(56, 189, 148, 0.08);
+    --chart-grid: rgba(48, 54, 61, 0.5);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .font-mono-data {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .font-display {
+    font-family: 'Inter', sans-serif;
+  }
+
+  .glass {
+    @apply bg-card border border-border;
+    backdrop-filter: blur(20px);
+  }
+
+  .glass-elevated {
+    background: hsl(var(--card-elevated));
+    border: 1px solid hsl(var(--border));
+    backdrop-filter: blur(20px);
+  }
+
+  .glass-navbar {
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+  }
+
+  .glass-panel {
+    background: rgba(22, 27, 34, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(48, 54, 61, 0.8);
+  }
+
+  .teal-glow {
+    box-shadow: 0 0 0 1px rgba(56, 189, 148, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .card-hover-glow {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-hover-glow:hover {
+    box-shadow: 0 0 0 1px rgba(56, 189, 148, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .label-mono {
+    @apply font-mono-data text-[10px] uppercase tracking-[0.12em];
+    color: hsl(var(--text-secondary));
+  }
+
+  .value-large {
+    @apply font-mono-data text-[28px] font-medium;
+    color: hsl(var(--text-primary));
+  }
+
+  .shimmer {
+    background: linear-gradient(90deg, #161B22 0%, #1C2128 50%, #161B22 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  .teal-grid-bg {
+    background-image: 
+      linear-gradient(rgba(56, 189, 148, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56, 189, 148, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotateX(2deg) rotateY(-2deg); }
+  50% { transform: translateY(-12px) rotateX(-2deg) rotateY(2deg); }
+}
+
+@keyframes pulse-teal {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes draw-line {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
