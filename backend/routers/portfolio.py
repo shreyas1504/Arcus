@@ -103,7 +103,7 @@ def analyze_portfolio(req: AnalyzeRequest):
     tickers, prices, returns, errors = _load_data(req.tickers, req.start_date, req.end_date)
 
     # Use custom weights if provided, otherwise equal weight
-    if req.weights and len(req.weights) == len(tickers):
+    if req.weights is not None and len(req.weights) == len(tickers):  # type: ignore[arg-type]
         w_arr = np.array(req.weights, dtype=float)
         w_arr = w_arr / w_arr.sum()  # normalize
     else:
@@ -189,20 +189,20 @@ def analyze_portfolio(req: AnalyzeRequest):
         "latest_prices": latest,
         "price_history": price_history,
         "metrics": {
-            "annualized_return": round(ann_ret, 6),
-            "annualized_volatility": round(ann_vol, 6),
-            "sharpe_ratio": round(shrp, 4),
-            "value_at_risk": round(var, 6),
-            "max_drawdown": round(mdd, 6),
-            "sortino_ratio": round(sort, 4),
-            "beta": round(beta, 4),  # type: ignore[call-overload]
-            "cvar_95": round(cvar_95, 6),
-            "alpha": round(alpha_val, 6),
-            "information_ratio": round(info_ratio, 4),
-            "calmar_ratio": round(calmar, 4),
+            "annualized_return": round(float(ann_ret), 6),  # type: ignore[call-overload]
+            "annualized_volatility": round(float(ann_vol), 6),  # type: ignore[call-overload]
+            "sharpe_ratio": round(float(shrp), 4),  # type: ignore[call-overload]
+            "value_at_risk": round(float(var), 6),  # type: ignore[call-overload]
+            "max_drawdown": round(float(mdd), 6),  # type: ignore[call-overload]
+            "sortino_ratio": round(float(sort), 4),  # type: ignore[call-overload]
+            "beta": round(float(beta), 4),  # type: ignore[call-overload]
+            "cvar_95": round(float(cvar_95), 6),  # type: ignore[call-overload]
+            "alpha": round(float(alpha_val), 6),  # type: ignore[call-overload]
+            "information_ratio": round(float(info_ratio), 4),  # type: ignore[call-overload]
+            "calmar_ratio": round(float(calmar), 4),  # type: ignore[call-overload]
             "health_score": health,
             "health_components": components,
-            "diversification_score": round(div_score, 1),
+            "diversification_score": round(float(div_score), 1),  # type: ignore[call-overload]
         },
         "interpretations": {
             "return": interpret_return(ann_ret, req.investment),
@@ -416,7 +416,7 @@ def efficient_frontier(req: EfficientFrontierRequest):
         w = np.random.dirichlet(np.ones(n))
         port_return = float(w @ mean_returns.values)
         port_vol = float(np.sqrt(w @ cov_matrix.values @ w))
-        frontier_points.append({"risk": round(port_vol, 6), "return": round(port_return, 6)})
+        frontier_points.append({"risk": round(float(port_vol), 6), "return": round(float(port_return), 6)})  # type: ignore[call-overload]
 
     # Current (equal weight)
     eq_w = np.array([1.0 / n] * n)
@@ -430,8 +430,8 @@ def efficient_frontier(req: EfficientFrontierRequest):
 
     return {
         "frontier_points": frontier_points,
-        "current_portfolio": {"risk": round(curr_vol, 6), "return": round(curr_ret, 6)},
-        "optimal_portfolio": {"risk": round(opt_vol, 6), "return": round(opt_ret, 6)},
+        "current_portfolio": {"risk": round(float(curr_vol), 6), "return": round(float(curr_ret), 6)},  # type: ignore[call-overload]
+        "optimal_portfolio": {"risk": round(float(opt_vol), 6), "return": round(float(opt_ret), 6)},  # type: ignore[call-overload]
     }
 
 
@@ -476,7 +476,7 @@ def stress_test(req: StressTestRequest):
 
     results = {}
     for key, scenario in _SCENARIOS.items():
-        estimated_loss = round(beta * scenario["benchmark_loss"], 4)
+        estimated_loss = round(float(beta) * float(scenario["benchmark_loss"]), 4)  # type: ignore[call-overload]
         results[key] = {
             "label": scenario["label"],
             "benchmark_loss": scenario["benchmark_loss"],
@@ -486,15 +486,16 @@ def stress_test(req: StressTestRequest):
 
     # Custom scenario
     if req.custom_drop is not None:
-        custom_loss = round(beta * (-abs(req.custom_drop) / 100), 4)
+        drop = float(req.custom_drop)  # type: ignore[arg-type]
+        custom_loss = round(float(beta) * (-abs(drop) / 100), 4)  # type: ignore[call-overload]
         results["custom_crash"] = {
-            "label": f"Custom -{abs(req.custom_drop):.0f}% Crash",
-            "benchmark_loss": round(-abs(req.custom_drop) / 100, 4),
+            "label": f"Custom -{abs(drop):.0f}% Crash",
+            "benchmark_loss": round(-abs(drop) / 100, 4),  # type: ignore[call-overload]
             "estimated_loss": custom_loss,
             "recovery_days": None,
         }
 
-    return {"beta": round(beta, 4), "scenarios": results}
+    return {"beta": round(float(beta), 4), "scenarios": results}  # type: ignore[call-overload]
 
 
 @router.get("/stock/{ticker}")
@@ -507,7 +508,7 @@ def get_stock_info(ticker: str):
         info = t.info or {}
         hist = t.history(period="3mo")
         price_history = [
-            {"date": d.strftime("%Y-%m-%d"), "close": round(float(row["Close"]), 2)}
+            {"date": d.strftime("%Y-%m-%d"), "close": round(float(row["Close"]), 2)}  # type: ignore[arg-type]
             for d, row in hist.iterrows()
         ] if not hist.empty else []
 
