@@ -17,7 +17,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# CORS — allow both Vite (8080) and Next.js (3000) dev servers
+# CORS — allow dev servers + production GitHub Pages
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -25,6 +25,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:8080",
         "http://127.0.0.1:3000",
+        "https://shreyas1504.github.io",
     ],
     allow_credentials=True,
     allow_methods=["*"],

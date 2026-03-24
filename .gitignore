@@ -6,5 +6,16 @@ venv/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/.next/
 frontend_old/
 .gemini/
+.devcontainer/
+Desktop/
+CLAUDE.md
+PULSE_PROJECT_CONTEXT.md
+ARCUS_PROJECT_CONTEXT.md
+*.lock
+frontend/bun.lock
+frontend/package-lock.json
+frontend/playwright-fixture.ts
+frontend/playwright.config.ts

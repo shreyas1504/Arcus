@@ -1,4 +1,7 @@
-const BASE = 'http://localhost:8000';
+// In production (GitHub Pages), use Render backend; locally, use localhost
+const BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000'
+  : 'https://arcus-backend.onrender.com';
 
 // ── Types ────────────────────────────────────────────────────────────────
 export interface PortfolioRequest {
