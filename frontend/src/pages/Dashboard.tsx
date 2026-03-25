@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import StockSearch from '@/components/StockSearch';
+import { MOCK_STOCK_PRICES } from '@/lib/mock-data';
 
 const STORAGE_KEY = 'arcus-portfolio-draft';
 const SAVED_KEY = 'arcus-portfolio';
@@ -111,7 +112,11 @@ const Dashboard = () => {
 
   const applyPreset = (preset: PresetConfig) => {
     setSelectedPreset(preset.key);
-    setHoldings(preset.tickers.map((t) => ({ ticker: t, shares: '10', cost: '' })));
+    setHoldings(preset.tickers.map((t) => {
+      const price = MOCK_STOCK_PRICES[t];
+      const estimatedCost = price ? (price * 0.82).toFixed(2) : '';
+      return { ticker: t, shares: '10', cost: estimatedCost };
+    }));
   };
 
   const analyse = () => {

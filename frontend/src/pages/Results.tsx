@@ -93,11 +93,18 @@ const Results = () => {
     if (analysis?.pnl) return analysis.pnl;
     const holdings = config?.holdings.filter(h => h.ticker && h.shares) ?? [];
     if (holdings.length === 0) return MOCK_PORTFOLIO.pnl;
+    const startMs = config?.startDate ? new Date(config.startDate).getTime() : null;
+    const days = startMs ? Math.round((Date.now() - startMs) / 86_400_000) : null;
     return holdings.map(h => ({
       ticker: h.ticker,
       shares: parseFloat(h.shares),
-      cost_basis: h.cost ? parseFloat(h.cost) : null,
       current_price: MOCK_STOCK_PRICES[h.ticker] ?? null,
+      cost_basis: h.cost
+        ? parseFloat(h.cost)
+        : MOCK_STOCK_PRICES[h.ticker]
+          ? parseFloat((MOCK_STOCK_PRICES[h.ticker] * 0.82).toFixed(2))
+          : null,
+      days,
     }));
   })();
 
