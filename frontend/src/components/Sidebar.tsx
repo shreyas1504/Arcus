@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, FlaskConical, MessageSquare, FileText, Settings, User, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -16,8 +16,12 @@ const bottomItems = [
   { icon: User, label: 'Profile / DNA', path: '/onboarding' },
 ];
 
-const Sidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps {
+  collapsed: boolean;
+  setCollapsed: Dispatch<SetStateAction<boolean>>;
+}
+
+const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
   const location = useLocation();
 
   const isActive = (path: string) => {

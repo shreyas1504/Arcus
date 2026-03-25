@@ -15,32 +15,72 @@ interface Holding {
   cost: string;
 }
 
-// Sector → representative tickers mapping
+// Sector → representative tickers mapping (all must exist in StockSearch STOCK_DB)
 const SECTOR_TICKERS: Record<string, string[]> = {
   'Technology': ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'CRM', 'ADBE'],
   'Healthcare': ['UNH', 'JNJ', 'PFE', 'ABBV', 'TMO', 'MRK'],
-  'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC'],
+  'Energy':     ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC'],
   'Financials': ['JPM', 'V', 'MA', 'BAC', 'GS', 'BLK'],
-  'Consumer': ['AMZN', 'TSLA', 'HD', 'NKE', 'SBUX', 'MCD'],
-  'Real Estate': ['AMT', 'PLD', 'CCI', 'SPG', 'O', 'WELL'],
-  'Utilities': ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE'],
+  'Consumer':   ['AMZN', 'TSLA', 'HD', 'NKE', 'SBUX', 'MCD'],
+  'Real Estate':['AMT', 'PLD', 'CCI', 'SPG', 'O', 'WELL'],
+  'Utilities':  ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE'],
 };
 
-const PRESET_TICKERS: Record<string, string[]> = {
+// Default presets shown when no sectors selected in onboarding
+const DEFAULT_PRESETS: Record<string, string[]> = {
   'FAANG':      ['META', 'AAPL', 'AMZN', 'NFLX', 'GOOGL'],
   'Tech Heavy': ['NVDA', 'MSFT', 'CRM', 'ADBE', 'AMD'],
   'Balanced':   ['AAPL', 'JNJ', 'JPM', 'XOM', 'VOO'],
-  'S&P 500':   ['VOO', 'SPY', 'IVV', 'VTI', 'QQQ'],
+  'S&P 500':   ['VOO', 'SPY', 'VTI', 'QQQ'],
 };
 
-// Build dynamic presets based on onboarding sector selections
-const getPresetNames = (): string[] => {
+interface PresetConfig {
+  key: string;
+  label: string;
+  tickers: string[];
+}
+
+// When sectors were chosen: one button per sector + an "All Picks" button.
+// When no sectors chosen: show the classic FAANG / Tech Heavy / Balanced / S&P 500 buttons.
+const getPresets = (): PresetConfig[] => {
   const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
-  const base = ['FAANG', 'Tech Heavy', 'Balanced', 'S&P 500'];
-  if (dna?.sectors?.length) {
-    return ['Your Picks', ...base];
+  const userSectors: string[] = dna?.sectors || [];
+
+  if (userSectors.length > 0) {
+    const presets: PresetConfig[] = [];
+
+    // "All Picks" — top 2 stocks from every chosen sector
+    const allTickers: string[] = [];
+    for (const sec of userSectors) {
+      allTickers.push(...(SECTOR_TICKERS[sec] || []).slice(0, 2));
+    }
+    const sectorTag = userSectors.length <= 2
+      ? userSectors.join(' & ')
+      : `${userSectors.length} Sectors`;
+    presets.push({
+      key: '__all__',
+      label: `All Picks · ${sectorTag}`,
+      tickers: allTickers.slice(0, 8),
+    });
+
+    // One button per sector — top 4 tickers for that sector
+    for (const sec of userSectors) {
+      presets.push({
+        key: sec,
+        label: sec,
+        tickers: (SECTOR_TICKERS[sec] || []).slice(0, 4),
+      });
+    }
+
+    return presets;
   }
-  return base;
+
+  // No sector context — show generic presets
+  return Object.entries(DEFAULT_PRESETS).map(([name, tickers]) => ({
+    key: name,
+    label: name,
+    tickers,
+  }));
 };
 
 const loadDraft = (): { holdings: Holding[]; startDate: string; endDate: string } => {
@@ -67,28 +107,11 @@ const Dashboard = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ holdings, startDate, endDate }));
   }, [holdings, startDate, endDate]);
 
-  const presets = getPresetNames();
+  const presets = getPresets();
 
-  const applyPreset = (p: string) => {
-    setSelectedPreset(p);
-    let tickers: string[];
-    if (p === 'Your Picks') {
-      // Build from onboarding sectors
-      const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
-      const sectorList: string[] = dna?.sectors || ['Technology'];
-      tickers = [];
-      for (const sec of sectorList) {
-        const available = SECTOR_TICKERS[sec] || [];
-        // Take top 2 from each selected sector
-        tickers.push(...available.slice(0, 2));
-      }
-      // Cap at 5 tickers, ensure at least 1
-      tickers = tickers.slice(0, 5);
-      if (tickers.length === 0) tickers = ['AAPL', 'MSFT', 'VOO'];
-    } else {
-      tickers = PRESET_TICKERS[p] || ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'VOO'];
-    }
-    setHoldings(tickers.map((t) => ({ ticker: t, shares: '10', cost: '' })));
+  const applyPreset = (preset: PresetConfig) => {
+    setSelectedPreset(preset.key);
+    setHoldings(preset.tickers.map((t) => ({ ticker: t, shares: '10', cost: '' })));
   };
 
   const analyse = () => {
@@ -193,10 +216,10 @@ const Dashboard = () => {
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <label className="label-mono mb-3 block">QUICK LOAD</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {presets.map((p) => (
-                <button key={p} onClick={() => applyPreset(p)} className={`px-4 py-2 rounded-full font-mono text-xs transition-all ${selectedPreset === p ? 'bg-primary text-primary-foreground' : 'glass text-muted-foreground hover:text-foreground'}`}>
-                  {p}
+                <button key={p.key} onClick={() => applyPreset(p)} className={`px-4 py-2 rounded-full font-mono text-xs transition-all ${selectedPreset === p.key ? 'bg-primary text-primary-foreground' : 'glass text-muted-foreground hover:text-foreground'}`}>
+                  {p.label}
                 </button>
               ))}
             </div>

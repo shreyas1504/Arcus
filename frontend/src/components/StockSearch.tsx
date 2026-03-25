@@ -63,6 +63,28 @@ const STOCK_DB: Stock[] = [
   { ticker: 'CAT', name: 'Caterpillar Inc.', aliases: ['caterpillar', 'construction'], price: 328.90, change: '+0.45%', positive: true },
   { ticker: 'GS', name: 'Goldman Sachs', aliases: ['goldman', 'investment bank'], price: 425.60, change: '+0.78%', positive: true },
   { ticker: 'MS', name: 'Morgan Stanley', aliases: ['morgan stanley', 'bank'], price: 92.30, change: '+0.34%', positive: true },
+  // Financials
+  { ticker: 'BAC', name: 'Bank of America', aliases: ['bank of america', 'bofa'], price: 38.20, change: '+0.42%', positive: true },
+  { ticker: 'BLK', name: 'BlackRock Inc.', aliases: ['blackrock', 'asset manager'], price: 825.40, change: '+0.31%', positive: true },
+  // Energy
+  { ticker: 'COP', name: 'ConocoPhillips', aliases: ['conoco', 'conocophillips', 'oil'], price: 112.30, change: '+0.54%', positive: true },
+  { ticker: 'SLB', name: 'SLB (Schlumberger)', aliases: ['slb', 'schlumberger', 'oilfield services'], price: 46.80, change: '-0.23%', positive: false },
+  { ticker: 'EOG', name: 'EOG Resources', aliases: ['eog', 'shale', 'oil'], price: 128.50, change: '+0.67%', positive: true },
+  { ticker: 'MPC', name: 'Marathon Petroleum', aliases: ['marathon petroleum', 'refinery'], price: 178.90, change: '+0.45%', positive: true },
+  // Utilities
+  { ticker: 'NEE', name: 'NextEra Energy', aliases: ['nextera', 'nextera energy', 'clean energy', 'renewables'], price: 73.20, change: '+0.34%', positive: true },
+  { ticker: 'DUK', name: 'Duke Energy', aliases: ['duke energy', 'duke', 'utilities'], price: 101.50, change: '+0.18%', positive: true },
+  { ticker: 'SO', name: 'Southern Company', aliases: ['southern company', 'southern', 'utilities'], price: 82.30, change: '+0.22%', positive: true },
+  { ticker: 'D', name: 'Dominion Energy', aliases: ['dominion energy', 'dominion'], price: 45.60, change: '-0.11%', positive: false },
+  { ticker: 'AEP', name: 'American Electric Power', aliases: ['aep', 'american electric power', 'utilities'], price: 94.20, change: '+0.15%', positive: true },
+  { ticker: 'SRE', name: 'Sempra Energy', aliases: ['sempra', 'sempra energy'], price: 72.80, change: '+0.29%', positive: true },
+  // Real Estate
+  { ticker: 'AMT', name: 'American Tower', aliases: ['american tower', 'tower reit', 'reit'], price: 185.40, change: '+0.56%', positive: true },
+  { ticker: 'PLD', name: 'Prologis Inc.', aliases: ['prologis', 'logistics reit', 'warehouse reit'], price: 112.60, change: '+0.44%', positive: true },
+  { ticker: 'CCI', name: 'Crown Castle Inc.', aliases: ['crown castle', 'tower reit'], price: 98.30, change: '-0.18%', positive: false },
+  { ticker: 'SPG', name: 'Simon Property Group', aliases: ['simon property', 'mall reit', 'retail reit'], price: 152.40, change: '+0.38%', positive: true },
+  { ticker: 'O', name: 'Realty Income Corporation', aliases: ['realty income', 'monthly dividend reit'], price: 54.20, change: '+0.21%', positive: true },
+  { ticker: 'WELL', name: 'Welltower Inc.', aliases: ['welltower', 'healthcare reit'], price: 98.70, change: '+0.33%', positive: true },
   { ticker: 'IBM', name: 'IBM Corporation', aliases: ['ibm', 'international business machines'], price: 185.40, change: '+0.23%', positive: true },
   { ticker: 'ORCL', name: 'Oracle Corporation', aliases: ['oracle', 'database'], price: 125.60, change: '+0.67%', positive: true },
   { ticker: 'T', name: 'AT&T Inc.', aliases: ['at&t', 'att', 'telecom'], price: 17.20, change: '-0.12%', positive: false },
@@ -85,6 +107,11 @@ const StockSearch = ({ value, onChange, placeholder = 'Search stocks (e.g. Apple
   const [open, setOpen] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Sync display when parent changes value (e.g. preset applied)
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
 
   const results = query.length > 0
     ? STOCK_DB.filter((s) => {

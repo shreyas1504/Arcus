@@ -17,7 +17,7 @@ import CorrelationHeatmap from '@/components/CorrelationHeatmap';
 import StressTestGrid from '@/components/StressTestGrid';
 import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
-import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS } from '@/lib/mock-data';
+import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES } from '@/lib/mock-data';
 import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
@@ -83,9 +83,23 @@ const Results = () => {
 
   // Use real metrics or fallback to mock
   const m = analysis?.metrics ?? MOCK_PORTFOLIO.metrics;
-  const tickers = analysis?.tickers ?? MOCK_PORTFOLIO.tickers;
+  const tickers = analysis?.tickers ?? config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? MOCK_PORTFOLIO.tickers;
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
   const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
+
+  // Build P&L rows from the user's actual holdings when API is unavailable
+  type PnlRow = { ticker: string; shares: number; cost_basis: number | null; current_price: number | null; days?: number };
+  const pnlRows: PnlRow[] = (() => {
+    if (analysis?.pnl) return analysis.pnl;
+    const holdings = config?.holdings.filter(h => h.ticker && h.shares) ?? [];
+    if (holdings.length === 0) return MOCK_PORTFOLIO.pnl;
+    return holdings.map(h => ({
+      ticker: h.ticker,
+      shares: parseFloat(h.shares),
+      cost_basis: h.cost ? parseFloat(h.cost) : null,
+      current_price: MOCK_STOCK_PRICES[h.ticker] ?? null,
+    }));
+  })();
 
   const tickerStr = tickers.join(' · ');
   const dateRange = config ? `${config.startDate} — ${config.endDate}` : 'JAN 2023 — DEC 2024';
@@ -113,53 +127,232 @@ const Results = () => {
           </div>
         </motion.div>
 
-        {/* Dynamic Profile Conflict + Investor DNA */}
+        {/* Goal Alignment Analysis */}
         {(() => {
           const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
+          if (!dna) return null;
+
           const riskLabel = dna?.risk_tolerance || 'Moderate';
-          const targetReturn = dna?.target_return ? `${(dna.target_return * 100).toFixed(0)}%` : '10%';
-          const sectors: string[] = dna?.sectors || [];
-          const isConflict = ['Conservative', 'Moderate'].includes(riskLabel) && (m.beta ?? 0) > 1.2;
+          const targetReturn = dna?.target_return ?? 0.10;
+          const targetReturnPct = (targetReturn * 100).toFixed(0);
+          const userSectors: string[] = dna?.sectors || [];
+
+          // ── Risk tolerance thresholds ──
+          const RISK_THRESHOLDS: Record<string, { maxVol: number; maxBeta: number; maxDD: number }> = {
+            'Conservative': { maxVol: 0.12, maxBeta: 0.8, maxDD: -0.10 },
+            'Moderate':     { maxVol: 0.18, maxBeta: 1.0, maxDD: -0.18 },
+            'Balanced':     { maxVol: 0.24, maxBeta: 1.2, maxDD: -0.25 },
+            'Growth':       { maxVol: 0.32, maxBeta: 1.5, maxDD: -0.35 },
+            'Aggressive':   { maxVol: 999,  maxBeta: 999, maxDD: -999 },
+          };
+
+          const thresholds = RISK_THRESHOLDS[riskLabel] || RISK_THRESHOLDS['Moderate'];
+          const actualReturn = m.annualized_return;
+          const actualVol = m.volatility;
+          const actualBeta = m.beta ?? 1.0;
+          const actualDD = m.max_drawdown;
+
+          // ── Return alignment (0-100) ──
+          const returnRatio = targetReturn > 0 ? actualReturn / targetReturn : 1;
+          const returnScore = Math.min(100, Math.max(0, returnRatio * 100));
+          const returnOnTrack = actualReturn >= targetReturn;
+
+          // ── Risk alignment (0-100) ──
+          const volOk = riskLabel === 'Aggressive' || actualVol <= thresholds.maxVol;
+          const betaOk = riskLabel === 'Aggressive' || actualBeta <= thresholds.maxBeta;
+          const ddOk = riskLabel === 'Aggressive' || actualDD >= thresholds.maxDD; // DD is negative
+          const riskChecks = [volOk, betaOk, ddOk];
+          const riskScore = riskLabel === 'Aggressive' ? 100 : (riskChecks.filter(Boolean).length / 3) * 100;
+
+          // ── Sector alignment (0-100) ──
+          // Use analysis.sectors (from backend) to check alignment
+          const portfolioSectors: string[] = (analysis?.sectors || []).map((s: any) => s.name);
+          const matchedSectors = userSectors.filter(s => portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
+          const sectorScore = userSectors.length > 0 ? (matchedSectors.length / userSectors.length) * 100 : 100;
+          const missingSectors = userSectors.filter(s => !portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
+
+          // ── Overall Goal Score ──
+          const goalScore = Math.round(returnScore * 0.4 + riskScore * 0.3 + sectorScore * 0.3);
+
+          const scoreColor = goalScore >= 70 ? 'text-signal-green' : goalScore >= 40 ? 'text-signal-amber' : 'text-signal-red';
+          const scoreBg = goalScore >= 70 ? 'bg-signal-green/10' : goalScore >= 40 ? 'bg-signal-amber/10' : 'bg-signal-red/10';
+          const scoreLabel = goalScore >= 70 ? 'Well Aligned' : goalScore >= 40 ? 'Needs Attention' : 'Misaligned';
+
+          const statusIcon = (ok: boolean) => ok
+            ? <CheckCircle size={14} className="text-signal-green flex-shrink-0" />
+            : <AlertTriangle size={14} className="text-signal-amber flex-shrink-0" />;
+
           return (
-            <>
-              {isConflict && (
-                <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} className="glass rounded-xl p-4 mb-4 border-l-4 border-signal-amber flex items-start gap-3">
-                  <AlertTriangle size={16} className="text-signal-amber mt-0.5 flex-shrink-0" />
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-signal-amber">PROFILE CONFLICT</span>
-                    <p className="text-sm text-foreground/80 mt-1">You indicated <span className="text-foreground font-medium">{riskLabel}</span> risk, but your Beta of <span className="font-mono text-foreground">{m.beta?.toFixed(2) ?? '—'}</span> suggests Growth/Aggressive exposure.</p>
-                  </div>
-                </motion.div>
-              )}
-              {dna && (
-                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-xl p-4 mb-6">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-xl p-5 mb-6">
+              {/* Header with Goal Score */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Shield size={16} className="text-primary" />
+                  <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>GOAL ALIGNMENT</span>
+                </div>
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${scoreBg}`}>
+                  <span className={`font-mono text-xl font-bold ${scoreColor}`}>{goalScore}</span>
+                  <span className={`font-mono text-[9px] uppercase tracking-wider ${scoreColor}`}>{scoreLabel}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Target Return Card */}
+                <div className="glass-elevated rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Shield size={14} className="text-primary" />
-                    <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>INVESTOR DNA</span>
+                    <TrendingUp size={14} className="text-primary" />
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Target Return</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="glass-elevated rounded-lg p-3">
-                      <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Risk Profile</span>
-                      <div className="font-mono text-sm font-bold text-foreground mt-1">{riskLabel}</div>
+                  <div className="flex items-center gap-2 mb-2">
+                    {statusIcon(returnOnTrack)}
+                    <span className={`font-mono text-sm font-bold ${returnOnTrack ? 'text-signal-green' : 'text-signal-amber'}`}>
+                      {returnOnTrack ? 'On Track' : 'Below Target'}
+                    </span>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    <div className="flex justify-between">
+                      <span className="text-[11px] text-muted-foreground">Your Target</span>
+                      <span className="font-mono text-xs font-bold text-foreground">{targetReturnPct}% / yr</span>
                     </div>
-                    <div className="glass-elevated rounded-lg p-3">
-                      <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Target Return</span>
-                      <div className="font-mono text-sm font-bold text-primary mt-1">{targetReturn} / yr</div>
+                    <div className="flex justify-between">
+                      <span className="text-[11px] text-muted-foreground">Actual Return</span>
+                      <span className={`font-mono text-xs font-bold ${returnOnTrack ? 'text-signal-green' : 'text-signal-amber'}`}>{(actualReturn * 100).toFixed(1)}% / yr</span>
                     </div>
-                    {sectors.length > 0 && (
-                      <div className="glass-elevated rounded-lg p-3 col-span-2 sm:col-span-1">
-                        <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Preferred Sectors</span>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {sectors.map((s: string) => (
-                            <span key={s} className="font-mono text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded">{s}</span>
-                          ))}
-                        </div>
+                    {!returnOnTrack && (
+                      <div className="flex justify-between border-t border-border/30 pt-2">
+                        <span className="text-[11px] text-muted-foreground">Gap</span>
+                        <span className="font-mono text-xs text-signal-red">-{((targetReturn - actualReturn) * 100).toFixed(1)}%</span>
                       </div>
                     )}
                   </div>
+                  {/* Mini bar */}
+                  <div className="mt-3 h-1.5 bg-border rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${returnOnTrack ? 'bg-signal-green' : 'bg-signal-amber'}`} style={{ width: `${Math.min(100, returnScore)}%` }} />
+                  </div>
+                </div>
+
+                {/* Risk Tolerance Card */}
+                <div className="glass-elevated rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity size={14} className="text-primary" />
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Risk Tolerance · {riskLabel}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    {statusIcon(riskScore >= 67)}
+                    <span className={`font-mono text-sm font-bold ${riskScore >= 67 ? 'text-signal-green' : riskScore >= 33 ? 'text-signal-amber' : 'text-signal-red'}`}>
+                      {riskScore >= 67 ? 'Within Limits' : riskScore >= 33 ? 'Partially Exceeded' : 'Exceeded'}
+                    </span>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    {riskLabel !== 'Aggressive' ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">Volatility</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono text-[10px] ${volOk ? 'text-signal-green' : 'text-signal-red'}`}>{(actualVol * 100).toFixed(1)}%</span>
+                            <span className="text-[9px] text-muted-foreground/60">/ {(thresholds.maxVol * 100)}%</span>
+                            {volOk ? <CheckCircle size={10} className="text-signal-green" /> : <AlertTriangle size={10} className="text-signal-red" />}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">Beta</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono text-[10px] ${betaOk ? 'text-signal-green' : 'text-signal-red'}`}>{actualBeta.toFixed(2)}</span>
+                            <span className="text-[9px] text-muted-foreground/60">/ {thresholds.maxBeta}</span>
+                            {betaOk ? <CheckCircle size={10} className="text-signal-green" /> : <AlertTriangle size={10} className="text-signal-red" />}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">Max Drawdown</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono text-[10px] ${ddOk ? 'text-signal-green' : 'text-signal-red'}`}>{(actualDD * 100).toFixed(1)}%</span>
+                            <span className="text-[9px] text-muted-foreground/60">/ {(thresholds.maxDD * 100)}%</span>
+                            {ddOk ? <CheckCircle size={10} className="text-signal-green" /> : <AlertTriangle size={10} className="text-signal-red" />}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">Aggressive profile — no risk limits applied.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sector Alignment Card */}
+                <div className="glass-elevated rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <BarChart2 size={14} className="text-primary" />
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Sector Alignment</span>
+                  </div>
+                  {userSectors.length > 0 ? (
+                    <>
+                      <div className="flex items-center gap-2 mb-2">
+                        {statusIcon(sectorScore >= 50)}
+                        <span className={`font-mono text-sm font-bold ${sectorScore >= 75 ? 'text-signal-green' : sectorScore >= 50 ? 'text-signal-amber' : 'text-signal-red'}`}>
+                          {matchedSectors.length}/{userSectors.length} Sectors Covered
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 mt-3">
+                        {userSectors.map(s => {
+                          const matched = portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase()));
+                          return (
+                            <div key={s} className="flex items-center gap-2">
+                              {matched ? <CheckCircle size={10} className="text-signal-green" /> : <AlertTriangle size={10} className="text-signal-amber" />}
+                              <span className={`font-mono text-[10px] ${matched ? 'text-foreground' : 'text-muted-foreground'}`}>{s}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {missingSectors.length > 0 && (
+                        <p className="text-[10px] text-signal-amber mt-3 border-t border-border/30 pt-2">
+                          Consider adding exposure to {missingSectors.join(', ')}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">No sector preferences set during onboarding.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Actionable Summary */}
+              {goalScore < 70 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="mt-4 p-3 rounded-lg bg-card-elevated border border-border/50">
+                  <span className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">RECOMMENDATIONS</span>
+                  <ul className="mt-2 space-y-1">
+                    {!returnOnTrack && (
+                      <li className="text-[12px] text-foreground/80 flex items-start gap-2">
+                        <ChevronRight size={12} className="text-primary mt-0.5 flex-shrink-0" />
+                        Portfolio returns ({(actualReturn * 100).toFixed(1)}%) are below your {targetReturnPct}% target. Consider higher-growth assets or extending your time horizon.
+                      </li>
+                    )}
+                    {!volOk && riskLabel !== 'Aggressive' && (
+                      <li className="text-[12px] text-foreground/80 flex items-start gap-2">
+                        <ChevronRight size={12} className="text-primary mt-0.5 flex-shrink-0" />
+                        Volatility ({(actualVol * 100).toFixed(1)}%) exceeds your {riskLabel} threshold ({(thresholds.maxVol * 100)}%). Diversify with lower-volatility holdings.
+                      </li>
+                    )}
+                    {!betaOk && riskLabel !== 'Aggressive' && (
+                      <li className="text-[12px] text-foreground/80 flex items-start gap-2">
+                        <ChevronRight size={12} className="text-primary mt-0.5 flex-shrink-0" />
+                        Beta ({actualBeta.toFixed(2)}) exceeds the {thresholds.maxBeta} limit for {riskLabel} investors. Add defensive positions or index funds.
+                      </li>
+                    )}
+                    {!ddOk && riskLabel !== 'Aggressive' && (
+                      <li className="text-[12px] text-foreground/80 flex items-start gap-2">
+                        <ChevronRight size={12} className="text-primary mt-0.5 flex-shrink-0" />
+                        Max drawdown ({(actualDD * 100).toFixed(1)}%) is worse than your {(thresholds.maxDD * 100)}% comfort zone. Consider stop-loss strategies.
+                      </li>
+                    )}
+                    {missingSectors.length > 0 && (
+                      <li className="text-[12px] text-foreground/80 flex items-start gap-2">
+                        <ChevronRight size={12} className="text-primary mt-0.5 flex-shrink-0" />
+                        Missing exposure to {missingSectors.join(', ')}. Add sector ETFs or individual stocks to align with your preferences.
+                      </li>
+                    )}
+                  </ul>
                 </motion.div>
               )}
-            </>
+            </motion.div>
           );
         })()}
 
@@ -261,19 +454,24 @@ const Results = () => {
               </tr>
             </thead>
             <tbody>
-              {MOCK_PORTFOLIO.pnl.map((row) => {
-                const pnlDollar = (row.current_price - row.cost_basis) * row.shares;
-                const pnlPct = ((row.current_price - row.cost_basis) / row.cost_basis) * 100;
-                const positive = pnlDollar >= 0;
+              {pnlRows.map((row) => {
+                const hasPnl = row.current_price != null && row.cost_basis != null;
+                const pnlDollar = hasPnl ? (row.current_price - row.cost_basis) * row.shares : null;
+                const pnlPct = hasPnl ? ((row.current_price - row.cost_basis) / row.cost_basis) * 100 : null;
+                const positive = pnlDollar != null && pnlDollar >= 0;
                 return (
                   <tr key={row.ticker} className="border-b border-border/30 hover:bg-card-elevated/50 transition-colors">
                     <td className="py-3 font-mono text-sm font-medium text-foreground">{row.ticker}</td>
                     <td className="py-3 font-mono text-sm text-foreground">{row.shares}</td>
-                    <td className="py-3 font-mono text-sm text-muted-foreground">${row.cost_basis.toFixed(2)}</td>
-                    <td className="py-3 font-mono text-sm text-foreground">${row.current_price.toFixed(2)}</td>
-                    <td className={`py-3 font-mono text-sm font-medium ${positive ? 'text-signal-green' : 'text-signal-red'}`}>{positive ? '+' : ''}${pnlDollar.toFixed(2)}</td>
-                    <td className={`py-3 font-mono text-sm ${positive ? 'text-signal-green' : 'text-signal-red'}`}>{positive ? '+' : ''}{pnlPct.toFixed(1)}%</td>
-                    <td className="py-3 font-mono text-sm text-muted-foreground">{row.days}</td>
+                    <td className="py-3 font-mono text-sm text-muted-foreground">{row.cost_basis != null ? `$${row.cost_basis.toFixed(2)}` : '—'}</td>
+                    <td className="py-3 font-mono text-sm text-foreground">{row.current_price != null ? `$${row.current_price.toFixed(2)}` : '—'}</td>
+                    <td className={`py-3 font-mono text-sm font-medium ${pnlDollar != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
+                      {pnlDollar != null ? `${positive ? '+' : ''}$${pnlDollar.toFixed(2)}` : '—'}
+                    </td>
+                    <td className={`py-3 font-mono text-sm ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
+                      {pnlPct != null ? `${positive ? '+' : ''}${pnlPct.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="py-3 font-mono text-sm text-muted-foreground">{row.days ?? '—'}</td>
                   </tr>
                 );
               })}
@@ -281,7 +479,10 @@ const Results = () => {
                 <td className="py-3 font-mono text-sm font-bold text-foreground">TOTAL</td>
                 <td colSpan={3} />
                 <td className="py-3 font-mono text-sm font-bold text-signal-green">
-                  +${MOCK_PORTFOLIO.pnl.reduce((a, r) => a + (r.current_price - r.cost_basis) * r.shares, 0).toFixed(2)}
+                  {(() => {
+                    const total = pnlRows.reduce((a, r) => r.current_price != null && r.cost_basis != null ? a + (r.current_price - r.cost_basis) * r.shares : a, 0);
+                    return `${total >= 0 ? '+' : ''}$${total.toFixed(2)}`;
+                  })()}
                 </td>
                 <td colSpan={2} />
               </tr>

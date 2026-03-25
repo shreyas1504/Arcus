@@ -150,6 +150,27 @@ export const MOCK_AI_RECOMMENDATIONS = [
   "Monte Carlo simulation shows 82% probability of achieving your 15% annual return target over the next 12 months.",
 ];
 
+// Static price snapshot used for offline P&L calculation (mirrors StockSearch STOCK_DB)
+export const MOCK_STOCK_PRICES: Record<string, number> = {
+  'AAPL': 182.63, 'MSFT': 378.91, 'GOOGL': 165.22, 'AMZN': 178.25, 'NVDA': 875.40,
+  'META': 485.39, 'TSLA': 248.42, 'JPM': 198.45, 'JNJ': 156.78, 'V': 278.90,
+  'UNH': 492.15, 'XOM': 108.45, 'WMT': 165.34, 'MA': 458.90, 'PG': 158.90,
+  'LLY': 782.30, 'HD': 345.67, 'CVX': 155.20, 'MRK': 125.40, 'ABBV': 168.90,
+  'COST': 725.80, 'KO': 60.45, 'PEP': 172.30, 'AMD': 165.23, 'INTC': 31.45,
+  'NFLX': 628.90, 'DIS': 98.45, 'ADBE': 478.60, 'CRM': 265.40, 'PYPL': 62.30,
+  'UBER': 72.45, 'SPOT': 285.60, 'SHOP': 78.90, 'SQ': 68.20, 'PLTR': 22.80,
+  'SNOW': 162.30, 'COIN': 225.40, 'SPY': 512.40, 'QQQ': 438.92, 'VOO': 465.18,
+  'VTI': 245.60, 'IVV': 510.20, 'GLD': 218.90, 'TLT': 92.30, 'ARKK': 48.90,
+  'BTC-USD': 67420.00, 'ETH-USD': 3520.00, 'BA': 215.60, 'CAT': 328.90,
+  'GS': 425.60, 'MS': 92.30, 'IBM': 185.40, 'ORCL': 125.60, 'T': 17.20,
+  'VZ': 38.90, 'NKE': 98.45, 'SBUX': 92.30, 'MCD': 285.60, 'PFE': 28.90,
+  'TMO': 565.40, 'BAC': 38.20, 'BLK': 825.40, 'COP': 112.30, 'SLB': 46.80,
+  'EOG': 128.50, 'MPC': 178.90, 'NEE': 73.20, 'DUK': 101.50, 'SO': 82.30,
+  'D': 45.60, 'AEP': 94.20, 'SRE': 72.80, 'AMT': 185.40, 'PLD': 112.60,
+  'CCI': 98.30, 'SPG': 152.40, 'O': 54.20, 'WELL': 98.70,
+  'BRK.B': 412.30, 'PFE': 28.90, 'LLY': 782.30,
+};
+
 export const MOCK_SPARKLINES: Record<string, number[]> = {
   sharpe: [1.2, 1.4, 1.6, 1.5, 1.7, 1.8, 1.84],
   sortino: [1.8, 2.0, 1.9, 2.1, 2.2, 2.3, 2.31],
