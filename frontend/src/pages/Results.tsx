@@ -167,22 +167,22 @@ const Results = () => {
 
   return (
     <AppLayout title="Portfolio Analysis">
-      <div className="max-w-7xl mx-auto px-6 py-8 arcus-print-root">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 arcus-print-root">
         <BackButton to="/dashboard" />
 
         {/* Top bar */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="font-display font-extrabold text-2xl text-foreground">Portfolio Analysis</h1>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="font-mono text-xs text-muted-foreground">{tickerStr}</span>
-              <span className="font-mono text-[10px] bg-card-elevated text-muted-foreground px-2 py-0.5 rounded-full">{dateRange}</span>
+            <h1 className="font-display font-extrabold text-xl sm:text-2xl text-foreground">Portfolio Analysis</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="font-mono text-xs text-muted-foreground break-all">{tickerStr}</span>
+              <span className="font-mono text-[10px] bg-card-elevated text-muted-foreground px-2 py-0.5 rounded-full whitespace-nowrap">{dateRange}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {isLoading && <span className="font-mono text-[10px] text-primary animate-pulse">LOADING...</span>}
-            <span className="font-mono text-[10px] text-muted-foreground">LAST UPDATED: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
-            <button data-export-btn onClick={handleExportPDF} className="glass rounded-lg px-4 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2">
+            <span className="hidden md:block font-mono text-[10px] text-muted-foreground">LAST UPDATED: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+            <button data-export-btn onClick={handleExportPDF} className="glass rounded-lg px-3 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2">
               <Download size={14} className="text-primary" /> Export PDF
             </button>
           </div>
@@ -259,7 +259,7 @@ const Results = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Target Return Card */}
                 <div className="glass-elevated rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -446,7 +446,7 @@ const Results = () => {
         </motion.div>
 
         {/* Metric Cards Row 1 */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-[120px] rounded-xl shimmer" />)
           ) : (
@@ -462,7 +462,7 @@ const Results = () => {
         {/* Health Score */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass rounded-xl p-6 mb-6 cursor-pointer" onClick={() => askAI(`My portfolio health score is ${m.health_score}/100. Break down what's driving this score.`)}>
           <HealthGauge score={m.health_score} />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
             {[
               { label: 'Diversification', value: '72%', color: 'text-primary' },
               { label: 'Concentration', value: '34%', color: 'text-signal-amber' },
@@ -481,7 +481,7 @@ const Results = () => {
         <FullReport />
 
         {/* Metric Cards Row 2 */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-[120px] rounded-xl shimmer" />)
           ) : (
@@ -495,7 +495,7 @@ const Results = () => {
         </div>
 
         {/* Metric Cards Row 3 */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <MetricCard icon={BarChart2} label="CALMAR RATIO" value={m.calmar} format={(n) => n.toFixed(2)} change={0.08} delay={0.55} chatQuestion={`My Calmar ratio is ${m.calmar.toFixed(2)}. What does this tell me about return vs drawdown risk?`} />
           <MetricCard icon={TrendingUp} label="ANN. RETURN" value={m.annualized_return * 100} format={(n) => `${n.toFixed(1)}%`} change={2.1} changeLabel="+2.1%" sparklineData={MOCK_SPARKLINES.annualized_return} delay={0.6} chatQuestion={`My annualized return is ${(m.annualized_return * 100).toFixed(1)}%. How does this compare to the market?`} />
           <MetricCard icon={Activity} label="VOLATILITY" value={m.volatility * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.8} changeLabel="-0.8%" delay={0.65} chatQuestion={`My portfolio volatility is ${(m.volatility * 100).toFixed(1)}%. What does this mean for my risk?`} />
@@ -570,7 +570,7 @@ const Results = () => {
 
         {/* Risk Intelligence */}
         <SectionHeader label="RISK INTELLIGENCE" chatQuestion="Give me an overview of my portfolio's risk intelligence — risk attribution, correlation, and sector concentration." />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <RiskAttribution data={analysis?.risk_attribution} />
           <CorrelationHeatmap data={analysis?.correlation} />
           <SectorDonut data={analysis?.sectors} />
@@ -582,7 +582,7 @@ const Results = () => {
           <EfficientFrontier data={frontier} />
           <div className="glass rounded-xl p-5">
             <span className="label-mono mb-4 block" style={{ color: 'hsl(214 10% 57%)' }}>OPTIMAL WEIGHTS</span>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {Object.values(optWeights).map((strat: any) => (
                 <div key={strat.label} className="glass-elevated rounded-lg p-3 relative">
                   {strat.recommended && (

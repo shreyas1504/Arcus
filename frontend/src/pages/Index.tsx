@@ -42,8 +42,8 @@ const Landing = () => (
         <ArcusLogo size={28} />
         <span className="font-display font-extrabold text-foreground text-lg">Arcus</span>
       </div>
-      <div className="flex gap-3">
-        <Link to="/dashboard" className="px-4 py-1.5 rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
+      <div className="flex gap-2 sm:gap-3">
+        <Link to="/dashboard" className="hidden sm:block px-4 py-1.5 rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
         <Link to="/onboarding" className="px-4 py-2 rounded-full text-sm bg-primary text-primary-foreground font-semibold hover:bg-accent-bright transition-colors">
           Get Started <ChevronRight size={14} className="inline ml-1" />
         </Link>
@@ -51,7 +51,7 @@ const Landing = () => (
     </nav>
 
     {/* Hero */}
-    <section className="max-w-5xl mx-auto px-6 pt-24 pb-16 text-center">
+    <section className="max-w-5xl mx-auto px-4 sm:px-6 pt-14 sm:pt-24 pb-12 sm:pb-16 text-center">
       <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="flex items-center justify-center gap-3 mb-8">
         <ArcusLogo size={48} />
         <span className="font-display font-extrabold text-foreground text-[32px]">Arcus</span>
@@ -61,7 +61,7 @@ const Landing = () => (
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="font-display font-extrabold text-5xl md:text-[64px] leading-[1.05] text-foreground"
+        className="font-display font-extrabold text-[34px] sm:text-5xl md:text-[64px] leading-[1.05] text-foreground"
       >
         Institutional-Grade<br />Portfolio Analytics.
       </motion.h1>
@@ -77,7 +77,7 @@ const Landing = () => (
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.5 }}
-        className="flex gap-3 justify-center mt-8"
+        className="flex flex-col sm:flex-row gap-3 justify-center items-center mt-8"
       >
         <Link to="/onboarding">
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">
@@ -118,7 +118,7 @@ const Landing = () => (
 
     {/* Stats bar */}
     <section className="border-b border-border py-6">
-      <div className="max-w-4xl mx-auto flex justify-center gap-16">
+      <div className="max-w-4xl mx-auto flex flex-wrap justify-center gap-8 md:gap-16 px-6">
         {[
           { value: '15+', label: 'Analytics' },
           { value: 'Institutional', label: 'Grade Analysis' },
@@ -148,8 +148,8 @@ const Landing = () => (
     {/* Comparison table */}
     <section className="max-w-4xl mx-auto px-6 pb-20">
       <h2 className="font-display font-extrabold text-2xl text-foreground text-center mb-8">What you get vs. the alternatives</h2>
-      <div className="glass rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div className="glass rounded-xl overflow-hidden overflow-x-auto">
+        <table className="w-full min-w-[480px]">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left p-4 label-mono">Feature</th>

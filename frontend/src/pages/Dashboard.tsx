@@ -134,7 +134,7 @@ const Dashboard = () => {
 
   return (
     <AppLayout title="Portfolio Builder">
-      <div className="max-w-[780px] mx-auto px-6 py-8">
+      <div className="max-w-[780px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <BackButton to="/" />
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
@@ -173,27 +173,29 @@ const Dashboard = () => {
             <label className="label-mono mb-3 block">ADD HOLDINGS</label>
             <div className="space-y-3">
               {holdings.map((h, i) => (
-                <div key={i} className="flex gap-3 items-start">
+                <div key={i} className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-start">
                   <div className="flex-1">
                     <StockSearch value={h.ticker} onChange={(t) => updateHolding(i, 'ticker', t)} placeholder="Search stocks (e.g. Apple, NVDA)..." />
                   </div>
-                  <input
-                    placeholder="Shares"
-                    value={h.shares}
-                    onChange={(e) => updateHolding(i, 'shares', e.target.value)}
-                    className="w-24 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                  />
-                  <input
-                    placeholder="Cost $"
-                    value={h.cost}
-                    onChange={(e) => updateHolding(i, 'cost', e.target.value)}
-                    className="w-28 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                  />
-                  {holdings.length > 1 && (
-                    <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red mt-3">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div className="flex gap-2 sm:gap-3">
+                    <input
+                      placeholder="Shares"
+                      value={h.shares}
+                      onChange={(e) => updateHolding(i, 'shares', e.target.value)}
+                      className="w-full sm:w-24 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    <input
+                      placeholder="Cost $"
+                      value={h.cost}
+                      onChange={(e) => updateHolding(i, 'cost', e.target.value)}
+                      className="w-full sm:w-28 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    {holdings.length > 1 && (
+                      <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red flex-shrink-0 self-center">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               <button
