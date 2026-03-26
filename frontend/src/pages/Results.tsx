@@ -592,7 +592,7 @@ const Results = () => {
         <SectionHeader label="RISK INTELLIGENCE" chatQuestion="Give me an overview of my portfolio's risk intelligence — risk attribution, correlation, and sector concentration." />
         <div className="flex flex-col gap-4 mb-6">
           <RiskAttribution data={analysis?.risk_attribution} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <CorrelationHeatmap data={analysis?.correlation} />
             <SectorDonut data={analysis?.sectors} />
           </div>
