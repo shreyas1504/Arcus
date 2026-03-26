@@ -150,6 +150,35 @@ export const MOCK_AI_RECOMMENDATIONS = [
   "Monte Carlo simulation shows 82% probability of achieving your 15% annual return target over the next 12 months.",
 ];
 
+// Ticker → Sector mapping for offline sector alignment detection
+export const TICKER_SECTOR_MAP: Record<string, string> = {
+  // Technology
+  'AAPL': 'Technology', 'MSFT': 'Technology', 'NVDA': 'Technology', 'GOOGL': 'Technology',
+  'CRM': 'Technology',  'ADBE': 'Technology',  'AMD': 'Technology',  'INTC': 'Technology',
+  'IBM': 'Technology',  'ORCL': 'Technology',  'PLTR': 'Technology', 'SNOW': 'Technology',
+  // Healthcare
+  'UNH': 'Healthcare',  'JNJ': 'Healthcare',  'PFE': 'Healthcare',  'ABBV': 'Healthcare',
+  'TMO': 'Healthcare',  'MRK': 'Healthcare',  'LLY': 'Healthcare',
+  // Energy
+  'XOM': 'Energy',  'CVX': 'Energy',  'COP': 'Energy',  'SLB': 'Energy',
+  'EOG': 'Energy',  'MPC': 'Energy',
+  // Financials
+  'JPM': 'Financials', 'V': 'Financials',   'MA': 'Financials',  'BAC': 'Financials',
+  'GS': 'Financials',  'MS': 'Financials',  'BLK': 'Financials', 'BRK.B': 'Financials',
+  'PYPL': 'Financials', 'COIN': 'Financials',
+  // Consumer
+  'AMZN': 'Consumer', 'TSLA': 'Consumer', 'HD': 'Consumer',   'NKE': 'Consumer',
+  'SBUX': 'Consumer', 'MCD': 'Consumer',  'WMT': 'Consumer',  'COST': 'Consumer',
+  'KO': 'Consumer',   'PEP': 'Consumer',  'PG': 'Consumer',   'DIS': 'Consumer',
+  'NFLX': 'Consumer', 'UBER': 'Consumer', 'SPOT': 'Consumer', 'SHOP': 'Consumer',
+  // Real Estate
+  'AMT': 'Real Estate', 'PLD': 'Real Estate', 'CCI': 'Real Estate',
+  'SPG': 'Real Estate', 'O': 'Real Estate',   'WELL': 'Real Estate',
+  // Utilities
+  'NEE': 'Utilities', 'DUK': 'Utilities', 'SO': 'Utilities',
+  'D': 'Utilities',   'AEP': 'Utilities', 'SRE': 'Utilities',
+};
+
 // Static price snapshot used for offline P&L calculation (mirrors StockSearch STOCK_DB)
 export const MOCK_STOCK_PRICES: Record<string, number> = {
   'AAPL': 182.63, 'MSFT': 378.91, 'GOOGL': 165.22, 'AMZN': 178.25, 'NVDA': 875.40,

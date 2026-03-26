@@ -19,7 +19,7 @@ import CorrelationHeatmap from '@/components/CorrelationHeatmap';
 import StressTestGrid from '@/components/StressTestGrid';
 import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
-import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES } from '@/lib/mock-data';
+import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP } from '@/lib/mock-data';
 import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
@@ -226,8 +226,10 @@ const Results = () => {
           const riskScore = riskLabel === 'Aggressive' ? 100 : (riskChecks.filter(Boolean).length / 3) * 100;
 
           // ── Sector alignment (0-100) ──
-          // Use analysis.sectors (from backend) to check alignment
-          const portfolioSectors: string[] = (analysis?.sectors || []).map((s: any) => s.name);
+          // Use API sectors if available, otherwise derive from tickers via local map
+          const portfolioSectors: string[] = analysis?.sectors?.length
+            ? analysis.sectors.map((s: any) => s.name)
+            : [...new Set(tickers.map((t: string) => TICKER_SECTOR_MAP[t]).filter(Boolean))];
           const matchedSectors = userSectors.filter(s => portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
           const sectorScore = userSectors.length > 0 ? (matchedSectors.length / userSectors.length) * 100 : 100;
           const missingSectors = userSectors.filter(s => !portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
