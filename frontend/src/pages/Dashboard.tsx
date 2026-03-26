@@ -207,11 +207,11 @@ const Dashboard = () => {
 
   return (
     <AppLayout title="Portfolio Builder">
-      <div className="max-w-[780px] mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="w-full max-w-[780px] mx-auto px-4 sm:px-6 py-6 sm:py-8 overflow-x-hidden">
         <BackButton to="/" />
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="font-display font-extrabold text-3xl text-foreground">Portfolio Builder</h1>
+          <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground">Portfolio Builder</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {hasSaved ? 'Your portfolio is saved. Update it or run analysis.' : 'Welcome. Now let\'s add your portfolio.'}
           </p>
@@ -278,21 +278,21 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 relative z-10">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 relative z-10 overflow-hidden">
             <label className="label-mono mb-3 block">DATE RANGE</label>
             <div className="flex flex-col gap-2.5">
               <div>
                 <span className="font-mono text-[10px] text-muted-foreground mb-1 block">START DATE</span>
-                <div className="relative">
-                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+                <div className="relative w-full">
+                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
                 </div>
               </div>
               <div>
                 <span className="font-mono text-[10px] text-muted-foreground mb-1 block">END DATE</span>
-                <div className="relative">
-                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+                <div className="relative w-full">
+                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
                 </div>
               </div>
             </div>

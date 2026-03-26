@@ -21,8 +21,10 @@ const TopBar = ({ title, onMenuClick, isMobile }: TopBarProps) => (
           >
             <Menu size={20} />
           </button>
-          <ArcusLogo size={22} />
-          <span className="font-display font-extrabold text-foreground text-sm mr-1">Arcus</span>
+          <Link to="/" className="flex items-center gap-1">
+            <ArcusLogo size={22} />
+            <span className="font-display font-extrabold text-foreground text-sm mr-1">Arcus</span>
+          </Link>
         </>
       )}
       <h2 className="font-display font-bold text-foreground text-sm sm:text-base md:text-lg truncate">{title}</h2>

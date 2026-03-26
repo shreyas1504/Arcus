@@ -173,18 +173,18 @@ const StockSearch = ({ value, onChange, placeholder = 'Search stocks (e.g. Apple
                 <button
                   key={stock.ticker}
                   onClick={() => select(stock.ticker)}
-                  className="w-full flex items-center justify-between h-11 px-3 transition-colors"
+                  className="w-full flex items-center justify-between h-11 px-3 transition-colors overflow-hidden"
                   style={{
                     background: i === selectedIdx ? 'rgba(56,189,148,0.12)' : 'transparent',
                     borderLeft: i === selectedIdx ? '2px solid hsl(var(--primary))' : '2px solid transparent',
                   }}
                   onMouseEnter={() => setSelectedIdx(i)}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[11px] text-primary px-2 py-0.5 rounded" style={{ background: 'rgba(56,189,148,0.15)' }}>{stock.ticker}</span>
-                    <span className="text-[13px] text-foreground">{stock.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-[11px] text-primary px-2 py-0.5 rounded flex-shrink-0" style={{ background: 'rgba(56,189,148,0.15)' }}>{stock.ticker}</span>
+                    <span className="text-[13px] text-foreground truncate">{stock.name}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     <span className="font-mono text-xs text-secondary">${stock.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     <span className={`font-mono text-[11px] ${stock.positive ? 'text-signal-green' : 'text-signal-red'}`}>{stock.change}</span>
                   </div>
