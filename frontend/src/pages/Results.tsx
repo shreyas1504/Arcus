@@ -435,12 +435,10 @@ const Results = () => {
                 In the analysis period you made {(m.annualized_return * 100).toFixed(1)}% but your portfolio can swing hard — on a bad day you could lose around {Math.abs(m.var_95 * 100).toFixed(1)}%.
               </p>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="font-mono text-[11px] text-signal-green">↑ +{(m.annualized_return * 100).toFixed(1)}% return</span>
-              <span className="text-primary text-xs">·</span>
               <span className="font-mono text-[11px] text-primary">Sharpe {m.sharpe.toFixed(2)}</span>
-              <span className="text-primary text-xs">·</span>
-              <span className="font-mono text-[11px] text-signal-red">▼ {(m.max_drawdown * 100).toFixed(1)}% worst drop</span>
+              <span className="font-mono text-[11px] text-signal-red">▼ {(m.max_drawdown * 100).toFixed(1)}% drop</span>
             </div>
           </div>
         </motion.div>
@@ -503,16 +501,16 @@ const Results = () => {
         </div>
 
         {/* P&L Table */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass rounded-xl p-5 mb-8 overflow-x-auto">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass rounded-xl p-4 sm:p-5 mb-8 overflow-x-auto max-w-full">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={16} className="text-primary" />
             <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>PROFIT & LOSS</span>
           </div>
-          <table className="w-full min-w-[600px]">
+          <table className="w-full min-w-[480px]">
             <thead>
               <tr className="border-b border-border">
                 {['Ticker', 'Shares', 'Cost Basis', 'Current', 'P&L ($)', 'P&L (%)', 'Days'].map((h) => (
-                  <th key={h} className="text-left py-2 label-mono" style={{ color: 'hsl(214 10% 57%)' }}>{h}</th>
+                  <th key={h} className="text-left py-2 pr-3 label-mono whitespace-nowrap" style={{ color: 'hsl(214 10% 57%)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -524,24 +522,24 @@ const Results = () => {
                 const positive = pnlDollar != null && pnlDollar >= 0;
                 return (
                   <tr key={row.ticker} className="border-b border-border/30 hover:bg-card-elevated/50 transition-colors">
-                    <td className="py-3 font-mono text-sm font-medium text-foreground">{row.ticker}</td>
-                    <td className="py-3 font-mono text-sm text-foreground">{row.shares}</td>
-                    <td className="py-3 font-mono text-sm text-muted-foreground">{row.cost_basis != null ? `$${row.cost_basis.toFixed(2)}` : '—'}</td>
-                    <td className="py-3 font-mono text-sm text-foreground">{row.current_price != null ? `$${row.current_price.toFixed(2)}` : '—'}</td>
-                    <td className={`py-3 font-mono text-sm font-medium ${pnlDollar != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
+                    <td className="py-2.5 pr-3 font-mono text-xs font-medium text-foreground whitespace-nowrap">{row.ticker}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.shares}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.cost_basis != null ? `$${row.cost_basis.toFixed(2)}` : '—'}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.current_price != null ? `$${row.current_price.toFixed(2)}` : '—'}</td>
+                    <td className={`py-2.5 pr-3 font-mono text-xs font-medium whitespace-nowrap ${pnlDollar != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
                       {pnlDollar != null ? `${positive ? '+' : ''}$${pnlDollar.toFixed(2)}` : '—'}
                     </td>
-                    <td className={`py-3 font-mono text-sm ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
+                    <td className={`py-2.5 pr-3 font-mono text-xs whitespace-nowrap ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
                       {pnlPct != null ? `${positive ? '+' : ''}${pnlPct.toFixed(1)}%` : '—'}
                     </td>
-                    <td className="py-3 font-mono text-sm text-muted-foreground">{row.days ?? '—'}</td>
+                    <td className="py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.days ?? '—'}</td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-border">
-                <td className="py-3 font-mono text-sm font-bold text-foreground">TOTAL</td>
+                <td className="py-2.5 pr-3 font-mono text-xs font-bold text-foreground">TOTAL</td>
                 <td colSpan={3} />
-                <td className="py-3 font-mono text-sm font-bold text-signal-green">
+                <td className="py-2.5 pr-3 font-mono text-xs font-bold text-signal-green whitespace-nowrap">
                   {(() => {
                     const total = pnlRows.reduce((a, r) => r.current_price != null && r.cost_basis != null ? a + (r.current_price - r.cost_basis) * r.shares : a, 0);
                     return `${total >= 0 ? '+' : ''}$${total.toFixed(2)}`;

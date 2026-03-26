@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import AnimatedNumber from '@/components/AnimatedNumber';
 import { MOCK_PORTFOLIO } from '@/lib/mock-data';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MockColumn {
   id: string;
@@ -29,6 +30,7 @@ const calcMetrics = (weights: Record<string, number>) => {
 };
 
 const Sandbox = () => {
+  const isMobile = useIsMobile();
   const [mocks, setMocks] = useState<MockColumn[]>([
     { id: 'a', label: 'MOCK A', weights: { ...currentWeights, NVDA: 0.15, VOO: 0.25 } },
   ]);
@@ -54,15 +56,22 @@ const Sandbox = () => {
 
   return (
     <AppLayout title="Strategy Sandbox">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <BackButton to="/dashboard/results" />
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="font-display font-extrabold text-3xl text-foreground">Strategy Sandbox</h1>
+          <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground">Strategy Sandbox</h1>
           <p className="text-muted-foreground text-sm mt-1">Compare your portfolio against simulated alternatives in real-time.</p>
         </motion.div>
 
-        <div className="grid gap-4 mt-8" style={{ gridTemplateColumns: `repeat(${1 + mocks.length + (mocks.length < 3 ? 1 : 0)}, minmax(0, 1fr))` }}>
+        <div
+          className="grid gap-4 mt-8"
+          style={{
+            gridTemplateColumns: isMobile
+              ? '1fr'
+              : `repeat(${1 + mocks.length + (mocks.length < 3 ? 1 : 0)}, minmax(0, 1fr))`,
+          }}
+        >
           {/* Current column */}
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -169,7 +178,12 @@ const Sandbox = () => {
 
           {/* Add mock column */}
           {mocks.length < 3 && (
-            <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={addMock} className="glass rounded-xl p-5 border-2 border-dashed border-border hover:border-primary/30 transition-colors flex flex-col items-center justify-center min-h-[300px]">
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              onClick={addMock}
+              className={`glass rounded-xl p-5 border-2 border-dashed border-border hover:border-primary/30 transition-colors flex flex-col items-center justify-center ${isMobile ? 'py-6' : 'min-h-[300px]'}`}
+            >
               <Plus size={24} className="text-primary mb-2" />
               <span className="font-mono text-xs text-muted-foreground">ADD MOCK</span>
             </motion.button>

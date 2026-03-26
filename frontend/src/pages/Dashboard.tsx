@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, ChevronRight, Calendar, Trash2, Plus } from 'lucide-react';
+import { Upload, ChevronRight, Calendar, Trash2, Plus, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
@@ -84,6 +84,42 @@ const getPresets = (): PresetConfig[] => {
   }));
 };
 
+const SAMPLE_CSV = `Symbol,Quantity,Average Cost
+AAPL,15,148.20
+MSFT,8,320.00
+NVDA,5,620.00
+GOOGL,12,132.50
+VOO,40,388.00
+`;
+
+const parseCSV = (text: string): Holding[] => {
+  const lines = text.trim().split('\n').filter((l) => l.trim() && !l.startsWith('---'));
+  if (lines.length < 2) return [];
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  const headers = lines[0].split(sep).map((h) => h.replace(/"/g, '').trim().toLowerCase());
+
+  const colIdx = (keys: string[]) =>
+    headers.findIndex((h) => keys.some((k) => h.includes(k)));
+
+  const tickerIdx = colIdx(['symbol', 'ticker', 'instrument', 'stock', 'security']);
+  const sharesIdx = colIdx(['quantity', 'shares', 'qty', 'units']);
+  const costIdx   = colIdx(['average cost', 'avg cost', 'cost basis', 'cost per share', 'unit cost', 'purchase price', 'avg price', 'average price']);
+
+  if (tickerIdx === -1) return [];
+
+  const results: Holding[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(sep).map((c) => c.replace(/"/g, '').trim());
+    const ticker = cols[tickerIdx]?.toUpperCase().replace(/[^A-Z.]/g, '');
+    if (!ticker || ['TOTAL', 'CASH', 'PENDING'].includes(ticker)) continue;
+    if (!/^[A-Z.]{1,6}$/.test(ticker)) continue;
+    const shares = sharesIdx !== -1 ? (cols[sharesIdx] ?? '') : '';
+    const cost   = costIdx   !== -1 ? (cols[costIdx]?.replace(/[$,\s]/g, '') ?? '') : '';
+    results.push({ ticker, shares, cost });
+  }
+  return results;
+};
+
 const loadDraft = (): { holdings: Holding[]; startDate: string; endDate: string } => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -98,6 +134,10 @@ const Dashboard = () => {
   const [startDate, setStartDate] = useState(draft.startDate);
   const [endDate, setEndDate] = useState(draft.endDate);
   const [selectedPreset, setSelectedPreset] = useState('');
+  const [csvImported, setCsvImported] = useState(false);
+  const [csvError, setCsvError] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const savedPortfolio = localStorage.getItem(SAVED_KEY);
@@ -107,6 +147,39 @@ const Dashboard = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ holdings, startDate, endDate }));
   }, [holdings, startDate, endDate]);
+
+  const applyParsedHoldings = (text: string) => {
+    setCsvError('');
+    const parsed = parseCSV(text);
+    if (parsed.length === 0) {
+      setCsvError('Could not parse CSV. Check format: Symbol, Quantity, Average Cost columns required.');
+      return;
+    }
+    setHoldings(parsed);
+    setSelectedPreset('');
+    setCsvImported(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => applyParsedHoldings(ev.target?.result as string);
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => applyParsedHoldings(ev.target?.result as string);
+    reader.readAsText(file);
+  };
+
+  const loadSampleFile = () => applyParsedHoldings(SAMPLE_CSV);
 
   const presets = getPresets();
 
@@ -173,29 +246,27 @@ const Dashboard = () => {
             <label className="label-mono mb-3 block">ADD HOLDINGS</label>
             <div className="space-y-3">
               {holdings.map((h, i) => (
-                <div key={i} className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch sm:items-start">
-                  <div className="flex-1">
-                    <StockSearch value={h.ticker} onChange={(t) => updateHolding(i, 'ticker', t)} placeholder="Search stocks (e.g. Apple, NVDA)..." />
+                <div key={i} className="flex flex-row items-center gap-1.5">
+                  <div className="flex-1 min-w-0">
+                    <StockSearch value={h.ticker} onChange={(t) => updateHolding(i, 'ticker', t)} placeholder="Ticker / Name..." />
                   </div>
-                  <div className="flex gap-2 sm:gap-3">
-                    <input
-                      placeholder="Shares"
-                      value={h.shares}
-                      onChange={(e) => updateHolding(i, 'shares', e.target.value)}
-                      className="w-full sm:w-24 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                    />
-                    <input
-                      placeholder="Cost $"
-                      value={h.cost}
-                      onChange={(e) => updateHolding(i, 'cost', e.target.value)}
-                      className="w-full sm:w-28 bg-card-elevated border border-border rounded-lg px-3 py-3 font-mono text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                    />
-                    {holdings.length > 1 && (
-                      <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red flex-shrink-0 self-center">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
+                  <input
+                    placeholder="Qty"
+                    value={h.shares}
+                    onChange={(e) => updateHolding(i, 'shares', e.target.value)}
+                    className="w-14 sm:w-20 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    placeholder="Cost $"
+                    value={h.cost}
+                    onChange={(e) => updateHolding(i, 'cost', e.target.value)}
+                    className="w-16 sm:w-24 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                  />
+                  {holdings.length > 1 && (
+                    <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red flex-shrink-0">
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               ))}
               <button
@@ -209,14 +280,20 @@ const Dashboard = () => {
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 relative z-10">
             <label className="label-mono mb-3 block">DATE RANGE</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative">
-                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-9 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+            <div className="flex flex-col gap-2.5">
+              <div>
+                <span className="font-mono text-[10px] text-muted-foreground mb-1 block">START DATE</span>
+                <div className="relative">
+                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+                </div>
               </div>
-              <div className="relative">
-                <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-9 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+              <div>
+                <span className="font-mono text-[10px] text-muted-foreground mb-1 block">END DATE</span>
+                <div className="relative">
+                  <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none" />
+                </div>
               </div>
             </div>
           </motion.div>
@@ -233,12 +310,32 @@ const Dashboard = () => {
           </motion.div>
 
           {/* CSV import zone */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass rounded-xl p-6 border-2 border-dashed border-border hover:border-primary/30 transition-colors text-center">
-            <Upload size={32} className="text-primary mx-auto mb-4" />
-            <h3 className="font-display font-bold text-foreground">Import from CSV</h3>
-            <p className="text-muted-foreground text-sm mt-2">Drag and drop your broker CSV file</p>
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className={`glass rounded-xl p-6 border-2 border-dashed transition-colors text-center cursor-pointer ${isDragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
+            {csvImported
+              ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" />
+              : <Upload size={32} className="text-primary mx-auto mb-4" />}
+            <h3 className="font-display font-bold text-foreground">
+              {csvImported ? 'CSV Imported!' : 'Import from CSV'}
+            </h3>
+            <p className="text-muted-foreground text-sm mt-2">
+              {csvImported ? 'Holdings loaded from your file.' : 'Click or drag & drop your broker CSV file'}
+            </p>
+            {csvError && <p className="font-mono text-[11px] text-signal-red mt-2">{csvError}</p>}
             <p className="font-mono text-[10px] text-muted-foreground mt-3">Robinhood · Fidelity · Schwab · Webull</p>
-            <button className="mt-4 px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors">
+            <button
+              className="mt-4 px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
+              onClick={(e) => { e.stopPropagation(); loadSampleFile(); }}
+            >
               Use sample file
             </button>
           </motion.div>

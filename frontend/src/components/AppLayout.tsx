@@ -17,9 +17,9 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
   const isMobile = useIsMobile();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <NewsTicker />
-      <div className="flex pt-9 relative">
+      <div className="flex pt-9 relative overflow-x-hidden">
         {/* Mobile backdrop */}
         {isMobile && mobileOpen && (
           <div

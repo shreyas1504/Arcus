@@ -38,6 +38,7 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen, isMobile 
   // On mobile: drawer that slides in/out. On desktop: always-visible collapsed sidebar.
   return (
     <motion.aside
+      initial={isMobile ? { x: -280, width: 260 } : false}
       animate={
         isMobile
           ? { x: mobileOpen ? 0 : -280, width: 260 }
