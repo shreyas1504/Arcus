@@ -94,25 +94,11 @@ const Results = () => {
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
   const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
 
-  // Compute health score from real metrics so it's never stuck at the mock 78.
-  // Formula: Sharpe quality (40%) + Tail risk (30%) + Volatility control (20%) + Drawdown control (10%)
-  const computeHealthScore = (met: typeof rawMetrics): number => {
-    // Sharpe: 0 → score 0,  1.0 → 60,  2.0+ → 100
-    const sharpeScore   = Math.min(100, Math.max(0, (met.sharpe / 2.0) * 100));
-    // VaR: ≤2% daily loss → 100, ≥8% → 0
-    const varScore      = Math.min(100, Math.max(0, 100 - (Math.abs(met.var_95) * 100 - 2) * (100 / 6)));
-    // Volatility: ≤10% ann → 100, ≥40% → 0
-    const volScore      = Math.min(100, Math.max(0, 100 - (met.volatility * 100 - 10) * (100 / 30)));
-    // Drawdown: ≤5% → 100, ≥40% → 0
-    const ddScore       = Math.min(100, Math.max(0, 100 - (Math.abs(met.max_drawdown) * 100 - 5) * (100 / 35)));
-    return Math.round(sharpeScore * 0.40 + varScore * 0.30 + volScore * 0.20 + ddScore * 0.10);
-  };
-
-  // Always recompute from real metrics; only use mock value if we have no better data
-  const m = {
-    ...rawMetrics,
-    health_score: computeHealthScore(rawMetrics),  // Always recompute — never use hardcoded mock value
-  };
+  // Use health_score directly from rawMetrics:
+  //  - backend: computed by Python portfolio_health_score() from real historical data
+  //  - offline: computed by computePortfolioMetrics() with concentration penalty per ticker combo
+  // Both sources already produce portfolio-specific values; no override needed.
+  const m = rawMetrics;
 
 
   // Build P&L rows from the user's actual holdings when API is unavailable
