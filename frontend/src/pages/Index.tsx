@@ -107,8 +107,8 @@ const Landing = () => (
               </div>
             ))}
           </div>
-          <div className="mt-3 h-16 rounded-lg glass-elevated flex items-center justify-center">
-            <svg width="100%" height="40" className="px-4">
+          <div className="mt-3 h-16 rounded-lg glass-elevated flex items-center justify-center overflow-hidden">
+            <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" className="px-4">
               <polyline points="0,30 20,25 40,28 60,18 80,22 100,15 120,20 140,12 160,18 180,10 200,14 220,8 240,12 260,6 280,10 300,5" fill="none" stroke="#38BDA4" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
@@ -146,25 +146,25 @@ const Landing = () => (
     </motion.section>
 
     {/* Comparison table */}
-    <section className="max-w-4xl mx-auto px-6 pb-20">
+    <section className="max-w-xl mx-auto px-6 pb-20">
       <h2 className="font-display font-extrabold text-2xl text-foreground text-center mb-8">What you get vs. the alternatives</h2>
-      <div className="glass rounded-xl overflow-hidden overflow-x-auto">
-        <table className="w-full min-w-[480px]">
+      <div className="glass rounded-xl overflow-hidden">
+        <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left p-4 label-mono">Feature</th>
-              <th className="p-4 label-mono text-center">Robinhood</th>
-              <th className="p-4 label-mono text-center">Personal Capital</th>
-              <th className="p-4 label-mono text-center text-primary">Arcus</th>
+              <th className="text-left px-4 py-3 label-mono">Feature</th>
+              <th className="px-3 py-3 label-mono text-center">Robinhood</th>
+              <th className="px-3 py-3 label-mono text-center">Personal Capital</th>
+              <th className="px-3 py-3 label-mono text-center text-primary">Arcus</th>
             </tr>
           </thead>
           <tbody>
             {comparison.map((row) => (
               <tr key={row.feature} className="border-b border-border/50 hover:bg-card-elevated/50 transition-colors">
-                <td className="p-4 text-sm text-foreground">{row.feature}</td>
-                <td className="p-4 text-center">{row.robinhood ? <CheckCircle size={16} className="text-signal-green mx-auto" /> : <X size={16} className="text-muted-foreground/30 mx-auto" />}</td>
-                <td className="p-4 text-center">{row.pc ? <CheckCircle size={16} className="text-signal-green mx-auto" /> : <X size={16} className="text-muted-foreground/30 mx-auto" />}</td>
-                <td className="p-4 text-center"><CheckCircle size={16} className="text-primary mx-auto" /></td>
+                <td className="px-4 py-2.5 text-sm text-foreground">{row.feature}</td>
+                <td className="px-3 py-2.5 text-center">{row.robinhood ? <CheckCircle size={15} className="text-signal-green mx-auto" /> : <X size={15} className="text-muted-foreground/30 mx-auto" />}</td>
+                <td className="px-3 py-2.5 text-center">{row.pc ? <CheckCircle size={15} className="text-signal-green mx-auto" /> : <X size={15} className="text-muted-foreground/30 mx-auto" />}</td>
+                <td className="px-3 py-2.5 text-center"><CheckCircle size={15} className="text-primary mx-auto" /></td>
               </tr>
             ))}
           </tbody>
