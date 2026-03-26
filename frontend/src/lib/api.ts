@@ -9,6 +9,8 @@ export interface PortfolioRequest {
   weights: number[];
   start_date: string;
   end_date: string;
+  risk_free_rate?: number;
+  benchmark?: string;
 }
 
 export interface MonteCarloRequest extends PortfolioRequest {

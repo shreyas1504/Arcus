@@ -23,6 +23,7 @@ import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICE
 import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
+import { loadSettings } from '@/hooks/use-settings';
 
 const askAI = (question: string) => {
   openChatWithMessage.dispatchEvent(new CustomEvent('open', { detail: { message: question } }));
@@ -41,7 +42,8 @@ const SectionHeader = ({ label, chatQuestion }: { label: string; chatQuestion?: 
 
 const Results = () => {
   const config = usePortfolioConfig();
-  const req = config ? portfolioToRequest(config) : null;
+  const settings = loadSettings();
+  const req = config ? portfolioToRequest(config, settings) : null;
 
   const { data: analysis, isLoading } = useQuery({
     queryKey: ['analyze', req],
@@ -88,7 +90,7 @@ const Results = () => {
   const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
   const userShares  = config?.holdings.filter(h => h.ticker).map(h => parseFloat(h.shares) || 1) ?? [];
   const rawMetrics = analysis?.metrics
-    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares) : MOCK_PORTFOLIO.metrics);
+    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares, settings.riskFreeRate) : MOCK_PORTFOLIO.metrics);
 
   const tickers = analysis?.tickers ?? (userTickers.length > 0 ? userTickers : MOCK_PORTFOLIO.tickers);
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
@@ -547,10 +549,10 @@ const Results = () => {
                   <tr key={row.ticker} className="border-b border-border/30 hover:bg-card-elevated/50 transition-colors">
                     <td className="py-2.5 pr-3 font-mono text-xs font-medium text-foreground whitespace-nowrap">{row.ticker}</td>
                     <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.shares}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.cost_basis != null ? `$${row.cost_basis.toFixed(2)}` : '—'}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.current_price != null ? `$${row.current_price.toFixed(2)}` : '—'}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.cost_basis != null ? (settings.vaultMode ? '$***.**' : `$${row.cost_basis.toFixed(2)}`) : '—'}</td>
+                    <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.current_price != null ? (settings.vaultMode ? '$***.**' : `$${row.current_price.toFixed(2)}`) : '—'}</td>
                     <td className={`py-2.5 pr-3 font-mono text-xs font-medium whitespace-nowrap ${pnlDollar != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
-                      {pnlDollar != null ? `${positive ? '+' : ''}$${pnlDollar.toFixed(2)}` : '—'}
+                      {pnlDollar != null ? (settings.vaultMode ? `${positive ? '+' : ''}$***.**` : `${positive ? '+' : ''}$${pnlDollar.toFixed(2)}`) : '—'}
                     </td>
                     <td className={`py-2.5 pr-2 font-mono text-xs whitespace-nowrap ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
                       {pnlPct != null ? `${positive ? '+' : ''}${pnlPct.toFixed(1)}%` : '—'}
@@ -564,7 +566,7 @@ const Results = () => {
                 <td className="py-2.5 pr-2 font-mono text-xs font-bold text-signal-green whitespace-nowrap">
                   {(() => {
                     const total = pnlRows.reduce((a, r) => r.current_price != null && r.cost_basis != null ? a + (r.current_price - r.cost_basis) * r.shares : a, 0);
-                    return `${total >= 0 ? '+' : ''}$${total.toFixed(2)}`;
+                    return settings.vaultMode ? `${total >= 0 ? '+' : ''}$***.**` : `${total >= 0 ? '+' : ''}$${total.toFixed(2)}`;
                   })()}
                 </td>
                 <td colSpan={1} />
@@ -654,7 +656,7 @@ const Results = () => {
         {/* Monte Carlo + Stress Testing */}
         <SectionHeader label="SIMULATION & STRESS TESTING" chatQuestion="Explain my Monte Carlo simulation results and stress test outcomes — what are the key takeaways?" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <MonteCarloChart data={monteCarlo} />
+          <MonteCarloChart data={monteCarlo} targetReturn={settings.targetReturn} initialValue={100000} vaultMode={settings.vaultMode} />
           <StressTestGrid data={stressTests} />
         </div>
       </div>

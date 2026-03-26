@@ -16,7 +16,10 @@ export function usePortfolioConfig(): PortfolioConfig | null {
   }
 }
 
-export function portfolioToRequest(config: PortfolioConfig) {
+export function portfolioToRequest(
+  config: PortfolioConfig,
+  settings?: { riskFreeRate?: number; benchmark?: string },
+) {
   const filled = config.holdings.filter((h) => h.ticker);
   const n = filled.length;
   if (n === 0) return null;
@@ -25,5 +28,7 @@ export function portfolioToRequest(config: PortfolioConfig) {
     weights: filled.map(() => 1 / n),
     start_date: config.startDate,
     end_date: config.endDate,
+    ...(settings?.riskFreeRate !== undefined && { risk_free_rate: settings.riskFreeRate }),
+    ...(settings?.benchmark && { benchmark: settings.benchmark }),
   };
 }

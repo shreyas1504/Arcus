@@ -37,6 +37,8 @@ class V2PortfolioRequest(BaseModel):
     weights: Optional[list[float]] = None
     start_date: str
     end_date: str
+    risk_free_rate: Optional[float] = None
+    benchmark: Optional[str] = None
 
 class V2MonteCarloRequest(V2PortfolioRequest):
     n_days: int = 252
@@ -178,12 +180,25 @@ def v2_analyze(req: V2PortfolioRequest):
             weighted_pe = 0
             weighted_ps = 0
 
+    # Recalculate Sharpe/Sortino if the user supplied a custom risk-free rate
+    sharpe_val = round(m.get("sharpe_ratio", 0), 2)
+    sortino_val = round(m.get("sortino_ratio", 0), 2)
+    rfr: Optional[float] = req.risk_free_rate
+    if rfr is not None:
+        ann_ret: float = float(m.get("annualized_return", 0) or 0.0)
+        ann_vol: float = float(m.get("annualized_volatility", 0) or 0.01)
+        new_sharpe: float = (ann_ret - rfr) / ann_vol
+        old_sharpe: float = float(m.get("sharpe_ratio", new_sharpe) or new_sharpe)
+        sharpe_val = round(new_sharpe, 2)
+        if old_sharpe != 0:
+            sortino_val = round(float(m.get("sortino_ratio", 0)) * (new_sharpe / old_sharpe), 2)
+
     return {
         "tickers": tickers,
         "weights": weights,
         "metrics": {
-            "sharpe": round(m.get("sharpe_ratio", 0), 2),
-            "sortino": round(m.get("sortino_ratio", 0), 2),
+            "sharpe": sharpe_val,
+            "sortino": sortino_val,
             "alpha": round(m.get("alpha", 0), 4),
             "information_ratio": round(m.get("information_ratio", 0), 2),
             "calmar": round(m.get("calmar_ratio", 0), 2),

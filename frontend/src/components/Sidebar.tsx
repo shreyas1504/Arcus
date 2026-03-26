@@ -12,7 +12,7 @@ const navItems = [
 ];
 
 const bottomItems = [
-  { icon: Settings, label: 'Settings',     path: '#' },
+  { icon: Settings, label: 'Settings',     path: '/settings' },
   { icon: User,     label: 'Profile / DNA', path: '/onboarding' },
 ];
 

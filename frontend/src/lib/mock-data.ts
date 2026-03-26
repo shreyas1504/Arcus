@@ -50,7 +50,8 @@ const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD
  */
 export const computePortfolioMetrics = (
   tickers: string[],
-  sharesOrWeights?: number[]
+  sharesOrWeights?: number[],
+  riskFreeRate = 0.05,
 ) => {
   if (tickers.length === 0) return MOCK_PORTFOLIO.metrics;
 
@@ -75,7 +76,7 @@ export const computePortfolioMetrics = (
   const adjDD  = pDD  * (divFactor * 0.92);
 
   // Derived metrics
-  const rf = 0.05; // Risk-free rate
+  const rf = riskFreeRate;
   const sharpe            = adjVol > 0 ? (pRet - rf) / adjVol : 0;
   const sortino           = Math.abs(adjVar) > 0 ? (pRet - rf) / Math.abs(adjVar * Math.sqrt(252)) : 0;
   const alpha             = pRet - (rf + pBeta * 0.07);   // market premium 7%
