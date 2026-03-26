@@ -33,7 +33,7 @@ const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
         ))}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto flex justify-center">
         <div
           style={{
             display: 'inline-grid',
