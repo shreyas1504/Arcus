@@ -93,7 +93,7 @@ export const computePortfolioMetrics = (
       Math.min(100, Math.max(0, 100 - (adjVol * 100 - 10) * (100 / 30))) * 0.20 +
       Math.min(100, Math.max(0, 100 - (Math.abs(adjDD) * 100 - 5) * (100 / 35))) * 0.10
     ) * concentrationPenalty
-  );
+  ));
 
   return {
     sharpe:            Math.round(sharpe * 100) / 100,
@@ -313,7 +313,7 @@ export const MOCK_STOCK_PRICES: Record<string, number> = {
   'EOG': 128.50, 'MPC': 178.90, 'NEE': 73.20, 'DUK': 101.50, 'SO': 82.30,
   'D': 45.60, 'AEP': 94.20, 'SRE': 72.80, 'AMT': 185.40, 'PLD': 112.60,
   'CCI': 98.30, 'SPG': 152.40, 'O': 54.20, 'WELL': 98.70,
-  'BRK.B': 412.30, 'PFE': 28.90, 'LLY': 782.30,
+  'BRK.B': 412.30,
 };
 
 export const MOCK_SPARKLINES: Record<string, number[]> = {
