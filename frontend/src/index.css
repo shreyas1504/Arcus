@@ -73,14 +73,28 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
   html {
     overflow-x: hidden;
     max-width: 100%;
+    width: 100%;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: hidden;
+    max-width: 100%;
+    width: 100%;
+    position: relative;
+  }
+  /* Universal width clamp — no element should exceed viewport width.
+     This is the single most reliable fix for mobile browser zoom-out.
+     Exempts fixed-position overlays (tooltips, chat panel). */
+  *:not(.recharts-wrapper):not(.recharts-surface) {
+    max-width: 100%;
+  }
+  img, svg, video, canvas, iframe {
+    max-width: 100%;
   }
   /* Prevent iOS Safari auto-zoom on input focus (triggered when font-size < 16px) */
   @media screen and (max-width: 767px) {
