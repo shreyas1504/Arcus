@@ -167,7 +167,7 @@ const Results = () => {
 
   return (
     <AppLayout title="Portfolio Analysis">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 arcus-print-root">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 arcus-print-root overflow-x-hidden">
         <BackButton to="/dashboard" />
 
         {/* Top bar */}
@@ -501,16 +501,16 @@ const Results = () => {
         </div>
 
         {/* P&L Table */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass rounded-xl p-4 sm:p-5 mb-8 overflow-x-auto max-w-full">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass rounded-xl p-4 sm:p-5 mb-8 overflow-x-auto">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={16} className="text-primary" />
             <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>PROFIT & LOSS</span>
           </div>
-          <table className="w-full min-w-[480px]">
+          <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                {['Ticker', 'Shares', 'Cost Basis', 'Current', 'P&L ($)', 'P&L (%)', 'Days'].map((h) => (
-                  <th key={h} className="text-left py-2 pr-3 label-mono whitespace-nowrap" style={{ color: 'hsl(214 10% 57%)' }}>{h}</th>
+                {['Ticker', 'Qty', 'Cost', 'Price', 'P&L $', 'P&L %'].map((h) => (
+                  <th key={h} className="text-left py-2 pr-2 label-mono whitespace-nowrap" style={{ color: 'hsl(214 10% 57%)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -529,23 +529,22 @@ const Results = () => {
                     <td className={`py-2.5 pr-3 font-mono text-xs font-medium whitespace-nowrap ${pnlDollar != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
                       {pnlDollar != null ? `${positive ? '+' : ''}$${pnlDollar.toFixed(2)}` : '—'}
                     </td>
-                    <td className={`py-2.5 pr-3 font-mono text-xs whitespace-nowrap ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
+                    <td className={`py-2.5 pr-2 font-mono text-xs whitespace-nowrap ${pnlPct != null ? (positive ? 'text-signal-green' : 'text-signal-red') : 'text-muted-foreground'}`}>
                       {pnlPct != null ? `${positive ? '+' : ''}${pnlPct.toFixed(1)}%` : '—'}
                     </td>
-                    <td className="py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.days ?? '—'}</td>
                   </tr>
                 );
               })}
               <tr className="border-t-2 border-border">
                 <td className="py-2.5 pr-3 font-mono text-xs font-bold text-foreground">TOTAL</td>
                 <td colSpan={3} />
-                <td className="py-2.5 pr-3 font-mono text-xs font-bold text-signal-green whitespace-nowrap">
+                <td className="py-2.5 pr-2 font-mono text-xs font-bold text-signal-green whitespace-nowrap">
                   {(() => {
                     const total = pnlRows.reduce((a, r) => r.current_price != null && r.cost_basis != null ? a + (r.current_price - r.cost_basis) * r.shares : a, 0);
                     return `${total >= 0 ? '+' : ''}$${total.toFixed(2)}`;
                   })()}
                 </td>
-                <td colSpan={2} />
+                <td colSpan={1} />
               </tr>
             </tbody>
           </table>
@@ -568,7 +567,7 @@ const Results = () => {
 
         {/* Risk Intelligence */}
         <SectionHeader label="RISK INTELLIGENCE" chatQuestion="Give me an overview of my portfolio's risk intelligence — risk attribution, correlation, and sector concentration." />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 gap-4 mb-6">
           <RiskAttribution data={analysis?.risk_attribution} />
           <CorrelationHeatmap data={analysis?.correlation} />
           <SectorDonut data={analysis?.sectors} />
