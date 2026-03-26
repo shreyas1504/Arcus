@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Settings2, Shield, Target, BarChart2, EyeOff, Download, Trash2, RotateCcw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
@@ -13,8 +14,8 @@ const Section = ({
   delay = 0,
 }: {
   title: string;
-  icon: React.ElementType;
-  children: React.ReactNode;
+  icon: ElementType;
+  children: ReactNode;
   delay?: number;
 }) => (
   <motion.div
@@ -38,7 +39,7 @@ const SettingRow = ({
 }: {
   label: string;
   description: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) => (
   <div className="flex items-center justify-between gap-6">
     <div className="min-w-0">
