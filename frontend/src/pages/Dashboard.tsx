@@ -314,30 +314,49 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className={`glass rounded-xl p-6 border-2 border-dashed transition-colors text-center cursor-pointer ${isDragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'}`}
+            className={`glass rounded-xl border-2 border-dashed transition-colors ${isDragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
             onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
           >
-            <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
-            {csvImported
-              ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" />
-              : <Upload size={32} className="text-primary mx-auto mb-4" />}
-            <h3 className="font-display font-bold text-foreground">
-              {csvImported ? 'CSV Imported!' : 'Import from CSV'}
-            </h3>
-            <p className="text-muted-foreground text-sm mt-2">
-              {csvImported ? 'Holdings loaded from your file.' : 'Click or drag & drop your broker CSV file'}
-            </p>
-            {csvError && <p className="font-mono text-[11px] text-signal-red mt-2">{csvError}</p>}
-            <p className="font-mono text-[10px] text-muted-foreground mt-3">Robinhood · Fidelity · Schwab · Webull</p>
-            <button
-              className="mt-4 px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
-              onClick={(e) => { e.stopPropagation(); loadSampleFile(); }}
+            {/* Hidden real file input */}
+            <input
+              ref={fileInputRef}
+              id="csv-file-input"
+              type="file"
+              accept=".csv,.txt"
+              className="sr-only"
+              onChange={handleFileChange}
+            />
+
+            {/* Label covers the whole zone — triggers file picker natively on all browsers */}
+            <label
+              htmlFor="csv-file-input"
+              className="block p-6 text-center cursor-pointer hover:bg-primary/5 rounded-xl transition-colors"
             >
-              Use sample file
-            </button>
+              {csvImported
+                ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" />
+                : <Upload size={32} className="text-primary mx-auto mb-4" />}
+              <p className="font-display font-bold text-foreground">
+                {csvImported ? 'CSV Imported!' : 'Tap to upload CSV file'}
+              </p>
+              <p className="text-muted-foreground text-sm mt-2">
+                {csvImported ? 'Holdings loaded. Tap to upload a different file.' : 'Or drag & drop your broker export'}
+              </p>
+              {csvError && <p className="font-mono text-[11px] text-signal-red mt-2">{csvError}</p>}
+              <p className="font-mono text-[10px] text-muted-foreground mt-3">Robinhood · Fidelity · Schwab · Webull</p>
+            </label>
+
+            {/* Sample file button — outside the label so it doesn't re-trigger file picker */}
+            <div className="px-6 pb-5 text-center">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
+                onClick={loadSampleFile}
+              >
+                Load sample data instead
+              </button>
+            </div>
           </motion.div>
 
           <motion.button
