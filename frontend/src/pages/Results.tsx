@@ -119,9 +119,9 @@ const Results = () => {
 
     const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
 
-    // Mount report component into a hidden off-screen container
+    // Mount report into a visible-but-offscreen container so the browser actually paints it
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
+    container.style.cssText = 'position:fixed;top:0;left:0;width:794px;z-index:99999;pointer-events:none;transform:translateX(-9999px);';
     document.body.appendChild(container);
 
     const root = createRoot(container);
@@ -136,8 +136,8 @@ const Results = () => {
           dna={dna}
         />
       );
-      // Give React one tick to paint
-      setTimeout(resolve, 300);
+      // Double RAF + 600ms ensures React commits AND browser paints before capture
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 600)));
     });
 
     const el = container.querySelector('#arcus-pdf-report') as HTMLElement;
