@@ -119,6 +119,17 @@ const Results = () => {
 
     const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
 
+    // Always use the freshest data — what was last rendered on the dashboard
+    const cachedAnalysis = (() => {
+      try { return JSON.parse(localStorage.getItem('arcus-last-analysis') || 'null'); } catch { return null; }
+    })();
+
+    // Use live analysis metrics if available, else the cached snapshot, else current `m`
+    const pdfMetrics = analysis?.metrics ?? cachedAnalysis?.metrics ?? m;
+    const pdfTickers = analysis?.tickers ?? cachedAnalysis?.tickers ?? tickers;
+    const pdfWeights = analysis?.weights ?? cachedAnalysis?.weights ?? weights;
+    const pdfPnl = analysis?.pnl ?? cachedAnalysis?.pnl ?? pnlRows;
+
     // Mount report into a visible-but-offscreen container so the browser actually paints it
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;top:0;left:0;width:794px;z-index:99999;pointer-events:none;transform:translateX(-9999px);';
@@ -128,10 +139,10 @@ const Results = () => {
     await new Promise<void>(resolve => {
       root.render(
         <PDFReportDocument
-          tickers={tickers}
-          weights={weights}
-          metrics={m}
-          pnlRows={pnlRows}
+          tickers={pdfTickers}
+          weights={pdfWeights}
+          metrics={pdfMetrics}
+          pnlRows={pdfPnl}
           dateRange={dateRange}
           dna={dna}
         />
@@ -162,7 +173,7 @@ const Results = () => {
       y += pageH;
       if (y < imgH) pdf.addPage();
     }
-    pdf.save(`arcus-report-${tickers.join('-')}.pdf`);
+    pdf.save(`arcus-report-${pdfTickers.join('-')}.pdf`);
   };
 
   return (
