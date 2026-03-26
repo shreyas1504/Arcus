@@ -319,7 +319,7 @@ const Dashboard = () => {
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
           >
-            {/* Hidden real file input */}
+            {/* Hidden real file input — triggered programmatically for Safari compatibility */}
             <input
               ref={fileInputRef}
               id="csv-file-input"
@@ -329,25 +329,31 @@ const Dashboard = () => {
               onChange={handleFileChange}
             />
 
-            {/* Label covers the whole zone — triggers file picker natively on all browsers */}
-            <label
-              htmlFor="csv-file-input"
-              className="block p-6 text-center cursor-pointer hover:bg-primary/5 rounded-xl transition-colors"
+            {/* Tap zone — uses button + programmatic click for reliable Safari iOS support */}
+            <button
+              type="button"
+              className="block w-full p-6 text-center cursor-pointer hover:bg-primary/5 rounded-xl transition-colors"
+              onClick={() => {
+                setCsvError('');
+                setCsvImported(false);
+                // Small delay helps Safari reliably open the picker
+                setTimeout(() => fileInputRef.current?.click(), 50);
+              }}
             >
               {csvImported
                 ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" />
                 : <Upload size={32} className="text-primary mx-auto mb-4" />}
               <p className="font-display font-bold text-foreground">
-                {csvImported ? 'CSV Imported!' : 'Tap to upload CSV file'}
+                {csvImported ? 'CSV Imported! Tap to change' : 'Tap to upload CSV file'}
               </p>
               <p className="text-muted-foreground text-sm mt-2">
-                {csvImported ? 'Holdings loaded. Tap to upload a different file.' : 'Or drag & drop your broker export'}
+                {csvImported ? 'Holdings loaded from your file.' : 'Or drag & drop your broker export'}
               </p>
               {csvError && <p className="font-mono text-[11px] text-signal-red mt-2">{csvError}</p>}
               <p className="font-mono text-[10px] text-muted-foreground mt-3">Robinhood · Fidelity · Schwab · Webull</p>
-            </label>
+            </button>
 
-            {/* Sample file button — outside the label so it doesn't re-trigger file picker */}
+            {/* Sample file button — outside the tap zone so it doesn't re-trigger picker */}
             <div className="px-6 pb-5 text-center">
               <button
                 type="button"
