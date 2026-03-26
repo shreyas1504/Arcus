@@ -83,7 +83,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="fixed bottom-6 right-6 z-50 w-[360px] h-[480px] glass rounded-2xl border border-border flex flex-col overflow-hidden shadow-2xl"
+            className="fixed bottom-6 right-4 z-50 w-[calc(100vw-2rem)] sm:w-[360px] h-[480px] glass rounded-2xl border border-border flex flex-col overflow-hidden shadow-2xl"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">

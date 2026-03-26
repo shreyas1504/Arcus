@@ -82,6 +82,12 @@
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: hidden;
   }
+  /* Prevent iOS Safari auto-zoom on input focus (triggered when font-size < 16px) */
+  @media screen and (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer utilities {
