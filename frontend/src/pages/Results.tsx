@@ -111,9 +111,32 @@ const Results = () => {
   const tickerStr = tickers.join(' · ');
   const dateRange = config ? `${config.startDate} — ${config.endDate}` : 'JAN 2023 — DEC 2024';
 
+  const handleExportPDF = () => {
+    const style = document.createElement('style');
+    style.id = 'arcus-print-style';
+    style.innerHTML = `
+      @media print {
+        body { background: #0d1117 !important; color: #e6edf3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .arcus-no-print { display: none !important; }
+        nav, aside, header { display: none !important; }
+        .arcus-print-root { margin: 0 !important; padding: 16px !important; max-width: 100% !important; }
+        @page { margin: 12mm; size: A4 portrait; }
+      }
+    `;
+    document.head.appendChild(style);
+    // Mark elements to hide
+    document.querySelectorAll('aside, nav, [data-no-print]').forEach(el => el.classList.add('arcus-no-print'));
+    window.print();
+    // Cleanup after dialog closes
+    setTimeout(() => {
+      document.head.removeChild(style);
+      document.querySelectorAll('.arcus-no-print').forEach(el => el.classList.remove('arcus-no-print'));
+    }, 1000);
+  };
+
   return (
     <AppLayout title="Portfolio Analysis">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8 arcus-print-root">
         <BackButton to="/dashboard" />
 
         {/* Top bar */}
@@ -128,7 +151,7 @@ const Results = () => {
           <div className="flex items-center gap-3">
             {isLoading && <span className="font-mono text-[10px] text-primary animate-pulse">LOADING...</span>}
             <span className="font-mono text-[10px] text-muted-foreground">LAST UPDATED: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
-            <button className="glass rounded-lg px-4 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2">
+            <button onClick={handleExportPDF} className="glass rounded-lg px-4 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2">
               <Download size={14} className="text-primary" /> Export PDF
             </button>
           </div>
