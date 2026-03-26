@@ -84,10 +84,32 @@ const Results = () => {
   }, [analysis]);
 
   // Use real metrics or fallback to mock
-  const m = analysis?.metrics ?? MOCK_PORTFOLIO.metrics;
+  const rawMetrics = analysis?.metrics ?? MOCK_PORTFOLIO.metrics;
   const tickers = analysis?.tickers ?? config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? MOCK_PORTFOLIO.tickers;
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
   const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
+
+  // Compute health score from real metrics so it's never stuck at the mock 78.
+  // Formula: Sharpe quality (40%) + Tail risk (30%) + Volatility control (20%) + Drawdown control (10%)
+  const computeHealthScore = (met: typeof rawMetrics): number => {
+    // Sharpe: 0 → score 0,  1.0 → 60,  2.0+ → 100
+    const sharpeScore   = Math.min(100, Math.max(0, (met.sharpe / 2.0) * 100));
+    // VaR: ≤2% daily loss → 100, ≥8% → 0
+    const varScore      = Math.min(100, Math.max(0, 100 - (Math.abs(met.var_95) * 100 - 2) * (100 / 6)));
+    // Volatility: ≤10% ann → 100, ≥40% → 0
+    const volScore      = Math.min(100, Math.max(0, 100 - (met.volatility * 100 - 10) * (100 / 30)));
+    // Drawdown: ≤5% → 100, ≥40% → 0
+    const ddScore       = Math.min(100, Math.max(0, 100 - (Math.abs(met.max_drawdown) * 100 - 5) * (100 / 35)));
+    return Math.round(sharpeScore * 0.40 + varScore * 0.30 + volScore * 0.20 + ddScore * 0.10);
+  };
+
+  // Always recompute from real metrics; only use mock value if we have no better data
+  const m = {
+    ...rawMetrics,
+    health_score: analysis?.metrics
+      ? computeHealthScore(rawMetrics)
+      : rawMetrics.health_score,
+  };
 
   // Build P&L rows from the user's actual holdings when API is unavailable
   type PnlRow = { ticker: string; shares: number; cost_basis: number | null; current_price: number | null; days?: number };
