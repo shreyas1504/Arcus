@@ -1,3 +1,118 @@
+// ── Per-ticker risk profiles (historical approximations) ──────────────────
+// annRet: 3-yr annualised return, vol: annualised volatility, beta: vs S&P500
+// var95: typical daily 95% VaR (negative), maxDD: historical max drawdown
+export const TICKER_RISK_DB: Record<string, {
+  annRet: number; vol: number; beta: number; var95: number; maxDD: number; pe: number;
+}> = {
+  'AAPL':    { annRet: 0.22,  vol: 0.28,  beta: 1.20, var95: -0.028, maxDD: -0.27, pe: 29 },
+  'MSFT':    { annRet: 0.28,  vol: 0.26,  beta: 0.90, var95: -0.025, maxDD: -0.22, pe: 35 },
+  'GOOGL':   { annRet: 0.18,  vol: 0.30,  beta: 1.05, var95: -0.030, maxDD: -0.33, pe: 24 },
+  'NVDA':    { annRet: 0.52,  vol: 0.58,  beta: 1.75, var95: -0.055, maxDD: -0.66, pe: 65 },
+  'AMZN':    { annRet: 0.24,  vol: 0.32,  beta: 1.15, var95: -0.032, maxDD: -0.40, pe: 60 },
+  'META':    { annRet: 0.35,  vol: 0.38,  beta: 1.25, var95: -0.038, maxDD: -0.55, pe: 25 },
+  'TSLA':    { annRet: 0.28,  vol: 0.72,  beta: 1.90, var95: -0.065, maxDD: -0.74, pe: 55 },
+  'AMD':     { annRet: 0.38,  vol: 0.52,  beta: 1.60, var95: -0.050, maxDD: -0.60, pe: 40 },
+  'SPY':     { annRet: 0.12,  vol: 0.16,  beta: 1.00, var95: -0.016, maxDD: -0.19, pe: 22 },
+  'VOO':     { annRet: 0.12,  vol: 0.16,  beta: 0.99, var95: -0.016, maxDD: -0.19, pe: 22 },
+  'QQQ':     { annRet: 0.16,  vol: 0.22,  beta: 1.15, var95: -0.022, maxDD: -0.30, pe: 30 },
+  'VTI':     { annRet: 0.11,  vol: 0.17,  beta: 1.00, var95: -0.017, maxDD: -0.20, pe: 21 },
+  'IVV':     { annRet: 0.12,  vol: 0.16,  beta: 0.99, var95: -0.016, maxDD: -0.19, pe: 22 },
+  'GLD':     { annRet: 0.08,  vol: 0.14,  beta: 0.05, var95: -0.014, maxDD: -0.20, pe: 0  },
+  'TLT':     { annRet: -0.04, vol: 0.14,  beta: -0.25,var95: -0.012, maxDD: -0.46, pe: 0  },
+  'JPM':     { annRet: 0.18,  vol: 0.24,  beta: 1.10, var95: -0.024, maxDD: -0.26, pe: 12 },
+  'BAC':     { annRet: 0.14,  vol: 0.28,  beta: 1.30, var95: -0.028, maxDD: -0.32, pe: 11 },
+  'V':       { annRet: 0.20,  vol: 0.22,  beta: 0.95, var95: -0.022, maxDD: -0.23, pe: 30 },
+  'MA':      { annRet: 0.20,  vol: 0.22,  beta: 0.95, var95: -0.022, maxDD: -0.24, pe: 35 },
+  'JNJ':     { annRet: 0.06,  vol: 0.14,  beta: 0.55, var95: -0.014, maxDD: -0.18, pe: 15 },
+  'UNH':     { annRet: 0.16,  vol: 0.20,  beta: 0.65, var95: -0.020, maxDD: -0.22, pe: 22 },
+  'LLY':     { annRet: 0.45,  vol: 0.30,  beta: 0.40, var95: -0.028, maxDD: -0.22, pe: 55 },
+  'XOM':     { annRet: 0.15,  vol: 0.24,  beta: 0.85, var95: -0.024, maxDD: -0.42, pe: 14 },
+  'CVX':     { annRet: 0.14,  vol: 0.22,  beta: 0.80, var95: -0.022, maxDD: -0.40, pe: 14 },
+  'COST':    { annRet: 0.22,  vol: 0.22,  beta: 0.75, var95: -0.022, maxDD: -0.20, pe: 50 },
+  'WMT':     { annRet: 0.18,  vol: 0.18,  beta: 0.55, var95: -0.018, maxDD: -0.18, pe: 28 },
+  'KO':      { annRet: 0.06,  vol: 0.14,  beta: 0.55, var95: -0.014, maxDD: -0.18, pe: 23 },
+  'PG':      { annRet: 0.08,  vol: 0.14,  beta: 0.50, var95: -0.014, maxDD: -0.17, pe: 25 },
+  'NFLX':    { annRet: 0.30,  vol: 0.44,  beta: 1.30, var95: -0.040, maxDD: -0.55, pe: 40 },
+  'DIS':     { annRet: -0.04, vol: 0.28,  beta: 1.10, var95: -0.028, maxDD: -0.45, pe: 70 },
+  'NEE':     { annRet: 0.06,  vol: 0.18,  beta: 0.55, var95: -0.018, maxDD: -0.30, pe: 18 },
+  'PLTR':    { annRet: 0.22,  vol: 0.60,  beta: 1.85, var95: -0.058, maxDD: -0.72, pe: 80 },
+  'COIN':    { annRet: 0.40,  vol: 0.90,  beta: 2.10, var95: -0.082, maxDD: -0.80, pe: 30 },
+  'ARKK':    { annRet: -0.10, vol: 0.58,  beta: 1.70, var95: -0.052, maxDD: -0.80, pe: 0  },
+  'GS':      { annRet: 0.18,  vol: 0.26,  beta: 1.30, var95: -0.026, maxDD: -0.30, pe: 12 },
+  'BLK':     { annRet: 0.16,  vol: 0.24,  beta: 1.15, var95: -0.024, maxDD: -0.28, pe: 20 },
+};
+
+const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD: -0.25, pe: 20 };
+
+/**
+ * Compute realistic portfolio metrics from user's actual tickers + equal weights.
+ * Used when the backend API is unavailable (GitHub Pages deployment).
+ */
+export const computePortfolioMetrics = (
+  tickers: string[],
+  sharesOrWeights?: number[]
+) => {
+  if (tickers.length === 0) return MOCK_PORTFOLIO.metrics;
+
+  // Normalise weights (equal if not provided)
+  const rawW = sharesOrWeights && sharesOrWeights.length === tickers.length
+    ? sharesOrWeights : tickers.map(() => 1);
+  const totalW = rawW.reduce((a, b) => a + b, 0);
+  const w = rawW.map(x => x / totalW);
+
+  // Weighted portfolio metrics
+  const pRet  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).annRet, 0);
+  const pVol  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).vol, 0);
+  const pBeta = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).beta, 0);
+  const pVar  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).var95, 0);
+  const pDD   = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).maxDD, 0);
+  const pPE   = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).pe, 0);
+
+  // Diversification benefit: more tickers → lower actual vol vs sum-of-weights
+  const divFactor = Math.max(0.65, 1 - (tickers.length - 1) * 0.06);
+  const adjVol = pVol * divFactor;
+  const adjVar = pVar * (divFactor * 0.9);
+  const adjDD  = pDD  * (divFactor * 0.92);
+
+  // Derived metrics
+  const rf = 0.05; // Risk-free rate
+  const sharpe            = adjVol > 0 ? (pRet - rf) / adjVol : 0;
+  const sortino           = Math.abs(adjVar) > 0 ? (pRet - rf) / Math.abs(adjVar * Math.sqrt(252)) : 0;
+  const alpha             = pRet - (rf + pBeta * 0.07);   // market premium 7%
+  const information_ratio = Math.min(1.5, Math.max(-1, alpha / Math.max(0.01, adjVol * 0.4)));
+  const calmar            = Math.abs(adjDD) > 0 ? pRet / Math.abs(adjDD) : 0;
+  const cvar_95           = adjVar * 1.45;
+
+  // Concentration penalty for very few tickers
+  const concentrationPenalty = tickers.length < 3 ? 0.85 : tickers.length < 5 ? 0.92 : 1.0;
+
+  const health_score = Math.round(
+    Math.min(100, Math.max(0,
+      Math.min(100, (sharpe / 2.0) * 100) * 0.40 +
+      Math.min(100, Math.max(0, 100 - (Math.abs(adjVar) * 100 - 2) * (100 / 6))) * 0.30 +
+      Math.min(100, Math.max(0, 100 - (adjVol * 100 - 10) * (100 / 30))) * 0.20 +
+      Math.min(100, Math.max(0, 100 - (Math.abs(adjDD) * 100 - 5) * (100 / 35))) * 0.10
+    ) * concentrationPenalty
+  );
+
+  return {
+    sharpe:            Math.round(sharpe * 100) / 100,
+    sortino:           Math.round(Math.min(4, sortino) * 100) / 100,
+    alpha:             Math.round(alpha * 1000) / 1000,
+    information_ratio: Math.round(information_ratio * 100) / 100,
+    calmar:            Math.round(calmar * 100) / 100,
+    var_95:            Math.round(adjVar * 1000) / 1000,
+    cvar_95:           Math.round(cvar_95 * 1000) / 1000,
+    max_drawdown:      Math.round(adjDD * 1000) / 1000,
+    beta:              Math.round(pBeta * 100) / 100,
+    annualized_return: Math.round(pRet * 1000) / 1000,
+    volatility:        Math.round(adjVol * 1000) / 1000,
+    health_score,
+    weighted_pe:       Math.round(pPE * 10) / 10,
+    weighted_ps:       0,
+  };
+};
+
 export const MOCK_PORTFOLIO = {
   tickers: ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'VOO'],
   weights: [0.25, 0.20, 0.20, 0.15, 0.20],
@@ -25,6 +140,7 @@ export const MOCK_PORTFOLIO = {
     { ticker: 'VOO', shares: 40, cost_basis: 388.00, current_price: 465.18, days: 500 },
   ],
 };
+
 
 export const MOCK_PERFORMANCE_DATA = Array.from({ length: 60 }, (_, i) => {
   const base = 10000;

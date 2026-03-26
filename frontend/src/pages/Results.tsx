@@ -19,7 +19,7 @@ import CorrelationHeatmap from '@/components/CorrelationHeatmap';
 import StressTestGrid from '@/components/StressTestGrid';
 import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
-import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP } from '@/lib/mock-data';
+import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP, computePortfolioMetrics } from '@/lib/mock-data';
 import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
@@ -84,8 +84,13 @@ const Results = () => {
   }, [analysis]);
 
   // Use real metrics or fallback to mock
-  const rawMetrics = analysis?.metrics ?? MOCK_PORTFOLIO.metrics;
-  const tickers = analysis?.tickers ?? config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? MOCK_PORTFOLIO.tickers;
+  // When backend is unavailable, compute from the user's actual tickers
+  const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
+  const userShares  = config?.holdings.filter(h => h.ticker).map(h => parseFloat(h.shares) || 1) ?? [];
+  const rawMetrics = analysis?.metrics
+    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares) : MOCK_PORTFOLIO.metrics);
+
+  const tickers = analysis?.tickers ?? (userTickers.length > 0 ? userTickers : MOCK_PORTFOLIO.tickers);
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
   const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
 
@@ -106,10 +111,9 @@ const Results = () => {
   // Always recompute from real metrics; only use mock value if we have no better data
   const m = {
     ...rawMetrics,
-    health_score: analysis?.metrics
-      ? computeHealthScore(rawMetrics)
-      : rawMetrics.health_score,
+    health_score: computeHealthScore(rawMetrics),  // Always recompute — never use hardcoded mock value
   };
+
 
   // Build P&L rows from the user's actual holdings when API is unavailable
   type PnlRow = { ticker: string; shares: number; cost_basis: number | null; current_price: number | null; days?: number };
