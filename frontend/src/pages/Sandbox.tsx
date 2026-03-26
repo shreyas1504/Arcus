@@ -117,11 +117,13 @@ const Sandbox = () => {
             const isBest = mockIdx === bestSharpeIdx;
 
             return (
-              <motion.div key={mock.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 * (mockIdx + 1) }} className="glass rounded-xl p-5 relative overflow-hidden">
-                {isBest && (
-                  <span className="absolute -top-2 right-3 bg-primary text-primary-foreground font-mono text-[8px] uppercase px-2 py-0.5 rounded-full">BEST SHARPE ↑</span>
-                )}
-                <span className="font-mono text-[10px] uppercase tracking-wider text-primary mb-4 block">{mock.label}</span>
+              <motion.div key={mock.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 * (mockIdx + 1) }} className="glass rounded-xl p-5 relative">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-primary">{mock.label}</span>
+                  {isBest && (
+                    <span className="bg-primary text-primary-foreground font-mono text-[8px] uppercase px-2 py-0.5 rounded-full whitespace-nowrap">BEST SHARPE ↑</span>
+                  )}
+                </div>
                 {!normalized && (
                   <span className="font-mono text-[10px] text-signal-amber animate-pulse block mb-2">NORMALISING... ({(totalW * 100).toFixed(0)}%)</span>
                 )}
