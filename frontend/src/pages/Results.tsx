@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import { motion } from 'framer-motion';
 import { Activity, TrendingUp, TrendingDown, Shield, BarChart2, AlertTriangle, Zap, GitBranch, Download, ChevronRight, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
+import PDFReportDocument from '@/components/PDFReportDocument';
 import BackButton from '@/components/BackButton';
 import MetricCard from '@/components/MetricCard';
 import HealthGauge from '@/components/HealthGauge';
@@ -115,22 +117,39 @@ const Results = () => {
     const { default: html2canvas } = await import('html2canvas');
     const { default: jsPDF } = await import('jspdf');
 
-    const el = document.querySelector('.arcus-print-root') as HTMLElement;
-    if (!el) return;
+    const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
 
-    const btn = document.querySelector('[data-export-btn]') as HTMLElement;
-    if (btn) btn.style.display = 'none';
+    // Mount report component into a hidden off-screen container
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
+    document.body.appendChild(container);
 
+    const root = createRoot(container);
+    await new Promise<void>(resolve => {
+      root.render(
+        <PDFReportDocument
+          tickers={tickers}
+          weights={weights}
+          metrics={m}
+          pnlRows={pnlRows}
+          dateRange={dateRange}
+          dna={dna}
+        />
+      );
+      // Give React one tick to paint
+      setTimeout(resolve, 300);
+    });
+
+    const el = container.querySelector('#arcus-pdf-report') as HTMLElement;
     const canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#0d1117',
+      backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: el.scrollWidth,
-      windowHeight: el.scrollHeight,
     });
 
-    if (btn) btn.style.display = '';
+    root.unmount();
+    document.body.removeChild(container);
 
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -143,7 +162,7 @@ const Results = () => {
       y += pageH;
       if (y < imgH) pdf.addPage();
     }
-    pdf.save(`arcus-portfolio-${tickers.join('-')}.pdf`);
+    pdf.save(`arcus-report-${tickers.join('-')}.pdf`);
   };
 
   return (
