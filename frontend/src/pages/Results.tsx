@@ -136,8 +136,8 @@ const Results = () => {
       try { return JSON.parse(localStorage.getItem('arcus-last-analysis') || 'null'); } catch { return null; }
     })();
 
-    // Use live analysis metrics if available, else the cached snapshot, else current `m`
-    const pdfMetrics = analysis?.metrics ?? cachedAnalysis?.metrics ?? m;
+    // Always use m (the live rendered metrics) so PDF health score matches what's on screen
+    const pdfMetrics = m;
     const pdfTickers = analysis?.tickers ?? cachedAnalysis?.tickers ?? tickers;
     const pdfWeights = analysis?.weights ?? cachedAnalysis?.weights ?? weights;
     const pdfPnl = analysis?.pnl ?? cachedAnalysis?.pnl ?? pnlRows;
