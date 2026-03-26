@@ -12,7 +12,6 @@ const getColor = (val: number) => {
 const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
   const { tickers, matrix } = data ?? MOCK_CORRELATION;
   const n = tickers.length;
-  const cellSize = 34; // px — compact fixed cell
 
   return (
     <div className="glass rounded-xl p-4 sm:p-5">
@@ -33,65 +32,64 @@ const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
         ))}
       </div>
 
-      <div className="overflow-x-auto flex justify-center">
-        <div
-          style={{
-            display: 'inline-grid',
-            gridTemplateColumns: `36px repeat(${n}, ${cellSize}px)`,
-            gap: '3px',
-          }}
-        >
-          {/* Top-left empty corner */}
-          <div />
-          {/* Column headers */}
-          {tickers.map((t) => (
+      {/* Full-width grid — label column is fixed, data columns share remaining space equally */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `40px repeat(${n}, 1fr)`,
+          gap: '3px',
+        }}
+      >
+        {/* Top-left empty corner */}
+        <div />
+        {/* Column headers */}
+        {tickers.map((t) => (
+          <div
+            key={t}
+            className="font-mono text-[9px] text-muted-foreground flex items-center justify-center truncate"
+            style={{ aspectRatio: '1' }}
+          >
+            {t}
+          </div>
+        ))}
+
+        {/* Rows */}
+        {matrix.map((row, i) => (
+          <>
+            {/* Row label */}
             <div
-              key={t}
-              className="font-mono text-[9px] text-muted-foreground text-center truncate px-0.5"
-              style={{ height: `${cellSize}px`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              key={`label-${i}`}
+              className="font-mono text-[9px] text-muted-foreground flex items-center justify-end pr-1.5 truncate"
+              style={{ aspectRatio: '1' }}
             >
-              {t}
+              {tickers[i]}
             </div>
-          ))}
 
-          {/* Rows */}
-          {matrix.map((row, i) => (
-            <>
-              {/* Row label */}
-              <div
-                key={`label-${i}`}
-                className="font-mono text-[9px] text-muted-foreground flex items-center justify-end pr-1.5 truncate"
-                style={{ height: `${cellSize}px` }}
-              >
-                {tickers[i]}
-              </div>
-
-              {/* Cells */}
-              {row.map((val, j) => {
-                const { bg, text } = getColor(val);
-                return (
-                  <motion.div
-                    key={j}
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: (i * n + j) * 0.012, duration: 0.25 }}
-                    className="flex items-center justify-center rounded font-mono font-semibold cursor-default select-none"
-                    style={{
-                      width: cellSize, height: cellSize,
-                      fontSize: n > 6 ? 8 : 10,
-                      backgroundColor: bg,
-                      color: text,
-                      border: i === j ? `1px solid ${text}40` : 'none',
-                    }}
-                    title={`${tickers[i]} ↔ ${tickers[j]}: ${val.toFixed(2)}`}
-                  >
-                    {val.toFixed(2)}
-                  </motion.div>
-                );
-              })}
-            </>
-          ))}
-        </div>
+            {/* Cells */}
+            {row.map((val, j) => {
+              const { bg, text } = getColor(val);
+              return (
+                <motion.div
+                  key={j}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: (i * n + j) * 0.012, duration: 0.25 }}
+                  className="flex items-center justify-center rounded font-mono font-semibold cursor-default select-none"
+                  style={{
+                    aspectRatio: '1',
+                    fontSize: n > 6 ? 8 : 10,
+                    backgroundColor: bg,
+                    color: text,
+                    border: i === j ? `1px solid ${text}40` : 'none',
+                  }}
+                  title={`${tickers[i]} ↔ ${tickers[j]}: ${val.toFixed(2)}`}
+                >
+                  {val.toFixed(2)}
+                </motion.div>
+              );
+            })}
+          </>
+        ))}
       </div>
     </div>
   );
