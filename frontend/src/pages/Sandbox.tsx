@@ -418,7 +418,7 @@ const Sandbox = () => {
       });
       toast.success(`${preset === 'maxSharpe' ? 'Max Sharpe' : 'Min Variance'} weights applied`);
     } catch {
-      toast.error('Connect to backend for AI optimization. Using Risk Parity as fallback.');
+      toast.info('Using Risk Parity weights (backend offline).');
       // fallback: risk parity
       const invVols = mock.tickers.map(t => 1 / (TICKER_RISK_DB[t]?.vol ?? DEFAULT_RISK.vol));
       const sumInvVols = invVols.reduce((a, v) => a + v, 0);
@@ -483,7 +483,7 @@ const Sandbox = () => {
           toast.success(`Loaded market data for ${ticker}`);
         }
       } catch (err) {
-        toast.error(`Market data for ${ticker} unavailable. Using estimates.`);
+        toast.info(`Using estimated risk data for ${ticker}.`);
       }
     }
   };
