@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { createRoot } from 'react-dom/client';
 import { motion } from 'framer-motion';
 import { Activity, TrendingUp, TrendingDown, Shield, BarChart2, AlertTriangle, Zap, GitBranch, Download, ChevronRight, CheckCircle } from 'lucide-react';
@@ -151,67 +152,94 @@ const Results = () => {
   const tickerStr = tickers.join(' · ');
   const dateRange = config ? `${config.startDate} — ${config.endDate}` : 'JAN 2023 — DEC 2024';
 
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+
   const handleExportPDF = async () => {
-    const { default: html2canvas } = await import('html2canvas');
-    const { default: jsPDF } = await import('jspdf');
+    if (pdfGenerating) return;
+    setPdfGenerating(true);
+    const tid = toast.loading('Generating PDF report…');
+    let container: HTMLDivElement | null = null;
+    let root: ReturnType<typeof createRoot> | null = null;
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const { default: jsPDF } = await import('jspdf');
 
-    const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
+      const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
 
-    // Always use the freshest data — what was last rendered on the dashboard
-    const cachedAnalysis = (() => {
-      try { return JSON.parse(localStorage.getItem('arcus-last-analysis') || 'null'); } catch { return null; }
-    })();
+      const cachedAnalysis = (() => {
+        try { return JSON.parse(localStorage.getItem('arcus-last-analysis') || 'null'); } catch { return null; }
+      })();
 
-    // Always use m (the live rendered metrics) so PDF health score matches what's on screen
-    const pdfMetrics = m;
-    const pdfTickers = analysis?.tickers ?? cachedAnalysis?.tickers ?? tickers;
-    const pdfWeights = analysis?.weights ?? cachedAnalysis?.weights ?? weights;
-    const pdfPnl = analysis?.pnl ?? cachedAnalysis?.pnl ?? pnlRows;
+      const pdfMetrics = m;
+      const pdfTickers = analysis?.tickers ?? cachedAnalysis?.tickers ?? tickers;
+      const pdfWeights = analysis?.weights ?? cachedAnalysis?.weights ?? weights;
+      const pdfPnl = analysis?.pnl ?? cachedAnalysis?.pnl ?? pnlRows;
 
-    // Mount report into a visible-but-offscreen container so the browser actually paints it
-    const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;top:0;left:0;width:794px;z-index:99999;pointer-events:none;transform:translateX(-9999px);';
-    document.body.appendChild(container);
+      // Mount report into an off-screen container so the browser paints it
+      container = document.createElement('div');
+      container.style.cssText = 'position:absolute;top:0;left:-9999px;width:794px;z-index:99999;pointer-events:none;';
+      document.body.appendChild(container);
 
-    const root = createRoot(container);
-    await new Promise<void>(resolve => {
-      root.render(
-        <PDFReportDocument
-          tickers={pdfTickers}
-          weights={pdfWeights}
-          metrics={pdfMetrics}
-          pnlRows={pdfPnl}
-          dateRange={dateRange}
-          dna={dna}
-        />
-      );
-      // Double RAF + 600ms ensures React commits AND browser paints before capture
-      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 600)));
-    });
+      root = createRoot(container);
+      await new Promise<void>(resolve => {
+        root!.render(
+          <PDFReportDocument
+            tickers={pdfTickers}
+            weights={pdfWeights}
+            metrics={pdfMetrics}
+            pnlRows={pdfPnl}
+            dateRange={dateRange}
+            dna={dna}
+          />
+        );
+        // Double RAF + 1200ms ensures React commits AND browser fully paints before capture
+        requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 1200)));
+      });
 
-    const el = container.querySelector('#arcus-pdf-report') as HTMLElement;
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
+      const el = container.querySelector('#arcus-pdf-report') as HTMLElement | null;
+      if (!el) throw new Error('PDF report element not found — React may have failed to render.');
 
-    root.unmount();
-    document.body.removeChild(container);
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: el.scrollWidth,
+        height: el.scrollHeight,
+      });
 
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const imgH = (canvas.height * pageW) / canvas.width;
-    let y = 0;
-    while (y < imgH) {
-      pdf.addImage(imgData, 'PNG', 0, -y, pageW, imgH);
-      y += pageH;
-      if (y < imgH) pdf.addPage();
+      root.unmount();
+      root = null;
+      document.body.removeChild(container);
+      container = null;
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pageW) / canvas.width;
+      let y = 0;
+      let pageIdx = 0;
+      while (y < imgH) {
+        pdf.addImage(imgData, 'PNG', 0, -y, pageW, imgH, `pg${pageIdx}`, 'FAST');
+        y += pageH;
+        pageIdx++;
+        if (y < imgH) pdf.addPage();
+      }
+      pdf.save(`arcus-report-${pdfTickers.join('-')}.pdf`);
+      toast.dismiss(tid);
+      toast.success('PDF downloaded!');
+    } catch (err) {
+      console.error('[PDF export]', err);
+      toast.dismiss(tid);
+      toast.error('PDF export failed. Open the browser console for details.');
+    } finally {
+      // Clean up if an error occurred before unmount
+      if (root) { try { root.unmount(); } catch { /* ignore */ } }
+      if (container && container.parentNode) { try { document.body.removeChild(container); } catch { /* ignore */ } }
+      setPdfGenerating(false);
     }
-    pdf.save(`arcus-report-${pdfTickers.join('-')}.pdf`);
   };
 
   return (
@@ -231,8 +259,8 @@ const Results = () => {
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {isLoading && <span className="font-mono text-[10px] text-primary animate-pulse">LOADING...</span>}
             <span className="hidden md:block font-mono text-[10px] text-muted-foreground">LAST UPDATED: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
-            <button data-export-btn onClick={handleExportPDF} className="glass rounded-lg px-3 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2">
-              <Download size={14} className="text-primary" /> Export PDF
+            <button data-export-btn onClick={handleExportPDF} disabled={pdfGenerating} className="glass rounded-lg px-3 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <Download size={14} className="text-primary" /> {pdfGenerating ? 'Generating…' : 'Export PDF'}
             </button>
           </div>
         </motion.div>
