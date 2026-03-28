@@ -84,17 +84,19 @@ export const computePortfolioMetrics = (
   const calmar            = Math.abs(adjDD) > 0 ? pRet / Math.abs(adjDD) : 0;
   const cvar_95           = adjVar * 1.45;
 
-  // Concentration penalty for very few tickers
-  const concentrationPenalty = tickers.length < 3 ? 0.85 : tickers.length < 5 ? 0.92 : 1.0;
+  // HHI-based concentration: effectiveN = 1/HHI (1 = all-in-one, n = perfectly equal)
+  const hhi = w.reduce((s: number, wi: number) => s + wi * wi, 0);
+  const effectiveN = hhi > 0 ? 1 / hhi : 1;
+  const concentrationScore = Math.min(100, Math.max(0, (effectiveN - 1) / 9 * 100));
 
   const health_score = Math.round(
     Math.min(100, Math.max(0,
       Math.min(100, (sharpe / 2.0) * 100) * 0.40 +
-      Math.min(100, Math.max(0, 100 - (Math.abs(adjVar) * 100 - 2) * (100 / 6))) * 0.30 +
-      Math.min(100, Math.max(0, 100 - (adjVol * 100 - 10) * (100 / 30))) * 0.20 +
-      Math.min(100, Math.max(0, 100 - (Math.abs(adjDD) * 100 - 5) * (100 / 35))) * 0.10
-    ) * concentrationPenalty
-  ));
+      Math.min(100, Math.max(0, 100 - Math.max(0, Math.abs(adjVar) * 100 - 1.2) * (100 / 4))) * 0.25 +
+      Math.min(100, Math.max(0, 100 - Math.max(0, adjVol * 100 - 10) * (100 / 30))) * 0.20 +
+      concentrationScore * 0.15
+    ))
+  );
 
   return {
     sharpe:            Math.round(sharpe * 100) / 100,

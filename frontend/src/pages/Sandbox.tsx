@@ -183,12 +183,18 @@ const calcMetrics = (tickers: string[], weights: Record<string, number>, scenari
   const sharpe = adjVol > 0 ? (pRet - 0.04) / adjVol : 0;
   const var95 = -(1.645 * adjVol / Math.sqrt(252));
   const cvar = var95 * 1.4;
+
+  // HHI-based effective number of holdings (1 = single stock, 10 = 10 perfectly equal stocks)
+  const hhi = tickers.reduce((s, t) => { const wi = (weights[t] || 0) / norm; return s + wi * wi; }, 0);
+  const effectiveN = hhi > 0 ? 1 / hhi : 1;
+  const concentrationScore = Math.min(100, Math.max(0, (effectiveN - 1) / 9 * 100));
+
   const baseHealth = Math.round(
     Math.min(100, Math.max(0,
       Math.min(100, (sharpe / 2.0) * 100) * 0.40 +
-      Math.min(100, Math.max(0, 100 - (Math.abs(var95) * 100 - 2) * (100 / 6))) * 0.30 +
-      Math.min(100, Math.max(0, 100 - (adjVol * 100 - 10) * (100 / 30))) * 0.20 +
-      (tickers.length >= 5 ? 100 : tickers.length >= 3 ? 80 : 50) * 0.10
+      Math.min(100, Math.max(0, 100 - Math.max(0, Math.abs(var95) * 100 - 1.2) * (100 / 4))) * 0.25 +
+      Math.min(100, Math.max(0, 100 - Math.max(0, adjVol * 100 - 10) * (100 / 30))) * 0.20 +
+      concentrationScore * 0.15
     ))
   );
 
