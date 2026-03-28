@@ -63,15 +63,23 @@ export const computePortfolioMetrics = (
 
   // Weighted portfolio metrics
   const pRet  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).annRet, 0);
-  const pVol  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).vol, 0);
   const pBeta = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).beta, 0);
   const pVar  = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).var95, 0);
   const pDD   = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).maxDD, 0);
   const pPE   = tickers.reduce((s, t, i) => s + w[i] * (TICKER_RISK_DB[t] ?? DEFAULT_RISK).pe, 0);
 
-  // Diversification benefit: more tickers → lower actual vol vs sum-of-weights
+  // Covariance-decomposition vol: σp² = βp²·σm² + Σi wi²·max(0, σi²−βi²·σm²)
+  // This correctly rewards low-beta assets (GLD, TLT, bonds) — same formula as sandbox calcMetrics.
+  const MKT_VOL = 0.16;
+  const sysVar = pBeta * pBeta * MKT_VOL * MKT_VOL;
+  const idioVar = tickers.reduce((s, t, i) => {
+    const risk = TICKER_RISK_DB[t] ?? DEFAULT_RISK;
+    const idio = Math.max(0, risk.vol * risk.vol - risk.beta * risk.beta * MKT_VOL * MKT_VOL);
+    return s + w[i] * w[i] * idio;
+  }, 0);
+  const adjVol = Math.sqrt(sysVar + idioVar);
+
   const divFactor = Math.max(0.65, 1 - (tickers.length - 1) * 0.06);
-  const adjVol = pVol * divFactor;
   const adjVar = pVar * (divFactor * 0.9);
   const adjDD  = pDD  * (divFactor * 0.92);
 

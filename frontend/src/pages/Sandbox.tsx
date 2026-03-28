@@ -156,16 +156,30 @@ const getSharpeRecs = (
 };
 
 // ── Metric calculation ───────────────────────────────────────────────────
+// Uses a covariance-decomposition model for portfolio vol:
+//   σp² = βp²·σm² + Σi wi²·(σi² − βi²·σm²)
+// This correctly rewards adding low-beta assets (GLD β=0.05, TLT β=-0.25) much
+// more than adding another high-beta equity, making recommendations measurably visible.
+const MKT_VOL = 0.16; // S&P 500 annualised vol proxy
+
 const calcMetrics = (tickers: string[], weights: Record<string, number>, scenario: ScenarioKey = 'normal', dynamicRiskDb: Record<string, any> = {}) => {
-  const totalW = tickers.reduce((a, t) => a + (weights[t] || 0), 0);
+  // Filter out zero-weight tickers for metric calculation (they don't contribute)
+  const activeTickers = tickers.filter(t => (weights[t] || 0) > 0.001);
+  const src = activeTickers.length > 0 ? activeTickers : tickers;
+
+  const totalW = src.reduce((a, t) => a + (weights[t] || 0), 0);
   const norm = totalW > 0 ? totalW : 1;
 
-  let pRet = 0, pVol = 0, pBeta = 0;
-  for (const t of tickers) {
+  let pRet = 0, pBeta = 0;
+  // Per-ticker data for variance decomposition
+  const td: { w: number; vol: number; beta: number }[] = [];
+
+  for (const t of src) {
     const w = (weights[t] || 0) / norm;
     const risk = dynamicRiskDb[t] ?? TICKER_RISK_DB[t] ?? DEFAULT_RISK;
     let ret = risk.annRet;
     let vol = risk.vol;
+    let beta = risk.beta;
 
     if (scenario === '2008') { ret *= 0.616; vol *= 2.5; }
     else if (scenario === 'covid') { ret *= 0.769; vol *= 2.0; }
@@ -174,17 +188,23 @@ const calcMetrics = (tickers: string[], weights: Record<string, number>, scenari
     else if (scenario === 'dotcom') { ret *= 0.90; }
 
     pRet += w * ret;
-    pVol += w * vol;
-    pBeta += w * risk.beta;
+    pBeta += w * beta;
+    td.push({ w, vol, beta });
   }
 
-  const divFactor = Math.max(0.65, 1 - (tickers.length - 1) * 0.06);
-  const adjVol = pVol * divFactor;
+  // σp² = βp²·σm² (systematic) + Σ wi²·max(0, σi²−βi²·σm²) (idiosyncratic)
+  const sysVar = pBeta * pBeta * MKT_VOL * MKT_VOL;
+  const idioVar = td.reduce((s, d) => {
+    const idio = Math.max(0, d.vol * d.vol - d.beta * d.beta * MKT_VOL * MKT_VOL);
+    return s + d.w * d.w * idio;
+  }, 0);
+  const adjVol = Math.sqrt(sysVar + idioVar);
+
   const sharpe = adjVol > 0 ? (pRet - 0.04) / adjVol : 0;
   const var95 = -(1.645 * adjVol / Math.sqrt(252));
   const cvar = var95 * 1.4;
 
-  // HHI-based effective number of holdings (1 = single stock, 10 = 10 perfectly equal stocks)
+  // HHI over ALL tickers (including zero-weight, so adding a stock at 0 doesn't affect concentration)
   const hhi = tickers.reduce((s, t) => { const wi = (weights[t] || 0) / norm; return s + wi * wi; }, 0);
   const effectiveN = hhi > 0 ? 1 / hhi : 1;
   const concentrationScore = Math.min(100, Math.max(0, (effectiveN - 1) / 9 * 100));
@@ -443,19 +463,18 @@ const Sandbox = () => {
   const addTickerToMock = async (mockIdx: number, ticker: string) => {
     if (!ticker) return;
     
-    // Optimistic UI update
+    // Optimistic UI update — give new ticker a real initial weight (1/(n+1))
+    // so the health score changes immediately and recommendations are visible.
     setMocks(prev => {
       const newMocks = [...prev];
       const mock = { ...newMocks[mockIdx], weights: { ...newMocks[mockIdx].weights }, tickers: [...newMocks[mockIdx].tickers] };
       if (!mock.tickers.includes(ticker)) {
         mock.tickers.push(ticker);
-        mock.weights[ticker] = 0;
-        const totalW = mock.tickers.reduce((s, t) => s + (mock.weights[t] || 0), 0);
-        if (totalW > 0) {
-          for (const t of mock.tickers) mock.weights[t] = (mock.weights[t] || 0) / totalW;
-        } else {
-          const n = mock.tickers.length;
-          for (const t of mock.tickers) mock.weights[t] = 1 / n;
+        const n = mock.tickers.length;   // includes the new ticker
+        const initW = 1 / n;             // new ticker gets 1/n
+        const scale = (n - 1) / n;       // existing tickers scale down by n/(n+1)
+        for (const t of mock.tickers) {
+          mock.weights[t] = t === ticker ? initW : (mock.weights[t] || 0) * scale;
         }
       }
       newMocks[mockIdx] = mock;
