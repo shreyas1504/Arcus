@@ -1,6 +1,24 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { MOCK_SECTORS } from '@/lib/mock-data';
 
+const SectorTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const { name, value, color } = payload[0].payload;
+  return (
+    <div style={{
+      background: '#161B22',
+      border: '1px solid rgba(56,189,148,0.2)',
+      borderRadius: 8,
+      padding: '6px 10px',
+      fontFamily: 'JetBrains Mono',
+      fontSize: 11,
+    }}>
+      <span style={{ color: '#8b949e' }}>{name}</span>
+      <span style={{ color, fontWeight: 700, marginLeft: 8 }}>{value}%</span>
+    </div>
+  );
+};
+
 const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
   const chartData = data ?? MOCK_SECTORS;
   return (
@@ -23,18 +41,7 @@ const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
                 <Cell key={i} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
-              contentStyle={{
-                background: '#161B22',
-                border: '1px solid rgba(56,189,148,0.2)',
-                borderRadius: 8,
-                fontFamily: 'JetBrains Mono',
-                fontSize: 11,
-                color: '#e6edf3',
-              }}
-              itemStyle={{ color: '#e6edf3' }}
-              labelStyle={{ color: '#8b949e' }}
-            />
+            <Tooltip content={<SectorTooltip />} />
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
