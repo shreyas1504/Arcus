@@ -30,7 +30,10 @@ const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
                 borderRadius: 8,
                 fontFamily: 'JetBrains Mono',
                 fontSize: 11,
+                color: '#e6edf3',
               }}
+              itemStyle={{ color: '#e6edf3' }}
+              labelStyle={{ color: '#8b949e' }}
             />
           </PieChart>
         </ResponsiveContainer>
