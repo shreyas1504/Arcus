@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, ChevronRight, Calendar, Trash2, Plus, CheckCircle2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Upload, ChevronRight, Calendar, Trash2, Plus, CheckCircle2, RefreshCw } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import StockSearch from '@/components/StockSearch';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MOCK_STOCK_PRICES } from '@/lib/mock-data';
+import { getStockPrice } from '@/lib/api';
 
 const STORAGE_KEY = 'arcus-portfolio-draft';
 const SAVED_KEY = 'arcus-portfolio';
@@ -16,7 +19,6 @@ interface Holding {
   cost: string;
 }
 
-// Sector → representative tickers mapping (all must exist in StockSearch STOCK_DB)
 const SECTOR_TICKERS: Record<string, string[]> = {
   'Technology': ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'CRM', 'ADBE'],
   'Healthcare': ['UNH', 'JNJ', 'PFE', 'ABBV', 'TMO', 'MRK'],
@@ -27,7 +29,6 @@ const SECTOR_TICKERS: Record<string, string[]> = {
   'Utilities':  ['NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE'],
 };
 
-// Default presets shown when no sectors selected in onboarding
 const DEFAULT_PRESETS: Record<string, string[]> = {
   'FAANG':      ['META', 'AAPL', 'AMZN', 'NFLX', 'GOOGL'],
   'Tech Heavy': ['NVDA', 'MSFT', 'CRM', 'ADBE', 'AMD'],
@@ -35,53 +36,21 @@ const DEFAULT_PRESETS: Record<string, string[]> = {
   'S&P 500':   ['VOO', 'SPY', 'VTI', 'QQQ'],
 };
 
-interface PresetConfig {
-  key: string;
-  label: string;
-  tickers: string[];
-}
+interface PresetConfig { key: string; label: string; tickers: string[] }
 
-// When sectors were chosen: one button per sector + an "All Picks" button.
-// When no sectors chosen: show the classic FAANG / Tech Heavy / Balanced / S&P 500 buttons.
 const getPresets = (): PresetConfig[] => {
   const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
   const userSectors: string[] = dna?.sectors || [];
-
   if (userSectors.length > 0) {
     const presets: PresetConfig[] = [];
-
-    // "All Picks" — top 2 stocks from every chosen sector
     const allTickers: string[] = [];
-    for (const sec of userSectors) {
-      allTickers.push(...(SECTOR_TICKERS[sec] || []).slice(0, 2));
-    }
-    const sectorTag = userSectors.length <= 2
-      ? userSectors.join(' & ')
-      : `${userSectors.length} Sectors`;
-    presets.push({
-      key: '__all__',
-      label: `All Picks · ${sectorTag}`,
-      tickers: allTickers.slice(0, 8),
-    });
-
-    // One button per sector — top 4 tickers for that sector
-    for (const sec of userSectors) {
-      presets.push({
-        key: sec,
-        label: sec,
-        tickers: (SECTOR_TICKERS[sec] || []).slice(0, 4),
-      });
-    }
-
+    for (const sec of userSectors) allTickers.push(...(SECTOR_TICKERS[sec] || []).slice(0, 2));
+    const sectorTag = userSectors.length <= 2 ? userSectors.join(' & ') : `${userSectors.length} Sectors`;
+    presets.push({ key: '__all__', label: `All Picks · ${sectorTag}`, tickers: allTickers.slice(0, 8) });
+    for (const sec of userSectors) presets.push({ key: sec, label: sec, tickers: (SECTOR_TICKERS[sec] || []).slice(0, 4) });
     return presets;
   }
-
-  // No sector context — show generic presets
-  return Object.entries(DEFAULT_PRESETS).map(([name, tickers]) => ({
-    key: name,
-    label: name,
-    tickers,
-  }));
+  return Object.entries(DEFAULT_PRESETS).map(([name, tickers]) => ({ key: name, label: name, tickers }));
 };
 
 const SAMPLE_CSV = `Symbol,Quantity,Average Cost
@@ -93,23 +62,18 @@ VOO,40,388.00
 `;
 
 const parseCSV = (text: string): Holding[] => {
-  const lines = text.trim().split('\n').filter((l) => l.trim() && !l.startsWith('---'));
+  const lines = text.trim().split('\n').filter(l => l.trim() && !l.startsWith('---'));
   if (lines.length < 2) return [];
   const sep = lines[0].includes('\t') ? '\t' : ',';
-  const headers = lines[0].split(sep).map((h) => h.replace(/"/g, '').trim().toLowerCase());
-
-  const colIdx = (keys: string[]) =>
-    headers.findIndex((h) => keys.some((k) => h.includes(k)));
-
+  const headers = lines[0].split(sep).map(h => h.replace(/"/g, '').trim().toLowerCase());
+  const colIdx = (keys: string[]) => headers.findIndex(h => keys.some(k => h.includes(k)));
   const tickerIdx = colIdx(['symbol', 'ticker', 'instrument', 'stock', 'security']);
   const sharesIdx = colIdx(['quantity', 'shares', 'qty', 'units']);
   const costIdx   = colIdx(['average cost', 'avg cost', 'cost basis', 'cost per share', 'unit cost', 'purchase price', 'avg price', 'average price']);
-
   if (tickerIdx === -1) return [];
-
   const results: Holding[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(sep).map((c) => c.replace(/"/g, '').trim());
+    const cols = lines[i].split(sep).map(c => c.replace(/"/g, '').trim());
     const ticker = cols[tickerIdx]?.toUpperCase().replace(/[^A-Z.]/g, '');
     if (!ticker || ['TOTAL', 'CASH', 'PENDING'].includes(ticker)) continue;
     if (!/^[A-Z.]{1,6}$/.test(ticker)) continue;
@@ -124,10 +88,59 @@ const loadDraft = (): { holdings: Holding[]; startDate: string; endDate: string 
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) return JSON.parse(saved);
-  } catch {}
+  } catch { /* empty */ }
   return { holdings: [{ ticker: '', shares: '', cost: '' }], startDate: '2023-01-01', endDate: '2024-12-31' };
 };
 
+// ── Price display for individual holdings ────────────────────────────────
+const HoldingPrice = ({ ticker, shares, onPriceFetched }: { ticker: string; shares: string; onPriceFetched?: (t: string, p: number) => void }) => {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['price', ticker],
+    queryFn: () => getStockPrice(ticker),
+    enabled: !!ticker && ticker.length >= 1,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+
+  const price = data?.price || MOCK_STOCK_PRICES[ticker.toUpperCase()] || 0;
+  const changePct = data?.changePercent || 0;
+  const qty = parseFloat(shares) || 0;
+  const total = qty * price;
+
+  useEffect(() => {
+    if (price > 0 && onPriceFetched) {
+      onPriceFetched(ticker.toUpperCase(), price);
+    }
+  }, [price, ticker, onPriceFetched]);
+
+  if (!ticker) return null;
+
+  return (
+    <div className="flex flex-col gap-0.5 mt-0.5">
+      <div className="flex items-center gap-2">
+        {isLoading ? (
+          <Skeleton className="h-4 w-16" />
+        ) : (
+          <>
+            <span className="font-mono text-[10px] text-foreground">${price.toFixed(2)}</span>
+            {(changePct !== 0 || data) && (
+              <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${changePct >= 0 ? 'bg-signal-green/10 text-signal-green' : 'bg-signal-red/10 text-signal-red'}`}>
+                {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
+              </span>
+            )}
+          </>
+        )}
+      </div>
+      {qty > 0 && price > 0 && (
+        <span className="font-mono text-[10px] text-muted-foreground/60">
+          {qty} shares × ${price.toFixed(2)} = ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      )}
+    </div>
+  );
+};
+
+// ── Dashboard ────────────────────────────────────────────────────────────
 const Dashboard = () => {
   const draft = loadDraft();
   const [holdings, setHoldings] = useState<Holding[]>(draft.holdings);
@@ -137,13 +150,28 @@ const Dashboard = () => {
   const [csvImported, setCsvImported] = useState(false);
   const [csvError, setCsvError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  // Pre-populate holdings if navigated from Apply Strategy in Sandbox
+  useEffect(() => {
+    const state = location.state as { weights?: Record<string, number>; tickers?: string[] } | null;
+    if (state?.weights && state.tickers?.length) {
+      setHoldings(state.tickers.map(t => ({
+        ticker: t,
+        shares: '10',
+        cost: MOCK_STOCK_PRICES[t] ? (MOCK_STOCK_PRICES[t] * 0.82).toFixed(2) : '',
+      })));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const savedPortfolio = localStorage.getItem(SAVED_KEY);
   const hasSaved = !!savedPortfolio;
 
-  // Persist draft
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ holdings, startDate, endDate }));
   }, [holdings, startDate, endDate]);
@@ -183,13 +211,39 @@ const Dashboard = () => {
 
   const presets = getPresets();
 
-  const applyPreset = (preset: PresetConfig) => {
+  const applyPreset = async (preset: PresetConfig) => {
     setSelectedPreset(preset.key);
-    setHoldings(preset.tickers.map((t) => {
-      const price = MOCK_STOCK_PRICES[t];
-      const estimatedCost = price ? (price * 0.82).toFixed(2) : '';
-      return { ticker: t, shares: '10', cost: estimatedCost };
-    }));
+    const newHoldings = preset.tickers.map(t => {
+      const upper = t.toUpperCase();
+      const p = livePrices[upper] || MOCK_STOCK_PRICES[upper];
+      return { ticker: upper, shares: '10', cost: p ? (p * 0.82).toFixed(2) : '' };
+    });
+    setHoldings(newHoldings);
+
+    // Async fetch missing costs
+    for (let i = 0; i < preset.tickers.length; i++) {
+      const t = preset.tickers[i].toUpperCase();
+      if (!newHoldings[i].cost && t.length >= 2) {
+        try {
+          const res = await queryClient.fetchQuery({
+            queryKey: ['price', t],
+            queryFn: () => getStockPrice(t),
+            staleTime: 5 * 60 * 1000
+          });
+          if (res?.price) {
+            setHoldings(prev => {
+              const next = [...prev];
+              // only update if user hasn't overwritten or removed this exact ticker at this index
+              if (next[i]?.ticker === t && !next[i].cost) {
+                next[i] = { ...next[i], cost: (res.price * 0.82).toFixed(2) };
+              }
+              return next;
+            });
+            setLivePrices(prev => ({ ...prev, [t]: res.price }));
+          }
+        } catch {}
+      }
+    }
   };
 
   const analyse = () => {
@@ -197,13 +251,67 @@ const Dashboard = () => {
     navigate('/dashboard/results');
   };
 
-  const updateHolding = (idx: number, field: keyof Holding, value: string) => {
+  const updateHolding = async (idx: number, field: keyof Holding, value: string) => {
     const updated = [...holdings];
     updated[idx] = { ...updated[idx], [field]: value };
     setHoldings(updated);
+
+    // Auto-fill cost when ticker is set and cost is empty
+    if (field === 'ticker' && value && !updated[idx].cost && value.length >= 2) {
+      const upperTicker = value.toUpperCase();
+      const p = livePrices[upperTicker] || MOCK_STOCK_PRICES[upperTicker];
+      if (p) {
+        setHoldings(prev => {
+          const next = [...prev];
+          if (next[idx].ticker === value && !next[idx].cost) {
+            next[idx].cost = (p * 0.82).toFixed(2);
+          }
+          return next;
+        });
+      } else if (value.length >= 3) {
+        try {
+          const res = await queryClient.fetchQuery({
+            queryKey: ['price', upperTicker],
+            queryFn: () => getStockPrice(upperTicker),
+            staleTime: 5 * 60 * 1000
+          });
+          if (res?.price) {
+            setHoldings(prev => {
+              const next = [...prev];
+              if (next[idx].ticker === value && !next[idx].cost) {
+                next[idx].cost = (res.price * 0.82).toFixed(2);
+              }
+              return next;
+            });
+            setLivePrices(prev => ({ ...prev, [upperTicker]: res.price }));
+          }
+        } catch {}
+      }
+    }
   };
 
-  const filledTickers = holdings.filter((h) => h.ticker).map((h) => h.ticker);
+  const filledTickers = holdings.filter(h => h.ticker).map(h => h.ticker);
+
+  // Compute total portfolio value
+  const portfolioTotal = holdings
+    .filter(h => h.ticker && h.shares)
+    .reduce((sum, h) => {
+      const upperTicker = h.ticker.toUpperCase();
+      const price = livePrices[upperTicker] || MOCK_STOCK_PRICES[upperTicker] || 0;
+      return sum + (parseFloat(h.shares) || 0) * price;
+    }, 0);
+
+  const totalCostBasis = holdings
+    .filter(h => h.ticker && h.shares && h.cost)
+    .reduce((sum, h) => sum + (parseFloat(h.shares) || 0) * (parseFloat(h.cost) || 0), 0);
+
+  const totalPnL = portfolioTotal - totalCostBasis;
+  const totalPnLPct = totalCostBasis > 0 ? (totalPnL / totalCostBasis) * 100 : 0;
+  const pnlPositive = totalPnL >= 0;
+
+  const refreshPrices = () => {
+    queryClient.invalidateQueries({ queryKey: ['price'] });
+  };
 
   return (
     <AppLayout title="Portfolio Builder">
@@ -213,7 +321,7 @@ const Dashboard = () => {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground">Portfolio Builder</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {hasSaved ? 'Your portfolio is saved. Update it or run analysis.' : 'Welcome. Now let\'s add your portfolio.'}
+            {hasSaved ? 'Your portfolio is saved. Update it or run analysis.' : "Welcome. Now let's add your portfolio."}
           </p>
         </motion.div>
 
@@ -223,14 +331,14 @@ const Dashboard = () => {
             <span className="label-mono mb-2 block">SAVED PORTFOLIO</span>
             <div className="flex flex-wrap gap-2">
               {filledTickers.length > 0
-                ? filledTickers.map((t) => (
+                ? filledTickers.map(t => (
                     <span key={t} className="font-mono text-xs bg-primary/10 text-primary px-3 py-1 rounded-full">{t}</span>
                   ))
                 : <span className="text-muted-foreground text-sm">No tickers yet</span>
               }
             </div>
             <div className="flex gap-3 mt-4">
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:bg-card-elevated transition-colors">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={() => window.scrollTo({ top: 300, behavior: 'smooth' })} className="px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:bg-card-elevated transition-colors">
                 Update Portfolio
               </motion.button>
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={analyse} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">
@@ -246,26 +354,38 @@ const Dashboard = () => {
             <label className="label-mono mb-3 block">ADD HOLDINGS</label>
             <div className="space-y-3">
               {holdings.map((h, i) => (
-                <div key={i} className="flex flex-row items-center gap-1.5">
-                  <div className="flex-1 min-w-0">
-                    <StockSearch value={h.ticker} onChange={(t) => updateHolding(i, 'ticker', t)} placeholder="Ticker / Name..." />
+                <div key={i}>
+                  <div className="flex flex-row items-center gap-1.5">
+                    <div className="flex-1 min-w-0">
+                      <StockSearch value={h.ticker} onChange={t => updateHolding(i, 'ticker', t)} placeholder="Ticker / Name..." />
+                    </div>
+                    <input
+                      placeholder="Qty"
+                      value={h.shares}
+                      onChange={e => updateHolding(i, 'shares', e.target.value)}
+                      className="w-14 sm:w-20 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    <input
+                      placeholder="Cost $"
+                      value={h.cost}
+                      onChange={e => updateHolding(i, 'cost', e.target.value)}
+                      className="w-16 sm:w-24 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                    />
+                    {holdings.length > 1 && (
+                      <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red flex-shrink-0">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
-                  <input
-                    placeholder="Qty"
-                    value={h.shares}
-                    onChange={(e) => updateHolding(i, 'shares', e.target.value)}
-                    className="w-14 sm:w-20 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                  />
-                  <input
-                    placeholder="Cost $"
-                    value={h.cost}
-                    onChange={(e) => updateHolding(i, 'cost', e.target.value)}
-                    className="w-16 sm:w-24 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                  />
-                  {holdings.length > 1 && (
-                    <button onClick={() => setHoldings(holdings.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-signal-red flex-shrink-0">
-                      <Trash2 size={13} />
-                    </button>
+                  {/* Live price + position value */}
+                  {h.ticker && (
+                    <div className="ml-0 sm:ml-2 mt-1">
+                      <HoldingPrice 
+                        ticker={h.ticker} 
+                        shares={h.shares} 
+                        onPriceFetched={(t, p) => setLivePrices(prev => prev[t] === p ? prev : { ...prev, [t]: p })} 
+                      />
+                    </div>
                   )}
                 </div>
               ))}
@@ -278,6 +398,33 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
+          {/* Total Portfolio Value */}
+          {filledTickers.length > 0 && portfolioTotal > 0 && (
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="label-mono">PORTFOLIO VALUE</span>
+                <button onClick={refreshPrices} className="text-muted-foreground hover:text-primary transition-colors p-1" title="Refresh prices">
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <div className="font-mono text-2xl font-bold text-foreground">${portfolioTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <span className="font-mono text-[10px] text-muted-foreground">Current Market Value</span>
+                </div>
+                {totalCostBasis > 0 && (
+                  <div>
+                    <div className={`font-mono text-lg font-bold ${pnlPositive ? 'text-signal-green' : 'text-signal-red'}`}>
+                      {pnlPositive ? '+' : ''}${totalPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span className="text-sm ml-2">({pnlPositive ? '+' : ''}{totalPnLPct.toFixed(1)}%)</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground">Total P&L</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 relative z-10 overflow-hidden">
             <label className="label-mono mb-3 block">DATE RANGE</label>
             <div className="flex flex-col gap-2.5">
@@ -285,14 +432,14 @@ const Dashboard = () => {
                 <span className="font-mono text-[10px] text-muted-foreground mb-1 block">START DATE</span>
                 <div className="relative w-full">
                   <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
                 </div>
               </div>
               <div>
                 <span className="font-mono text-[10px] text-muted-foreground mb-1 block">END DATE</span>
                 <div className="relative w-full">
                   <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary pointer-events-none z-10" />
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
                 </div>
               </div>
             </div>
@@ -301,7 +448,7 @@ const Dashboard = () => {
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <label className="label-mono mb-3 block">QUICK LOAD</label>
             <div className="flex flex-wrap gap-2">
-              {presets.map((p) => (
+              {presets.map(p => (
                 <button key={p.key} onClick={() => applyPreset(p)} className={`px-4 py-2 rounded-full font-mono text-xs transition-all ${selectedPreset === p.key ? 'bg-primary text-primary-foreground' : 'glass text-muted-foreground hover:text-foreground'}`}>
                   {p.label}
                 </button>
@@ -310,70 +457,23 @@ const Dashboard = () => {
           </motion.div>
 
           {/* CSV import zone */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className={`glass rounded-xl border-2 border-dashed transition-colors ${isDragOver ? 'border-primary bg-primary/5' : 'border-border'}`}
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={handleDrop}
-          >
-            {/* Hidden real file input — triggered programmatically for Safari compatibility */}
-            <input
-              ref={fileInputRef}
-              id="csv-file-input"
-              type="file"
-              accept=".csv,.txt"
-              className="sr-only"
-              onChange={handleFileChange}
-            />
-
-            {/* Tap zone — uses button + programmatic click for reliable Safari iOS support */}
-            <button
-              type="button"
-              className="block w-full p-6 text-center cursor-pointer hover:bg-primary/5 rounded-xl transition-colors"
-              onClick={() => {
-                setCsvError('');
-                setCsvImported(false);
-                // Small delay helps Safari reliably open the picker
-                setTimeout(() => fileInputRef.current?.click(), 50);
-              }}
-            >
-              {csvImported
-                ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" />
-                : <Upload size={32} className="text-primary mx-auto mb-4" />}
-              <p className="font-display font-bold text-foreground">
-                {csvImported ? 'CSV Imported! Tap to change' : 'Tap to upload CSV file'}
-              </p>
-              <p className="text-muted-foreground text-sm mt-2">
-                {csvImported ? 'Holdings loaded from your file.' : 'Or drag & drop your broker export'}
-              </p>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className={`glass rounded-xl border-2 border-dashed transition-colors ${isDragOver ? 'border-primary bg-primary/5' : 'border-border'}`} onDragOver={e => { e.preventDefault(); setIsDragOver(true); }} onDragLeave={() => setIsDragOver(false)} onDrop={handleDrop}>
+            <input ref={fileInputRef} id="csv-file-input" type="file" accept=".csv,.txt" className="sr-only" onChange={handleFileChange} />
+            <button type="button" className="block w-full p-6 text-center cursor-pointer hover:bg-primary/5 rounded-xl transition-colors" onClick={() => { setCsvError(''); setCsvImported(false); setTimeout(() => fileInputRef.current?.click(), 50); }}>
+              {csvImported ? <CheckCircle2 size={32} className="text-signal-green mx-auto mb-4" /> : <Upload size={32} className="text-primary mx-auto mb-4" />}
+              <p className="font-display font-bold text-foreground">{csvImported ? 'CSV Imported! Tap to change' : 'Tap to upload CSV file'}</p>
+              <p className="text-muted-foreground text-sm mt-2">{csvImported ? 'Holdings loaded from your file.' : 'Or drag & drop your broker export'}</p>
               {csvError && <p className="font-mono text-[11px] text-signal-red mt-2">{csvError}</p>}
               <p className="font-mono text-[10px] text-muted-foreground mt-3">Robinhood · Fidelity · Schwab · Webull</p>
             </button>
-
-            {/* Sample file button — outside the tap zone so it doesn't re-trigger picker */}
             <div className="px-6 pb-5 text-center">
-              <button
-                type="button"
-                className="px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
-                onClick={loadSampleFile}
-              >
+              <button type="button" className="px-4 py-2 rounded-lg font-mono text-xs text-primary border border-primary/30 hover:bg-primary/10 transition-colors" onClick={loadSampleFile}>
                 Load sample data instead
               </button>
             </div>
           </motion.div>
 
-          <motion.button
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={analyse}
-            className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm"
-          >
+          <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={analyse} className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">
             Analyse Portfolio <ChevronRight size={14} className="inline ml-1" />
           </motion.button>
         </div>
@@ -383,7 +483,7 @@ const Dashboard = () => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass rounded-xl p-4 mt-6">
             <span className="label-mono">PREVIEW</span>
             <div className="flex flex-wrap gap-2 mt-3">
-              {filledTickers.map((t) => (
+              {filledTickers.map(t => (
                 <span key={t} className="font-mono text-xs bg-primary/10 text-primary px-3 py-1 rounded-full">{t}</span>
               ))}
             </div>

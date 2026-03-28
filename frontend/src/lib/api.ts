@@ -61,15 +61,54 @@ export const getRecommendations = (req: PortfolioRequest) =>
 // ── Non-portfolio endpoints ──────────────────────────────────────────────
 export const getMarketNews = () => get('/api/news/market');
 
-export const sendChatMessage = async (message: string, portfolioContext?: object) => {
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatPortfolioContext {
+  holdings: { ticker: string; weight: number; currentPrice: number }[];
+  metrics: {
+    healthScore: number; sharpe: number; var95: number;
+    cvar: number; beta: number; maxDrawdown: number;
+    annualizedReturn?: number; volatility?: number;
+    sortino?: number; alpha?: number;
+  };
+  investorProfile: { riskTolerance: string; targetReturn: number };
+}
+
+export const sendChatMessage = async (
+  message: string,
+  portfolioContext?: ChatPortfolioContext | object,
+  conversationHistory: ChatMessage[] = [],
+): Promise<{ reply: string; fallback?: boolean; status503?: boolean }> => {
   try {
-    return await post('/api/chat', {
-      message,
-      portfolio_context: portfolioContext,
+    const res = await fetch(`${BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        portfolio_context: portfolioContext,
+        conversation_history: conversationHistory,
+      }),
     });
-  } catch {
-    // Offline fallback — smart pre-built responses when backend is unavailable
-    return { reply: getOfflineResponse(message) };
+
+    if (res.status === 503) {
+      return { reply: '', fallback: true, status503: true };
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'Unknown error');
+      throw new Error(`Chat failed: ${res.status} — ${text}`);
+    }
+
+    return res.json();
+  } catch (err) {
+    // Network unreachable — use offline fallback
+    if ((err as Error).message?.includes('503')) {
+      return { reply: '', fallback: true, status503: true };
+    }
+    return { reply: getOfflineResponse(message), fallback: true };
   }
 };
 
@@ -79,8 +118,21 @@ export const getDemoPortfolios = () => get('/api/v2/portfolio/demo-portfolios');
 
 export const getSentiment = (ticker: string) => get(`/api/news/sentiment/${ticker}`);
 
+// ── Stock price endpoint ─────────────────────────────────────────────────
+export async function getStockPrice(ticker: string) {
+  const res = await fetch(`${BASE}/api/portfolio/stock/${ticker}`);
+  if (!res.ok) throw new Error('Price unavailable');
+  const data = await res.json();
+  return {
+    ticker,
+    price: data.current_price ?? data.price ?? 0,
+    change: data.change ?? 0,
+    changePercent: data.change_percent ?? 0,
+    name: data.name ?? ticker,
+  };
+}
+
 // ── Offline AI fallback ──────────────────────────────────────────────────
-// Provides intelligent pre-built responses when backend is unreachable
 function getOfflineResponse(message: string): string {
   const msg = message.toLowerCase();
 
@@ -116,6 +168,5 @@ function getOfflineResponse(message: string): string {
     return "**Portfolio Health Score (0-100)** is a weighted composite of four risk metrics:\n\n• **Sharpe Ratio** (40 points) — Risk-adjusted return quality\n• **Value at Risk** (25 points) — Downside risk exposure\n• **Volatility** (20 points) — Overall price swing magnitude\n• **Concentration** (15 points) — Diversification of holdings\n\nScoring: **70+** = Healthy (green), **40-70** = Needs attention (yellow), **Below 40** = Concern (red).";
   }
 
-  // Default response
   return "I'm **Arcus AI**, your portfolio analytics assistant. I can explain any metric you see on the dashboard.\n\nTry asking about:\n• **Sharpe Ratio** — Risk-adjusted returns\n• **Portfolio Risk** — VaR, volatility, drawdowns\n• **Stress Testing** — Historical crash scenarios\n• **Monte Carlo** — Future projections\n• **Sector Diversification** — Concentration analysis\n• **Health Score** — Overall portfolio quality\n\n💡 *For live AI-powered analysis with Claude, run the backend locally with `uvicorn backend.main:app --port 8000`*";
 }

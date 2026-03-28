@@ -345,8 +345,16 @@ const PDFReportDocument = ({ tickers, weights, metrics: m, pnlRows, dateRange, d
         ))}
       </div>
 
+      {/* ── LEGAL DISCLAIMER ── */}
+      <div style={{ marginTop: 20, padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6 }}>
+        <div style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: AMBER, fontFamily: MONO, marginBottom: 4 }}>Important Disclosures</div>
+        <div style={{ fontSize: 8, color: MUTED, lineHeight: 1.6 }}>
+          Arcus is an educational analytics tool. It is not a registered investment advisor with the SEC or FINRA. All analysis — Health Scores, Sharpe ratios, Monte Carlo simulations, VaR estimates, and AI responses — is hypothetical and for educational purposes only. Nothing on this platform constitutes a recommendation to buy, sell, or hold any security. Always consult a qualified financial advisor before making investment decisions. Market data sourced from Yahoo Finance and may be delayed.
+        </div>
+      </div>
+
       {/* ── FOOTER ── */}
-      <div style={{ marginTop: 24, paddingTop: 14, borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BORDER}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 8, color: MUTED }}><strong style={{ color: TEAL }}>ARCUS</strong> · Portfolio Analytics · {generatedAt}</div>
         <div style={{ fontSize: 7.5, color: MUTED, maxWidth: 360, textAlign: 'right' }}>For informational purposes only. Not investment advice. Past performance does not guarantee future results.</div>
       </div>

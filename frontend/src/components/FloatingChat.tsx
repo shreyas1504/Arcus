@@ -1,18 +1,52 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, SendHorizontal, Zap, User } from 'lucide-react';
-import { sendChatMessage } from '@/lib/api';
+import { sendChatMessage, ChatMessage, ChatPortfolioContext } from '@/lib/api';
 
 const quickPrompts = ['PORTFOLIO RISK', 'EXPLAIN SHARPE', 'STRESS TEST'];
 
 // Global event to open chat with a pre-filled message
 export const openChatWithMessage = new EventTarget();
 
+function loadPortfolioContext(): ChatPortfolioContext | undefined {
+  try {
+    const rawAnalysis = JSON.parse(localStorage.getItem('arcus-last-analysis') || '{}');
+    const rawDNA = JSON.parse(localStorage.getItem('arcus-investor-dna') || '{}');
+    const rawPortfolio = JSON.parse(localStorage.getItem('arcus-portfolio') || '{}');
+    const holdings = rawPortfolio?.holdings?.filter((h: { ticker?: string }) => h.ticker) || [];
+    const n = holdings.length || 1;
+    const metrics = rawAnalysis?.metrics || {};
+
+    return {
+      holdings: holdings.map((h: { ticker: string }) => ({
+        ticker: h.ticker, weight: 1 / n, currentPrice: 0,
+      })),
+      metrics: {
+        healthScore: metrics.health_score ?? 0,
+        sharpe: metrics.sharpe ?? 0,
+        var95: metrics.var_95 ?? 0,
+        cvar: metrics.cvar_95 ?? 0,
+        beta: metrics.beta ?? 1,
+        maxDrawdown: metrics.max_drawdown ?? 0,
+        annualizedReturn: metrics.annualized_return,
+        volatility: metrics.volatility,
+        sortino: metrics.sortino,
+        alpha: metrics.alpha,
+      },
+      investorProfile: {
+        riskTolerance: rawDNA?.risk_tolerance || 'Moderate',
+        targetReturn: rawDNA?.target_return || 0.10,
+      },
+    };
+  } catch { return undefined; }
+}
+
 const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'ai' | 'user'; content: string }[]>([
     { role: 'ai', content: "Hi! I'm Arcus AI. I have context on your portfolio. Ask me anything about your risk, performance, or strategy." },
   ]);
+  const [history, setHistory] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState(initialMessage || '');
   const [typing, setTyping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,22 +69,23 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
 
   const doSendMessage = async (text: string) => {
     if (!text.trim()) return;
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
     setInput('');
     setTyping(true);
 
-    const portfolioContext = {
-      portfolio: (() => { try { return JSON.parse(localStorage.getItem('arcus-portfolio') || 'null'); } catch { return null; } })(),
-      metrics: (() => { try { return JSON.parse(localStorage.getItem('arcus-last-analysis') || 'null')?.metrics; } catch { return null; } })(),
-      investor_dna: (() => { try { return JSON.parse(localStorage.getItem('arcus-onboarding-state') || 'null'); } catch { return null; } })(),
-    };
+    const ctx = loadPortfolioContext();
+    const newHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
 
     try {
-      const data = await sendChatMessage(text, portfolioContext);
-      setMessages((prev) => [...prev, { role: 'ai', content: data.reply || data.response || data.content || 'No response received.' }]);
+      const data = await sendChatMessage(text, ctx, newHistory);
+      const reply = data.reply || (data.fallback ? 'AI is currently unavailable. Try again shortly.' : 'No response received.');
+      setMessages(prev => [...prev, { role: 'ai', content: reply }]);
+      if (!data.status503) {
+        setHistory([...newHistory, { role: 'assistant', content: reply }]);
+      }
     } catch (err) {
       console.error('Chat error:', err);
-      setMessages((prev) => [...prev, { role: 'ai', content: 'Sorry, I had trouble connecting. Please try again.' }]);
+      setMessages(prev => [...prev, { role: 'ai', content: 'Sorry, I had trouble connecting. Please try again.' }]);
     } finally {
       setTyping(false);
     }
@@ -58,7 +93,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
 
   return (
     <>
-      {/* Floating button — bottom RIGHT */}
+      {/* Floating button */}
       <AnimatePresence>
         {!open && (
           <motion.button
@@ -75,7 +110,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
         )}
       </AnimatePresence>
 
-      {/* Chat panel — bottom RIGHT */}
+      {/* Chat panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -98,7 +133,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
 
             {/* Quick prompts */}
             <div className="flex gap-1.5 px-3 py-2 border-b border-border overflow-x-auto">
-              {quickPrompts.map((p) => (
+              {quickPrompts.map(p => (
                 <button
                   key={p}
                   onClick={() => doSendMessage(p.toLowerCase())}
@@ -130,9 +165,9 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
               ))}
               {typing && (
                 <div className="flex justify-start">
-                  <div className="glass-elevated rounded-lg px-3 py-2 flex items-center gap-1">
-                    {[0, 1, 2].map((i) => (
-                      <motion.span key={i} className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ scale: [0, 1, 0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />
+                  <div className="glass-elevated rounded-lg px-3 py-2 flex items-center gap-1.5">
+                    {[0, 1, 2].map(i => (
+                      <motion.span key={i} className="w-1.5 h-1.5 rounded-full bg-primary" animate={{ y: [0, -4, 0] }} transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }} />
                     ))}
                   </div>
                 </div>
@@ -145,8 +180,8 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
                 <input
                   ref={inputRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && doSendMessage(input)}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && doSendMessage(input)}
                   placeholder="Ask about your portfolio..."
                   className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none"
                 />

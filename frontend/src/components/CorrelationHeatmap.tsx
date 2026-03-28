@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { motion } from 'framer-motion';
 import { MOCK_CORRELATION } from '@/lib/mock-data';
 
@@ -55,10 +56,9 @@ const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
 
         {/* Rows */}
         {matrix.map((row, i) => (
-          <>
+          <Fragment key={i}>
             {/* Row label */}
             <div
-              key={`label-${i}`}
               className="font-mono text-[9px] text-muted-foreground flex items-center justify-end pr-1.5 truncate"
               style={{ aspectRatio: '1' }}
             >
@@ -88,7 +88,7 @@ const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
                 </motion.div>
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>

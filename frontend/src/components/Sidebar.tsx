@@ -35,6 +35,8 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen, isMobile 
 
   const close = () => setMobileOpen(false);
 
+  const plan = localStorage.getItem('arcus-plan') || 'free';
+
   // On mobile: drawer that slides in/out. On desktop: always-visible collapsed sidebar.
   return (
     <motion.aside
@@ -114,6 +116,27 @@ const Sidebar = ({ collapsed, setCollapsed, mobileOpen, setMobileOpen, isMobile 
 
       {/* Bottom items */}
       <div className="px-2 py-2 space-y-1 border-t border-border">
+        {plan === 'free' && (
+          <Link
+            to="/pricing"
+            onClick={close}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-amber-400 hover:text-amber-300 hover:bg-accent/5 transition-all"
+          >
+            <span className="flex items-center justify-center w-[18px] text-[15px] flex-shrink-0">✦</span>
+            <AnimatePresence>
+              {(!collapsed || isMobile) && (
+                <motion.span
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  className="font-display font-medium text-[13px] overflow-hidden whitespace-nowrap"
+                >
+                  Upgrade
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </Link>
+        )}
         {bottomItems.map((item) => (
           <Link
             key={item.label}

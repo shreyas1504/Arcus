@@ -147,7 +147,13 @@ const StockSearch = ({ value, onChange, placeholder = 'Search stocks (e.g. Apple
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
         <input
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); setSelectedIdx(0); }}
+          onChange={(e) => { 
+            const val = e.target.value;
+            setQuery(val);
+            onChange(val);
+            setOpen(true); 
+            setSelectedIdx(0); 
+          }}
           onFocus={() => query.length > 0 && setOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}

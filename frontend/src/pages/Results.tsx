@@ -24,6 +24,7 @@ import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
 import { loadSettings } from '@/hooks/use-settings';
+import Disclaimer from '@/components/legal/Disclaimer';
 
 const askAI = (question: string) => {
   openChatWithMessage.dispatchEvent(new CustomEvent('open', { detail: { message: question } }));
@@ -41,6 +42,9 @@ const SectionHeader = ({ label, chatQuestion }: { label: string; chatQuestion?: 
 );
 
 const Results = () => {
+  // Scroll to top on mount to fix content-not-visible-until-scroll bug
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   const config = usePortfolioConfig();
   const settings = loadSettings();
   const req = config ? portfolioToRequest(config, settings) : null;
@@ -659,6 +663,9 @@ const Results = () => {
           <MonteCarloChart data={monteCarlo} targetReturn={settings.targetReturn} initialValue={100000} vaultMode={settings.vaultMode} />
           <StressTestGrid data={stressTests} />
         </div>
+
+        {/* Legal Disclaimer */}
+        <Disclaimer variant="full" />
       </div>
     </AppLayout>
   );
