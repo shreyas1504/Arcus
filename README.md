@@ -20,7 +20,7 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 | **Monte Carlo Simulation** | 300+ simulated future paths using Geometric Brownian Motion. |
 | **Efficient Frontier** | Random portfolios plotted on a risk-return map with your current vs optimal allocation. |
 | **Stress Testing** | Estimated losses under 2008 Crisis, COVID Crash, Dot-Com Bust, and custom scenarios. |
-| **AI Chat (Arcus AI)** | Ask questions about your portfolio in natural language — powered by Claude. |
+| **AI Chat (Arcus AI)** | Ask questions about your portfolio in natural language. |
 | **Sector Analysis** | GICS sector breakdown with concentration warnings. |
 | **Correlation Heatmap** | Pairwise stock correlations — are your holdings truly diversified? |
 
@@ -36,7 +36,7 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 | **NumPy / Pandas** | Numerical computation and data manipulation |
 | **SciPy** | Portfolio optimisation (SLSQP constrained minimiser) |
 | **yfinance** | Historical price data from Yahoo Finance |
-| **Anthropic Claude** | AI chatbot for portfolio Q&A |
+| **Recharts / Framer** | Dynamic, interactive simulation charting |
 
 ### Frontend
 | Tool | Purpose |

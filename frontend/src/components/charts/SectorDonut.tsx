@@ -6,15 +6,15 @@ const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
   return (
     <div className="glass rounded-xl p-5 flex flex-col h-full">
       <span className="label-mono">SECTOR CONCENTRATION</span>
-      <div className="flex-1 relative flex items-center justify-center min-h-[200px] mt-4">
-        <ResponsiveContainer width="100%" height={200}>
+      <div className="flex-1 relative flex items-center justify-center min-h-[220px] mt-4">
+        <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={chartData}
               cx="50%"
               cy="50%"
-              innerRadius={55}
-              outerRadius={80}
+              innerRadius="42%"
+              outerRadius="68%"
               dataKey="value"
               paddingAngle={3}
               strokeWidth={0}
@@ -36,8 +36,8 @@ const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
         </ResponsiveContainer>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <span className="font-mono text-2xl font-bold text-foreground">{chartData.length}</span>
-            <p className="font-mono text-[9px] text-muted-foreground">sectors</p>
+            <span className="font-mono text-3xl font-bold text-foreground">{chartData.length}</span>
+            <p className="font-mono text-[11px] text-muted-foreground tracking-wider">sectors</p>
           </div>
         </div>
       </div>

@@ -99,10 +99,11 @@ const STOCK_DB: Stock[] = [
 interface StockSearchProps {
   value: string;
   onChange: (ticker: string) => void;
+  onSelect?: (ticker: string) => void;
   placeholder?: string;
 }
 
-const StockSearch = ({ value, onChange, placeholder = 'Search stocks (e.g. Apple, NVDA)...' }: StockSearchProps) => {
+const StockSearch = ({ value, onChange, onSelect, placeholder = 'Search stocks (e.g. Apple, NVDA)...' }: StockSearchProps) => {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -131,6 +132,7 @@ const StockSearch = ({ value, onChange, placeholder = 'Search stocks (e.g. Apple
   const select = (ticker: string) => {
     setQuery(ticker);
     onChange(ticker);
+    onSelect?.(ticker);
     setOpen(false);
   };
 

@@ -1,5 +1,5 @@
 # ── backend/routers/chat.py ────────────────────────────────────────────────
-# AI chatbot endpoint powered by Anthropic Claude.
+# AI chatbot endpoint powered by Arcus AI.
 # Accepts live portfolio context and conversation history.
 
 import os
@@ -221,7 +221,7 @@ async def chat(req: ChatRequest):
             detail={"error": "anthropic package not installed", "fallback": True},
         )
     except Exception as e:
-        logger.error(f"Claude API error: {e}")
+        logger.error(f"Arcus AI API error: {e}")
         raise HTTPException(
             status_code=503,
             detail={"error": f"AI temporarily unavailable: {str(e)}", "fallback": True},

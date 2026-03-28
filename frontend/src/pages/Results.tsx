@@ -19,7 +19,7 @@ import CorrelationHeatmap from '@/components/CorrelationHeatmap';
 import StressTestGrid from '@/components/StressTestGrid';
 import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
-import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP, computePortfolioMetrics } from '@/lib/mock-data';
+import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP, MOCK_SECTORS, computePortfolioMetrics } from '@/lib/mock-data';
 import { openChatWithMessage } from '@/components/FloatingChat';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
@@ -99,6 +99,26 @@ const Results = () => {
   const tickers = analysis?.tickers ?? (userTickers.length > 0 ? userTickers : MOCK_PORTFOLIO.tickers);
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
   const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
+
+  const SECTOR_COLORS: Record<string, string> = {
+    'Technology': '#38BDA4', 'Healthcare': '#4F9CF0', 'Energy': '#F0514F',
+    'Financials': '#F0A44F', 'Consumer': '#A78BFA', 'Real Estate': '#34D399',
+    'Utilities': '#FB923C', 'Communication': '#60A5FA', 'Other': '#8B949E',
+  };
+
+  // Derive sector breakdown from actual tickers+weights; use MOCK_SECTORS only if no tickers
+  const sectorData = (() => {
+    if (!tickers.length) return MOCK_SECTORS;
+    const map: Record<string, number> = {};
+    tickers.forEach((t: string, i: number) => {
+      const sector = TICKER_SECTOR_MAP[t] ?? 'Other';
+      map[sector] = (map[sector] || 0) + (weights[i] ?? 1 / tickers.length);
+    });
+    const total = Object.values(map).reduce((a, v) => a + v, 0);
+    return Object.entries(map)
+      .map(([name, w]) => ({ name, value: Math.round((w / total) * 100), color: SECTOR_COLORS[name] ?? '#8B949E' }))
+      .sort((a, b) => b.value - a.value);
+  })();
 
   // Use health_score directly from rawMetrics:
   //  - backend: computed by Python portfolio_health_score() from real historical data
@@ -600,7 +620,7 @@ const Results = () => {
           <RiskAttribution data={analysis?.risk_attribution} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <CorrelationHeatmap data={analysis?.correlation} />
-            <SectorDonut data={analysis?.sectors} />
+            <SectorDonut data={sectorData} />
           </div>
         </div>
 

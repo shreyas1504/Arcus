@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Unlock, Plus, X, BookmarkPlus, Pencil, Check, Minus, Share2, ChevronRight } from 'lucide-react';
+import { Lock, Unlock, Plus, X, BookmarkPlus, Pencil, Check, Minus, Share2, ChevronRight, Lightbulb } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
@@ -15,6 +15,7 @@ import { MOCK_PORTFOLIO, TICKER_RISK_DB } from '@/lib/mock-data';
 import { optimizePortfolio } from '@/lib/api';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import { analyzePortfolio } from '@/lib/api';
 
 // ── Tooltip text map ─────────────────────────────────────────────────────
 const METRIC_TOOLTIPS: Record<string, string> = {
@@ -47,15 +48,122 @@ const TECH_TICKERS = new Set(['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'META', 'AMZN', '
 
 const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD: -0.25, pe: 20 };
 
+const TECH_SET = new Set(['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD','NFLX','CRM','ADBE','PLTR','SNOW','INTC','IBM','ORCL']);
+const INDEX_SET = new Set(['VOO','SPY','VTI','QQQ']);
+
+// Returns up to 3 specific, actionable Sharpe-improvement tips.
+// Aware of what's already in the portfolio and what other sandboxes are doing.
+const getSharpeRecs = (
+  mockId: string,
+  tickers: string[],
+  weights: Record<string, number>,
+  metrics: ReturnType<typeof calcMetrics>,
+  allMocks: MockColumn[]
+): string[] => {
+  const recs: string[] = [];
+  if (tickers.length === 0) return ['Add some stocks to get recommendations.'];
+
+  const sorted = [...tickers].sort((a, b) => (weights[b] || 0) - (weights[a] || 0));
+  const top = sorted[0] ?? '';
+  const topW = weights[top] || 0;
+  const techW = tickers.filter(t => TECH_SET.has(t)).reduce((s, t) => s + (weights[t] || 0), 0);
+  const gldW = weights['GLD'] || 0;
+  const tltW = weights['TLT'] || 0;
+  const hasGLD = tickers.includes('GLD');
+  const hasTLT = tickers.includes('TLT');
+  const hasIndex = tickers.some(t => INDEX_SET.has(t));
+
+  // ── 1. Cross-sandbox duplicate detection ────────────────────────────────
+  for (const other of allMocks.filter(m => m.id !== mockId)) {
+    const shared = tickers.filter(t => other.tickers.includes(t));
+    const overlapRatio = shared.length / Math.max(tickers.length, other.tickers.length, 1);
+    if (overlapRatio >= 0.85) {
+      const wDiff = shared.reduce((s, t) => s + Math.abs((weights[t] || 0) - (other.weights[t] || 0)), 0);
+      if (wDiff < 0.12) {
+        const last = sorted[sorted.length - 1];
+        recs.push(`Near-identical to ${other.label} (${Math.round(overlapRatio * 100)}% overlap). Swap ${last} for an uncorrelated asset (e.g. GLD, TLT, XOM) or try the Max Sharpe preset for a different allocation.`);
+        break;
+      }
+    }
+  }
+
+  // ── 2. Single-stock concentration ───────────────────────────────────────
+  if (topW > 0.35 && top && recs.length < 3) {
+    const reduceAmt = topW - 0.20;
+    const candidates = ['GLD', 'TLT', 'VOO', 'JNJ', 'JPM', 'XOM', 'PG'].filter(t => !tickers.includes(t));
+    if (candidates.length > 0) {
+      recs.push(`${top} = ${(topW * 100).toFixed(0)}% — reduce slider to 20%, add ${candidates[0]} at ${(reduceAmt * 100).toFixed(0)}%. Concentration >35% in one stock raises VaR and drags Sharpe. Est. Sharpe lift: +0.10–0.20.`);
+    } else {
+      const next = sorted.find(t => t !== top) ?? '';
+      if (next) {
+        const newNextW = (weights[next] || 0) + reduceAmt;
+        recs.push(`${top} = ${(topW * 100).toFixed(0)}% — slide to 20%. Move freed ${(reduceAmt * 100).toFixed(0)}% into ${next} (${((weights[next] || 0) * 100).toFixed(0)}% → ${(newNextW * 100).toFixed(0)}%) to reduce single-stock risk.`);
+      }
+    }
+  }
+
+  // ── 3. Defensive hedge (GLD / TLT) ──────────────────────────────────────
+  if (metrics.sharpe < 1.0 && recs.length < 3) {
+    if (!hasGLD && !hasTLT) {
+      const trimFrom = topW > 0.15 ? ` (trim ${top} slider ${(topW * 100).toFixed(0)}%→${Math.max(Math.round((topW - 0.12) * 100), 5)}%)` : '';
+      const estSharpe = (metrics.sharpe + 0.18).toFixed(2);
+      recs.push(`No hedge. Add GLD at 12%${trimFrom}. Gold's near-zero equity correlation cushions volatility. Estimated Sharpe: ${estSharpe}.`);
+    } else if (hasGLD && gldW < 0.08) {
+      const deficit = 0.12 - gldW;
+      recs.push(`GLD at ${(gldW * 100).toFixed(0)}% is below the 8% threshold for meaningful hedging. Slide GLD up to 12% (reduce ${top} by ${(deficit * 100).toFixed(0)}%). Below 8%, correlation benefits barely register.`);
+    } else if (hasTLT && tltW < 0.08) {
+      recs.push(`TLT at ${(tltW * 100).toFixed(0)}% is too small to reduce equity beta. Increase TLT to 12–15% — bonds and equities historically rebalance profitably during volatility spikes.`);
+    } else {
+      recs.push(`Sharpe ${metrics.sharpe.toFixed(2)}: try Equal Weight preset to see if concentrated sliders are dragging risk-adjusted return below 1.0.`);
+    }
+  }
+
+  // ── 4. Tech sector overweight ────────────────────────────────────────────
+  if (techW > 0.55 && recs.length < 3) {
+    const defensive = ['JNJ', 'JPM', 'XOM', 'PG', 'NEE', 'V', 'KO'].filter(t => !tickers.includes(t));
+    if (defensive.length >= 2) {
+      const trim = Math.round((techW - 0.40) * 100);
+      recs.push(`${(techW * 100).toFixed(0)}% tech = highly correlated drawdowns. Cut tech by ${trim}% total → add ${defensive[0]} + ${defensive[1]} at ${Math.round(trim / 2)}% each. Cross-sector diversification lowers max drawdown during tech sell-offs.`);
+    }
+  }
+
+  // ── 5. Too few holdings ──────────────────────────────────────────────────
+  if (tickers.length < 4 && recs.length < 3) {
+    const suggest = ['VOO', 'GLD', 'JNJ', 'JPM', 'XOM'].filter(t => !tickers.includes(t)).slice(0, 2);
+    recs.push(`Only ${tickers.length} holding${tickers.length === 1 ? '' : 's'} — high unsystematic risk. Add ${suggest.join(' + ')}. Each uncorrelated stock cuts portfolio variance (Modern Portfolio Theory).`);
+  }
+
+  // ── 6. High beta ─────────────────────────────────────────────────────────
+  if (metrics.beta > 1.3 && recs.length < 3) {
+    const lowB = ['GLD', 'TLT', 'NEE', 'PG', 'KO', 'JNJ'].filter(t => !tickers.includes(t));
+    if (lowB.length > 0) {
+      const estBeta = (metrics.beta * 0.88).toFixed(2);
+      recs.push(`Beta ${metrics.beta.toFixed(2)} means a 10% market drop hits you ~${(metrics.beta * 10).toFixed(0)}%. Add ${lowB[0]} (β≈0.3) at 12% → est. portfolio beta drops to ~${estBeta}.`);
+    }
+  }
+
+  // ── 7. No index ETF anchor ───────────────────────────────────────────────
+  if (!hasIndex && metrics.sharpe < 1.5 && recs.length < 3) {
+    recs.push('No index ETF. A 20% VOO core eliminates unsystematic risk and historically anchors Sharpe above 1.0 for equity portfolios.');
+  }
+
+  // ── Healthy portfolio ────────────────────────────────────────────────────
+  if (recs.length === 0) {
+    recs.push(`Sharpe ${metrics.sharpe.toFixed(2)} is strong. Use Equal Weight or Max Sharpe preset to confirm you are near the efficient frontier.`);
+  }
+
+  return recs.slice(0, 3);
+};
+
 // ── Metric calculation ───────────────────────────────────────────────────
-const calcMetrics = (tickers: string[], weights: Record<string, number>, scenario: ScenarioKey = 'normal') => {
+const calcMetrics = (tickers: string[], weights: Record<string, number>, scenario: ScenarioKey = 'normal', dynamicRiskDb: Record<string, any> = {}) => {
   const totalW = tickers.reduce((a, t) => a + (weights[t] || 0), 0);
   const norm = totalW > 0 ? totalW : 1;
 
   let pRet = 0, pVol = 0, pBeta = 0;
   for (const t of tickers) {
     const w = (weights[t] || 0) / norm;
-    const risk = TICKER_RISK_DB[t] ?? DEFAULT_RISK;
+    const risk = dynamicRiskDb[t] ?? TICKER_RISK_DB[t] ?? DEFAULT_RISK;
     let ret = risk.annRet;
     let vol = risk.vol;
 
@@ -160,8 +268,13 @@ const Sandbox = () => {
   const [addingTickerTo, setAddingTickerTo] = useState<string | null>(null);
   const [applyingPreset, setApplyingPreset] = useState<Record<string, boolean>>({});
   const [applyDialogIdx, setApplyDialogIdx] = useState<number | null>(null);
+  const [dynamicRiskDb, setDynamicRiskDb] = useState<Record<string, any>>({});
+  const [showRecsFor, setShowRecsFor] = useState<Record<string, boolean>>({});
+  const [mockAnalysisResults, setMockAnalysisResults] = useState<Record<string, any>>({});
+  const [analyzingMockId, setAnalyzingMockId] = useState<string | null>(null);
+  const [analysisMockDialogId, setAnalysisMockDialogId] = useState<string | null>(null);
 
-  const currentMetrics = useMemo(() => calcMetrics(currentTickers, currentWeights, scenario), [currentTickers, currentWeights, scenario]);
+  const currentMetrics = useMemo(() => calcMetrics(currentTickers, currentWeights, scenario, dynamicRiskDb), [currentTickers, currentWeights, scenario, dynamicRiskDb]);
 
   const addMock = () => {
     const labels = ['B', 'C', 'D', 'E'];
@@ -205,15 +318,25 @@ const Sandbox = () => {
     });
   };
 
-  const saveMock = (mock: MockColumn) => {
+  const toggleSaveMock = (mock: MockColumn) => {
     try {
       const existingRaw = localStorage.getItem(MOCKS_STORAGE);
       const existing: SavedMock[] = existingRaw ? JSON.parse(existingRaw) : [];
-      existing.push({ id: crypto.randomUUID(), name: mock.label, weights: mock.weights, tickers: mock.tickers, savedAt: new Date().toISOString() });
-      localStorage.setItem(MOCKS_STORAGE, JSON.stringify(existing));
-      toast.success(`${mock.label} saved`);
+      const isSaved = existing.some(e => e.id === mock.id);
+      
+      if (isSaved) {
+        // Unsave
+        const filtered = existing.filter(e => e.id !== mock.id);
+        localStorage.setItem(MOCKS_STORAGE, JSON.stringify(filtered));
+        toast.info(`${mock.label} unsaved`);
+      } else {
+        // Save
+        existing.push({ id: mock.id, name: mock.label, weights: mock.weights, tickers: mock.tickers, savedAt: new Date().toISOString() });
+        localStorage.setItem(MOCKS_STORAGE, JSON.stringify(existing));
+        toast.success(`${mock.label} saved`);
+      }
     } catch {
-      toast.error('Failed to save mock');
+      toast.error('Failed to toggle save state');
     }
   };
 
@@ -311,8 +434,10 @@ const Sandbox = () => {
     }
   };
 
-  const addTickerToMock = (mockIdx: number, ticker: string) => {
+  const addTickerToMock = async (mockIdx: number, ticker: string) => {
     if (!ticker) return;
+    
+    // Optimistic UI update
     setMocks(prev => {
       const newMocks = [...prev];
       const mock = { ...newMocks[mockIdx], weights: { ...newMocks[mockIdx].weights }, tickers: [...newMocks[mockIdx].tickers] };
@@ -331,6 +456,36 @@ const Sandbox = () => {
       return newMocks;
     });
     setAddingTickerTo(null);
+
+    // Fetch dynamic risk data if missing
+    if (!TICKER_RISK_DB[ticker] && !dynamicRiskDb[ticker]) {
+      try {
+        const req = {
+          tickers: [ticker],
+          weights: [1],
+          start_date: '2022-01-01',
+          end_date: new Date().toISOString().slice(0, 10),
+        };
+        const result = await analyzePortfolio(req);
+        if (result?.metrics) {
+          const m = result.metrics;
+          setDynamicRiskDb(prev => ({
+            ...prev,
+            [ticker]: {
+              annRet: m.annualized_return ?? DEFAULT_RISK.annRet,
+              vol: m.volatility ?? DEFAULT_RISK.vol,
+              beta: m.beta ?? DEFAULT_RISK.beta,
+              var95: m.var_95 ?? DEFAULT_RISK.var95,
+              maxDD: m.max_drawdown ?? DEFAULT_RISK.maxDD,
+              pe: DEFAULT_RISK.pe
+            }
+          }));
+          toast.success(`Loaded market data for ${ticker}`);
+        }
+      } catch (err) {
+        toast.error(`Market data for ${ticker} unavailable. Using estimates.`);
+      }
+    }
   };
 
   const removeTickerFromMock = (mockIdx: number, ticker: string) => {
@@ -363,8 +518,43 @@ const Sandbox = () => {
     });
   };
 
+  const analyseMock = async (mock: MockColumn, offlineMetrics: ReturnType<typeof calcMetrics>) => {
+    setAnalyzingMockId(mock.id);
+    try {
+      const n = mock.tickers.length;
+      const req = {
+        tickers: mock.tickers,
+        weights: mock.tickers.map(t => mock.weights[t] ?? 1 / n),
+        start_date: '2022-01-01',
+        end_date: new Date().toISOString().slice(0, 10),
+      };
+      const result = await analyzePortfolio(req);
+      setMockAnalysisResults(prev => ({ ...prev, [mock.id]: { ...result, _offline: false } }));
+    } catch {
+      setMockAnalysisResults(prev => ({
+        ...prev,
+        [mock.id]: {
+          metrics: {
+            health_score: offlineMetrics.healthScore,
+            sharpe: offlineMetrics.sharpe,
+            var_95: offlineMetrics.var95,
+            beta: offlineMetrics.beta,
+            cvar_95: offlineMetrics.cvar,
+            annualized_return: offlineMetrics.pRet,
+            volatility: offlineMetrics.adjVol,
+          },
+          _offline: true,
+        },
+      }));
+      toast.info('Backend offline — showing estimated metrics');
+    } finally {
+      setAnalyzingMockId(null);
+      setAnalysisMockDialogId(mock.id);
+    }
+  };
+
   const bestSharpeIdx = mocks.reduce((best, mock, i) => {
-    const s = calcMetrics(mock.tickers, mock.weights, scenario).sharpe;
+    const s = calcMetrics(mock.tickers, mock.weights, scenario, dynamicRiskDb).sharpe;
     return s > (best.sharpe || 0) ? { idx: i, sharpe: s } : best;
   }, { idx: -1, sharpe: currentMetrics.sharpe }).idx;
 
@@ -467,11 +657,18 @@ const Sandbox = () => {
           {/* Mock columns */}
           <AnimatePresence mode="popLayout">
             {mocks.map((mock, mockIdx) => {
-              const metrics = calcMetrics(mock.tickers, mock.weights, scenario);
+              const metrics = calcMetrics(mock.tickers, mock.weights, scenario, dynamicRiskDb);
               const totalW = mock.tickers.reduce((a, t) => a + (mock.weights[t] || 0), 0);
               const normalized = Math.abs(totalW - 1) < 0.01;
               const isBest = mockIdx === bestSharpeIdx;
               const isLoading = !!applyingPreset[mock.id];
+              
+              const isSavedLocally = (() => {
+                try {
+                  const items = JSON.parse(localStorage.getItem(MOCKS_STORAGE) || '[]');
+                  return items.some((i: any) => i.id === mock.id);
+                } catch { return false; }
+              })();
 
               return (
                 <motion.div
@@ -526,8 +723,8 @@ const Sandbox = () => {
                       <button onClick={() => shareMock(mock)} className="text-muted-foreground hover:text-primary transition-colors p-1" title="Share strategy link">
                         <Share2 size={11} />
                       </button>
-                      <button onClick={() => saveMock(mock)} className="text-muted-foreground hover:text-primary transition-colors p-1" title="Save mock">
-                        <BookmarkPlus size={12} />
+                      <button onClick={() => toggleSaveMock(mock)} className={`transition-colors p-1 ${isSavedLocally ? 'text-primary' : 'text-muted-foreground hover:text-primary'}`} title={isSavedLocally ? 'Unsave mock' : 'Save mock'}>
+                        <BookmarkPlus size={12} className={isSavedLocally ? 'fill-primary' : ''} />
                       </button>
                       <button onClick={() => deleteMock(mock.id)} className="text-muted-foreground hover:text-signal-red transition-colors p-1" title="Delete mock">
                         <X size={12} />
@@ -591,19 +788,30 @@ const Sandbox = () => {
 
                   <MiniSimChart sharpe={metrics.sharpe} vol={metrics.adjVol} />
 
+                  {/* Analyse button */}
+                  <button
+                    onClick={() => analyseMock(mock, metrics)}
+                    disabled={analyzingMockId === mock.id}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 glass border border-primary/20 hover:border-primary/40 text-primary rounded-lg py-1.5 font-mono text-[10px] transition-colors disabled:opacity-50"
+                  >
+                    {analyzingMockId === mock.id ? (
+                      <><motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }} className="inline-block">⟳</motion.span> Analysing...</>
+                    ) : (
+                      'Analyse Portfolio →'
+                    )}
+                  </button>
+
                   {/* Weights with lock/unlock */}
                   <div className="mt-4 space-y-3">
                     <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>WEIGHTS</span>
-                    {mock.tickers.map(t => {
-                      const isEstimated = !TICKER_RISK_DB[t];
-                      return (
+                    {mock.tickers.map(t => (
                         <div key={t} className="flex items-center gap-1.5">
                           <button onClick={() => toggleLock(mockIdx, t)} className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0" title={mock.locked[t] ? 'Unlock' : 'Lock'}>
                             {mock.locked[t] ? <Lock size={10} /> : <Unlock size={10} />}
                           </button>
                           <span className="font-mono text-[10px] text-muted-foreground w-10 flex items-center gap-0.5">
                             {t}
-                            {isEstimated && <span className="text-signal-amber text-[8px]" title="Using estimated risk data">~</span>}
+                            {!TICKER_RISK_DB[t] && !dynamicRiskDb[t] && <span className="text-signal-amber text-[8px]" title="Using estimated risk data">~</span>}
                           </span>
                           <input
                             type="range" min="0" max="100"
@@ -617,14 +825,14 @@ const Sandbox = () => {
                             <Minus size={10} />
                           </button>
                         </div>
-                      );
-                    })}
+                      )
+                    )}
 
                     {/* Add ticker */}
                     {addingTickerTo === mock.id ? (
                       <div className="flex items-center gap-1">
                         <div className="flex-1">
-                          <StockSearch value="" onChange={t => addTickerToMock(mockIdx, t)} placeholder="Add stock..." />
+                          <StockSearch value="" onChange={() => {}} onSelect={t => addTickerToMock(mockIdx, t)} placeholder="Add stock..." />
                         </div>
                         <button onClick={() => setAddingTickerTo(null)} className="text-muted-foreground hover:text-foreground"><X size={12} /></button>
                       </div>
@@ -636,6 +844,37 @@ const Sandbox = () => {
                         <Plus size={10} className="inline mr-1" /> Add Stock
                       </button>
                     )}
+                  </div>
+
+                  {/* Sharpe Recommendations */}
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setShowRecsFor(prev => ({ ...prev, [mock.id]: !prev[mock.id] }))}
+                      className="flex items-center gap-1.5 w-full text-left"
+                    >
+                      <Lightbulb size={11} className="text-signal-amber flex-shrink-0" />
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-signal-amber">Sharpe Tips</span>
+                      <ChevronRight size={10} className={`ml-auto text-muted-foreground transition-transform ${showRecsFor[mock.id] ? 'rotate-90' : ''}`} />
+                    </button>
+                    <AnimatePresence>
+                      {showRecsFor[mock.id] && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-2 space-y-1.5">
+                            {getSharpeRecs(mock.id, mock.tickers, mock.weights, metrics, mocks).map((rec, ri) => (
+                              <div key={ri} className="flex items-start gap-1.5 rounded-md bg-signal-amber/5 border border-signal-amber/15 px-2.5 py-2">
+                                <span className="font-mono text-signal-amber text-[9px] flex-shrink-0 mt-0.5">{ri + 1}.</span>
+                                <p className="font-mono text-[10px] text-foreground/80 leading-relaxed">{rec}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
 
                   {/* Apply Strategy button — only on best sharpe card */}
@@ -733,6 +972,69 @@ const Sandbox = () => {
           })()}
         </DialogContent>
       </Dialog>
+      {/* Mock Analysis Dialog */}
+      <Dialog open={analysisMockDialogId !== null} onOpenChange={open => !open && setAnalysisMockDialogId(null)}>
+        <DialogContent className="max-w-md">
+          {(() => {
+            const mock = mocks.find(m => m.id === analysisMockDialogId);
+            const r = analysisMockDialogId ? mockAnalysisResults[analysisMockDialogId] : null;
+            if (!mock || !r) return null;
+            const m = r.metrics;
+            const offlineMock = calcMetrics(mock.tickers, mock.weights, scenario, dynamicRiskDb);
+            const rows = [
+              { label: 'Health Score', value: m.health_score != null ? Math.round(m.health_score).toString() : offlineMock.healthScore.toString() },
+              { label: 'Sharpe', value: (m.sharpe ?? offlineMock.sharpe).toFixed(2) },
+              { label: 'VaR 95%', value: `${((m.var_95 ?? offlineMock.var95) * 100).toFixed(1)}%` },
+              { label: 'Beta', value: (m.beta ?? offlineMock.beta).toFixed(2) },
+              { label: 'Volatility', value: `${((m.volatility ?? offlineMock.adjVol) * 100).toFixed(1)}%` },
+              { label: 'Ann. Return', value: `${((m.annualized_return ?? offlineMock.pRet) * 100).toFixed(1)}%` },
+            ];
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-mono text-sm flex items-center gap-2">
+                    {mock.label} — Full Analysis
+                    {r._offline && <span className="text-signal-amber text-[10px] font-normal">(estimated)</span>}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    {rows.map(row => (
+                      <div key={row.label} className="glass rounded-lg p-3 text-center">
+                        <p className="font-mono text-[9px] text-muted-foreground">{row.label}</p>
+                        <p className="font-mono text-sm font-bold text-foreground mt-1">{row.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <span className="font-mono text-[10px] text-signal-amber flex items-center gap-1"><Lightbulb size={11} /> Sharpe Tips</span>
+                    {getSharpeRecs(mock.id, mock.tickers, mock.weights, offlineMock, mocks).map((rec, ri) => (
+                      <div key={ri} className="flex items-start gap-1.5 rounded-md bg-signal-amber/5 border border-signal-amber/15 px-2.5 py-2">
+                        <span className="font-mono text-signal-amber text-[9px] flex-shrink-0 mt-0.5">{ri + 1}.</span>
+                        <p className="font-mono text-[10px] text-foreground/80 leading-relaxed">{rec}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {r._offline && <p className="font-mono text-[10px] text-muted-foreground">Connect backend for historical analysis with real market data.</p>}
+                  <button
+                    onClick={() => {
+                      const totalW = mock.tickers.reduce((s, t) => s + (mock.weights[t] || 0), 0) || 1;
+                      const nw: Record<string, number> = {};
+                      mock.tickers.forEach(t => { nw[t] = (mock.weights[t] || 0) / totalW; });
+                      setAnalysisMockDialogId(null);
+                      navigate('/dashboard', { state: { weights: nw, tickers: mock.tickers } });
+                    }}
+                    className="w-full bg-primary text-primary-foreground font-mono text-xs py-2.5 rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    Load in Portfolio Builder →
+                  </button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
     </AppLayout>
   );
 };

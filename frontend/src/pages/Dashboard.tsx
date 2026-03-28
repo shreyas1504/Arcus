@@ -7,6 +7,7 @@ import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import StockSearch from '@/components/StockSearch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { MOCK_STOCK_PRICES } from '@/lib/mock-data';
 import { getStockPrice } from '@/lib/api';
 
@@ -252,6 +253,14 @@ const Dashboard = () => {
   };
 
   const updateHolding = async (idx: number, field: keyof Holding, value: string) => {
+    if (field === 'shares' && value === '0') {
+      toast.error('Minimum 1 needed', {
+        className: 'border-signal-red bg-card-elevated text-signal-red font-mono',
+        duration: 3000,
+      });
+      value = '1';
+    }
+
     const updated = [...holdings];
     updated[idx] = { ...updated[idx], [field]: value };
     setHoldings(updated);
