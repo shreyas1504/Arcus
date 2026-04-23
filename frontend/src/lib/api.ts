@@ -1,4 +1,4 @@
-// In production (GitHub Pages), use Render backend; locally, use localhost
+// In production (Vercel / GitHub Pages), use Render backend; locally, use localhost
 const BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
   : 'https://arcus-backend.onrender.com';
@@ -83,31 +83,55 @@ export const sendChatMessage = async (
   conversationHistory: ChatMessage[] = [],
 ): Promise<{ reply: string; fallback?: boolean; status503?: boolean }> => {
   try {
-    const res = await fetch(`${BASE}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        portfolio_context: portfolioContext,
-        conversation_history: conversationHistory,
-      }),
-    });
+    // Chat goes to Vercel serverless function (same origin, always available)
+    // Falls back to Render backend, then offline responses
+    const chatEndpoints = [
+      '/api/chat',              // Vercel serverless function (primary)
+      `${BASE}/api/chat`,       // Render backend (fallback)
+    ];
 
-    if (res.status === 503) {
-      return { reply: '', fallback: true, status503: true };
+    let lastError: Error | null = null;
+
+    for (const endpoint of chatEndpoints) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            portfolio_context: portfolioContext,
+            conversation_history: conversationHistory,
+          }),
+        });
+
+        if (res.status === 503) {
+          // This endpoint's AI is unavailable, try next
+          lastError = new Error('503');
+          continue;
+        }
+
+        if (!res.ok) {
+          lastError = new Error(`Chat failed: ${res.status}`);
+          continue;
+        }
+
+        const data = await res.json();
+        if (data.fallback && data.error) {
+          // Server returned a fallback signal, try next endpoint
+          lastError = new Error(data.error);
+          continue;
+        }
+
+        return data;
+      } catch (err) {
+        lastError = err as Error;
+        continue; // Try next endpoint
+      }
     }
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => 'Unknown error');
-      throw new Error(`Chat failed: ${res.status} — ${text}`);
-    }
-
-    return res.json();
+    // All endpoints failed — use offline fallback
+    return { reply: getOfflineResponse(message), fallback: true };
   } catch (err) {
-    // Network unreachable — use offline fallback
-    if ((err as Error).message?.includes('503')) {
-      return { reply: '', fallback: true, status503: true };
-    }
     return { reply: getOfflineResponse(message), fallback: true };
   }
 };
@@ -168,5 +192,5 @@ function getOfflineResponse(message: string): string {
     return "**Portfolio Health Score (0-100)** is a weighted composite of four risk metrics:\n\n• **Sharpe Ratio** (40 points) — Risk-adjusted return quality\n• **Value at Risk** (25 points) — Downside risk exposure\n• **Volatility** (20 points) — Overall price swing magnitude\n• **Concentration** (15 points) — Diversification of holdings\n\nScoring: **70+** = Healthy (green), **40-70** = Needs attention (yellow), **Below 40** = Concern (red).";
   }
 
-  return "I'm **Arcus AI**, your portfolio analytics assistant. I can explain any metric you see on the dashboard.\n\nTry asking about:\n• **Sharpe Ratio** — Risk-adjusted returns\n• **Portfolio Risk** — VaR, volatility, drawdowns\n• **Stress Testing** — Historical crash scenarios\n• **Monte Carlo** — Future projections\n• **Sector Diversification** — Concentration analysis\n• **Health Score** — Overall portfolio quality\n\n💡 *For live AI-powered analysis with Arcus AI, run the backend locally with `uvicorn backend.main:app --port 8000`*";
+  return "I'm **Arcus AI**, your portfolio analytics assistant. I can explain any metric you see on the dashboard.\n\nTry asking about:\n• **Sharpe Ratio** — Risk-adjusted returns\n• **Portfolio Risk** — VaR, volatility, drawdowns\n• **Stress Testing** — Historical crash scenarios\n• **Monte Carlo** — Future projections\n• **Sector Diversification** — Concentration analysis\n• **Health Score** — Overall portfolio quality\n\n💡 *AI is temporarily connecting. Try asking a specific question about your portfolio metrics.*";
 }

@@ -1,7 +1,1 @@
-streamlit
-yfinance
-pandas
-numpy
-scipy
-plotly
-pytest
+anthropic>=0.39.0

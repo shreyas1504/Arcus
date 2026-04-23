@@ -535,7 +535,8 @@ const Sandbox = () => {
 
   const shareMock = (mock: MockColumn) => {
     const encoded = btoa(JSON.stringify({ name: mock.label, weights: mock.weights }));
-    const url = `${window.location.origin}/Arcus/sandbox/view?mock=${encoded}`;
+    const base = import.meta.env.BASE_URL || '/';
+    const url = `${window.location.origin}${base}sandbox/view?mock=${encoded}`;
     navigator.clipboard.writeText(url).then(() => {
       toast.success('Link copied! Share your strategy with anyone.');
     }).catch(() => {

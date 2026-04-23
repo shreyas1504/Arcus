@@ -31,6 +31,8 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+        env:
+          VITE_BASE_PATH: /Arcus/
 
       - name: Add 404.html for SPA routing
         run: cp frontend/dist/index.html frontend/dist/404.html

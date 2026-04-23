@@ -101,7 +101,7 @@ const Settings = () => {
     ['arcus-portfolio', 'arcus-investor-dna', 'arcus-settings', 'arcus-last-analysis', 'arcus-portfolio-draft', 'arcus-onboarding-state'].forEach(
       (k) => localStorage.removeItem(k),
     );
-    window.location.href = '/';
+    window.location.href = import.meta.env.BASE_URL || '/';
   };
 
   return (
