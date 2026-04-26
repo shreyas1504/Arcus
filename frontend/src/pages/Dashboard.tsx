@@ -191,10 +191,11 @@ const Dashboard = () => {
   useEffect(() => {
     const state = location.state as { weights?: Record<string, number>; tickers?: string[] } | null;
     if (state?.weights && state.tickers?.length) {
+      // Load tickers only — leave shares & cost for the user to fill in
       setHoldings(state.tickers.map(t => ({
         ticker: t,
-        shares: '10',
-        cost: MOCK_STOCK_PRICES[t] ? (MOCK_STOCK_PRICES[t] * 0.82).toFixed(2) : '',
+        shares: '',
+        cost: '',
       })));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,39 +243,15 @@ const Dashboard = () => {
 
   const presets = getPresets();
 
-  const applyPreset = async (preset: PresetConfig) => {
+  const applyPreset = (preset: PresetConfig) => {
     setSelectedPreset(preset.key);
-    const newHoldings = preset.tickers.map(t => {
-      const upper = t.toUpperCase();
-      const p = livePrices[upper] || MOCK_STOCK_PRICES[upper];
-      return { ticker: upper, shares: '10', cost: p ? (p * 0.82).toFixed(2) : '' };
-    });
+    // Load tickers only — leave shares & cost blank for the user to fill in
+    const newHoldings = preset.tickers.map(t => ({
+      ticker: t.toUpperCase(),
+      shares: '',
+      cost: '',
+    }));
     setHoldings(newHoldings);
-
-    // Async fetch missing costs
-    for (let i = 0; i < preset.tickers.length; i++) {
-      const t = preset.tickers[i].toUpperCase();
-      if (!newHoldings[i].cost && t.length >= 2) {
-        try {
-          const res = await queryClient.fetchQuery({
-            queryKey: ['price', t],
-            queryFn: () => getStockPrice(t),
-            staleTime: 5 * 60 * 1000
-          });
-          if (res?.price) {
-            setHoldings(prev => {
-              const next = [...prev];
-              // only update if user hasn't overwritten or removed this exact ticker at this index
-              if (next[i]?.ticker === t && !next[i].cost) {
-                next[i] = { ...next[i], cost: (res.price * 0.82).toFixed(2) };
-              }
-              return next;
-            });
-            setLivePrices(prev => ({ ...prev, [t]: res.price }));
-          }
-        } catch {}
-      }
-    }
   };
 
   const analyse = () => {
@@ -282,7 +259,7 @@ const Dashboard = () => {
     navigate('/dashboard/results');
   };
 
-  const updateHolding = async (idx: number, field: keyof Holding, value: string) => {
+  const updateHolding = (idx: number, field: keyof Holding, value: string) => {
     if (field === 'shares' && value === '0') {
       toast.error('Minimum 1 needed', {
         className: 'border-signal-red bg-card-elevated text-signal-red font-mono',
@@ -294,39 +271,6 @@ const Dashboard = () => {
     const updated = [...holdings];
     updated[idx] = { ...updated[idx], [field]: value };
     setHoldings(updated);
-
-    // Auto-fill cost when ticker is set and cost is empty
-    if (field === 'ticker' && value && !updated[idx].cost && value.length >= 2) {
-      const upperTicker = value.toUpperCase();
-      const p = livePrices[upperTicker] || MOCK_STOCK_PRICES[upperTicker];
-      if (p) {
-        setHoldings(prev => {
-          const next = [...prev];
-          if (next[idx].ticker === value && !next[idx].cost) {
-            next[idx].cost = (p * 0.82).toFixed(2);
-          }
-          return next;
-        });
-      } else if (value.length >= 3) {
-        try {
-          const res = await queryClient.fetchQuery({
-            queryKey: ['price', upperTicker],
-            queryFn: () => getStockPrice(upperTicker),
-            staleTime: 5 * 60 * 1000
-          });
-          if (res?.price) {
-            setHoldings(prev => {
-              const next = [...prev];
-              if (next[idx].ticker === value && !next[idx].cost) {
-                next[idx].cost = (res.price * 0.82).toFixed(2);
-              }
-              return next;
-            });
-            setLivePrices(prev => ({ ...prev, [upperTicker]: res.price }));
-          }
-        } catch {}
-      }
-    }
   };
 
   const filledTickers = holdings.filter(h => h.ticker).map(h => h.ticker);
@@ -387,10 +331,31 @@ const Dashboard = () => {
           </motion.div>
         )}
 
-        {/* Holdings form */}
+        {/* Quick Load — above holdings so user picks sector first */}
         <div className="space-y-5 mt-8">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass rounded-xl p-5 overflow-visible relative z-20">
-            <label className="label-mono mb-3 block">ADD HOLDINGS</label>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <label className="label-mono mb-3 block">QUICK LOAD</label>
+            <p className="text-muted-foreground text-xs mb-3">Select a sector to load its stocks, then fill in your quantities and cost.</p>
+            <div className="flex flex-wrap gap-2">
+              {presets.map(p => (
+                <button key={p.key} onClick={() => applyPreset(p)} className={`px-4 py-2 rounded-full font-mono text-xs transition-all ${selectedPreset === p.key ? 'bg-primary text-primary-foreground' : 'glass text-muted-foreground hover:text-foreground'}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Holdings form */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 overflow-visible relative z-20">
+            <label className="label-mono mb-1 block">ADD HOLDINGS</label>
+            <p className="text-muted-foreground text-[11px] mb-4">Enter the price you paid per share as <span className="text-primary">Buy Price</span>.</p>
+            {/* Column headers */}
+            <div className="flex flex-row items-center gap-1.5 mb-2">
+              <span className="flex-1 min-w-0 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-wider pl-10">Stock</span>
+              <span className="w-14 sm:w-20 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-wider text-center">Shares</span>
+              <span className="w-16 sm:w-24 font-mono text-[10px] text-muted-foreground/70 uppercase tracking-wider text-center">Buy Price</span>
+              <span className="w-[13px] flex-shrink-0"></span>
+            </div>
             <div className="space-y-3">
               {holdings.map((h, i) => (
                 <div key={i}>
@@ -399,13 +364,18 @@ const Dashboard = () => {
                       <StockSearch value={h.ticker} onChange={t => updateHolding(i, 'ticker', t)} placeholder="Ticker / Name..." />
                     </div>
                     <input
-                      placeholder="Qty"
+                      type="number"
+                      min="1"
+                      placeholder="0"
                       value={h.shares}
                       onChange={e => updateHolding(i, 'shares', e.target.value)}
                       className="w-14 sm:w-20 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
                     />
                     <input
-                      placeholder="Cost $"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
                       value={h.cost}
                       onChange={e => updateHolding(i, 'cost', e.target.value)}
                       className="w-16 sm:w-24 bg-card-elevated border border-border rounded-lg px-2 py-2.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
@@ -439,7 +409,7 @@ const Dashboard = () => {
 
           {/* Total Portfolio Value */}
           {filledTickers.length > 0 && portfolioTotal > 0 && (
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }} className="glass rounded-xl p-5">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="glass rounded-xl p-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="label-mono">PORTFOLIO VALUE</span>
                 <button onClick={refreshPrices} className="text-muted-foreground hover:text-primary transition-colors p-1" title="Refresh prices">
@@ -464,7 +434,7 @@ const Dashboard = () => {
             </motion.div>
           )}
 
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass rounded-xl p-5 relative z-10 overflow-hidden">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }} className="glass rounded-xl p-5 relative z-10 overflow-hidden">
             <label className="label-mono mb-3 block">DATE RANGE</label>
             <div className="flex flex-col gap-2.5">
               <div>
@@ -481,17 +451,6 @@ const Dashboard = () => {
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-full appearance-none bg-card-elevated border border-border rounded-lg pl-8 pr-3 py-2.5 font-mono text-xs text-foreground focus:border-primary focus:outline-none box-border" />
                 </div>
               </div>
-            </div>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <label className="label-mono mb-3 block">QUICK LOAD</label>
-            <div className="flex flex-wrap gap-2">
-              {presets.map(p => (
-                <button key={p.key} onClick={() => applyPreset(p)} className={`px-4 py-2 rounded-full font-mono text-xs transition-all ${selectedPreset === p.key ? 'bg-primary text-primary-foreground' : 'glass text-muted-foreground hover:text-foreground'}`}>
-                  {p.label}
-                </button>
-              ))}
             </div>
           </motion.div>
 

@@ -140,11 +140,7 @@ const Results = () => {
       ticker: h.ticker,
       shares: parseFloat(h.shares),
       current_price: MOCK_STOCK_PRICES[h.ticker] ?? null,
-      cost_basis: h.cost
-        ? parseFloat(h.cost)
-        : MOCK_STOCK_PRICES[h.ticker]
-          ? parseFloat((MOCK_STOCK_PRICES[h.ticker] * 0.82).toFixed(2))
-          : null,
+      cost_basis: h.cost ? parseFloat(h.cost) : null,
       days,
     }));
   })();

@@ -59,6 +59,9 @@ const Onboarding = () => {
         sectors: selectedSectors,
       }));
       localStorage.removeItem(STORAGE_KEY);
+      // Clear any stale portfolio draft so Dashboard starts blank
+      localStorage.removeItem('arcus-portfolio-draft');
+      localStorage.removeItem('arcus-portfolio');
       navigate('/dashboard');
     }
   };
