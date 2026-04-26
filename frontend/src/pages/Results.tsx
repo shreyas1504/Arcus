@@ -506,10 +506,14 @@ const Results = () => {
                 <span className="font-mono text-[10px] uppercase tracking-wider text-primary">HEALTH SCORE {m.health_score}</span>
               </div>
               <p className="text-[15px] font-medium text-foreground leading-snug">
-                Solid performance with elevated risk. Your portfolio is doing well — consider diversifying for stability.
+                {m.health_score >= 70
+                  ? `Strong portfolio with a health score of ${m.health_score}. Risk-adjusted returns look solid — keep monitoring concentration.`
+                  : m.health_score >= 40
+                  ? `Portfolio needs attention (score ${m.health_score}/100). Consider diversifying to improve risk-adjusted returns.`
+                  : `Portfolio is under-optimised (score ${m.health_score}/100). High risk relative to returns — rebalancing is recommended.`}
               </p>
               <p className="text-[13px] text-secondary mt-2">
-                In the analysis period you made {(m.annualized_return * 100).toFixed(1)}% but your portfolio can swing hard — on a bad day you could lose around {Math.abs(m.var_95 * 100).toFixed(1)}%.
+                In the analysis period you made {(m.annualized_return * 100).toFixed(1)}% annualised{m.sharpe >= 1 ? ` with a solid Sharpe of ${m.sharpe.toFixed(2)}` : `, but risk-adjusted returns (Sharpe ${m.sharpe.toFixed(2)}) have room to improve`} — on a bad day you could lose around {Math.abs(m.var_95 * 100).toFixed(1)}%.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

@@ -40,6 +40,34 @@ export const TICKER_RISK_DB: Record<string, {
   'ARKK':    { annRet: -0.10, vol: 0.58,  beta: 1.70, var95: -0.052, maxDD: -0.80, pe: 0  },
   'GS':      { annRet: 0.18,  vol: 0.26,  beta: 1.30, var95: -0.026, maxDD: -0.30, pe: 12 },
   'BLK':     { annRet: 0.16,  vol: 0.24,  beta: 1.15, var95: -0.024, maxDD: -0.28, pe: 20 },
+  // Real Estate
+  'AMT':     { annRet: 0.04,  vol: 0.22,  beta: 0.55, var95: -0.022, maxDD: -0.35, pe: 40 },
+  'PLD':     { annRet: 0.08,  vol: 0.22,  beta: 0.70, var95: -0.022, maxDD: -0.30, pe: 32 },
+  'CCI':     { annRet: 0.02,  vol: 0.24,  beta: 0.60, var95: -0.024, maxDD: -0.38, pe: 38 },
+  'SPG':     { annRet: 0.10,  vol: 0.28,  beta: 0.90, var95: -0.028, maxDD: -0.45, pe: 16 },
+  'O':       { annRet: 0.06,  vol: 0.18,  beta: 0.50, var95: -0.018, maxDD: -0.25, pe: 45 },
+  'WELL':    { annRet: 0.12,  vol: 0.24,  beta: 0.70, var95: -0.024, maxDD: -0.32, pe: 28 },
+  // Utilities
+  'DUK':     { annRet: 0.06,  vol: 0.16,  beta: 0.45, var95: -0.016, maxDD: -0.22, pe: 16 },
+  'SO':      { annRet: 0.08,  vol: 0.16,  beta: 0.40, var95: -0.016, maxDD: -0.20, pe: 18 },
+  'D':       { annRet: 0.04,  vol: 0.18,  beta: 0.50, var95: -0.018, maxDD: -0.28, pe: 14 },
+  'AEP':     { annRet: 0.07,  vol: 0.16,  beta: 0.42, var95: -0.016, maxDD: -0.22, pe: 17 },
+  'SRE':     { annRet: 0.10,  vol: 0.18,  beta: 0.48, var95: -0.018, maxDD: -0.24, pe: 19 },
+  // Consumer (missing)
+  'HD':      { annRet: 0.16,  vol: 0.24,  beta: 1.00, var95: -0.024, maxDD: -0.30, pe: 22 },
+  'NKE':     { annRet: -0.02, vol: 0.28,  beta: 1.05, var95: -0.028, maxDD: -0.40, pe: 28 },
+  'SBUX':    { annRet: 0.04,  vol: 0.24,  beta: 0.85, var95: -0.024, maxDD: -0.32, pe: 24 },
+  'MCD':     { annRet: 0.10,  vol: 0.18,  beta: 0.65, var95: -0.018, maxDD: -0.20, pe: 25 },
+  // Healthcare (missing)
+  'PFE':     { annRet: -0.08, vol: 0.26,  beta: 0.65, var95: -0.026, maxDD: -0.50, pe: 12 },
+  'ABBV':    { annRet: 0.14,  vol: 0.22,  beta: 0.60, var95: -0.022, maxDD: -0.25, pe: 14 },
+  'TMO':     { annRet: 0.12,  vol: 0.22,  beta: 0.80, var95: -0.022, maxDD: -0.24, pe: 28 },
+  'MRK':     { annRet: 0.10,  vol: 0.20,  beta: 0.55, var95: -0.020, maxDD: -0.22, pe: 15 },
+  // Energy (missing)
+  'COP':     { annRet: 0.18,  vol: 0.30,  beta: 1.10, var95: -0.030, maxDD: -0.45, pe: 12 },
+  'SLB':     { annRet: 0.12,  vol: 0.32,  beta: 1.20, var95: -0.032, maxDD: -0.48, pe: 15 },
+  'EOG':     { annRet: 0.16,  vol: 0.28,  beta: 1.00, var95: -0.028, maxDD: -0.40, pe: 10 },
+  'MPC':     { annRet: 0.20,  vol: 0.30,  beta: 1.05, var95: -0.030, maxDD: -0.42, pe: 8  },
 };
 
 const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD: -0.25, pe: 20 };

@@ -177,7 +177,8 @@ const Onboarding = () => {
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.96 }}
           onClick={next}
-          className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+          disabled={step === 1 && !riskProfile}
+          className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {step === 2 ? 'Finish Setup' : 'Continue'} <ChevronRight size={14} className="inline ml-1" />
         </motion.button>

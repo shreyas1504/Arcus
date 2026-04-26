@@ -24,6 +24,7 @@ from backend.routers.portfolio import (  # type: ignore
     portfolio_sectors,
     get_recommendations,
 )
+from backend.analytics.metrics import sharpe_ratio  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v2/portfolio", tags=["v2-adapter"])
@@ -230,24 +231,45 @@ def v2_optimize(req: V2PortfolioRequest):
     )
     raw = optimize_portfolio(opt_req)
 
-    def _reshaper(weights_dict: dict, label: str, recommended: bool) -> dict:
+    # Load returns once so we can compute real per-strategy Sharpe ratios
+    try:
+        tickers_loaded, _, returns, _ = _load_data(req.tickers, req.start_date, req.end_date)
+    except Exception:
+        tickers_loaded, returns = req.tickers, None
+
+    def _compute_sharpe(weights_dict: dict) -> float | None:
+        if returns is None or not weights_dict:
+            return None
+        try:
+            w = np.array([weights_dict.get(t, 0.0) for t in tickers_loaded])
+            port_ret = returns[tickers_loaded].dot(w)
+            return round(float(sharpe_ratio(port_ret)), 2)
+        except Exception:
+            return None
+
+    def _reshaper(weights_dict: dict, label: str, name: str, recommended: bool) -> dict:
         weights_list = [
             {"ticker": t, "weight": round(w, 3)}
             for t, w in weights_dict.items()
         ]
-        # Estimate Sharpe from weights (approximate)
-        sharpe_est = 1.5 + sum(w for w in weights_dict.values()) * 0.5
         return {
+            "name": name,
             "label": label,
-            "sharpe": round(sharpe_est, 2),
+            "sharpe": _compute_sharpe(weights_dict),
             "weights": weights_list,
             "recommended": recommended,
         }
 
+    max_sharpe = _reshaper(raw.get("optimal_weights", {}), "Max Sharpe", "maxsharpe", True)
+    momentum   = _reshaper(raw.get("momentum_weights", {}), "Momentum", "momentum", False)
+    risk_parity = _reshaper(raw.get("risk_parity_weights", {}), "Risk Parity", "minvariance", False)
+
     return {
-        "max_sharpe": _reshaper(raw.get("optimal_weights", {}), "Max Sharpe", True),
-        "momentum": _reshaper(raw.get("momentum_weights", {}), "Momentum", False),
-        "risk_parity": _reshaper(raw.get("risk_parity_weights", {}), "Risk Parity", False),
+        "max_sharpe": max_sharpe,
+        "momentum": momentum,
+        "risk_parity": risk_parity,
+        # strategies array for Sandbox.tsx applyPreset()
+        "strategies": [max_sharpe, momentum, risk_parity],
     }
 
 

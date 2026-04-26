@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, ChevronRight, Calendar, Trash2, Plus, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -8,7 +8,7 @@ import BackButton from '@/components/BackButton';
 import StockSearch from '@/components/StockSearch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { MOCK_STOCK_PRICES } from '@/lib/mock-data';
+import { MOCK_STOCK_PRICES, TICKER_RISK_DB } from '@/lib/mock-data';
 import { getStockPrice } from '@/lib/api';
 
 const STORAGE_KEY = 'arcus-portfolio-draft';
@@ -39,16 +39,43 @@ const DEFAULT_PRESETS: Record<string, string[]> = {
 
 interface PresetConfig { key: string; label: string; tickers: string[] }
 
+
 const getPresets = (): PresetConfig[] => {
   const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
   const userSectors: string[] = dna?.sectors || [];
+  const riskTolerance: string = dna?.risk_tolerance || 'Moderate';
+
   if (userSectors.length > 0) {
     const presets: PresetConfig[] = [];
+
+    // Sort sectors' tickers by risk profile
+    const isConservative = ['Conservative', 'Moderate'].includes(riskTolerance);
+
+    const sortedSectorTickers = (tickers: string[]): string[] => {
+      return [...tickers].sort((a, b) => {
+        const aRisk = TICKER_RISK_DB[a];
+        const bRisk = TICKER_RISK_DB[b];
+        if (!aRisk || !bRisk) return 0;
+        // Conservative: low beta first; Aggressive: high beta first
+        return isConservative ? aRisk.beta - bRisk.beta : bRisk.beta - aRisk.beta;
+      });
+    };
+
+    // "All Picks" — take 3 per sector (up from 2), max 15 so no sector gets cut
     const allTickers: string[] = [];
-    for (const sec of userSectors) allTickers.push(...(SECTOR_TICKERS[sec] || []).slice(0, 2));
+    const perSector = Math.max(2, Math.ceil(12 / userSectors.length));
+    for (const sec of userSectors) {
+      const sorted = sortedSectorTickers(SECTOR_TICKERS[sec] || []);
+      allTickers.push(...sorted.slice(0, perSector));
+    }
     const sectorTag = userSectors.length <= 2 ? userSectors.join(' & ') : `${userSectors.length} Sectors`;
-    presets.push({ key: '__all__', label: `All Picks · ${sectorTag}`, tickers: allTickers.slice(0, 8) });
-    for (const sec of userSectors) presets.push({ key: sec, label: sec, tickers: (SECTOR_TICKERS[sec] || []).slice(0, 4) });
+    presets.push({ key: '__all__', label: `All Picks · ${sectorTag}`, tickers: allTickers });
+
+    // Individual sector presets — show ALL 6 stocks (not just 4)
+    for (const sec of userSectors) {
+      const sorted = sortedSectorTickers(SECTOR_TICKERS[sec] || []);
+      presets.push({ key: sec, label: sec, tickers: sorted });
+    }
     return presets;
   }
   return Object.entries(DEFAULT_PRESETS).map(([name, tickers]) => ({ key: name, label: name, tickers }));
@@ -152,6 +179,9 @@ const Dashboard = () => {
   const [csvError, setCsvError] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
+  const handlePriceFetched = useCallback((t: string, p: number) => {
+    setLivePrices(prev => prev[t] === p ? prev : { ...prev, [t]: p });
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -392,7 +422,7 @@ const Dashboard = () => {
                       <HoldingPrice 
                         ticker={h.ticker} 
                         shares={h.shares} 
-                        onPriceFetched={(t, p) => setLivePrices(prev => prev[t] === p ? prev : { ...prev, [t]: p })} 
+                        onPriceFetched={handlePriceFetched}
                       />
                     </div>
                   )}

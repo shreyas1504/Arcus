@@ -1,6 +1,6 @@
 backend/
 tests/
-src/
+/src/
 .devcontainer/
 .agents/
 *.py

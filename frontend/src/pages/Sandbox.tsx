@@ -11,8 +11,9 @@ import Disclaimer from '@/components/legal/Disclaimer';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MOCK_PORTFOLIO, TICKER_RISK_DB } from '@/lib/mock-data';
+import { MOCK_PORTFOLIO, TICKER_RISK_DB, TICKER_SECTOR_MAP } from '@/lib/mock-data';
 import { optimizePortfolio } from '@/lib/api';
+import { loadSettings } from '@/hooks/use-settings';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { analyzePortfolio } from '@/lib/api';
@@ -51,8 +52,34 @@ const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD
 const TECH_SET = new Set(['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD','NFLX','CRM','ADBE','PLTR','SNOW','INTC','IBM','ORCL']);
 const INDEX_SET = new Set(['VOO','SPY','VTI','QQQ']);
 
+// ── Investor DNA helper ──────────────────────────────────────────────────
+interface InvestorDNA {
+  risk_tolerance: string;
+  target_return: number;
+  sectors: string[];
+}
+
+const loadInvestorDNA = (): InvestorDNA => {
+  try {
+    const raw = JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null');
+    if (raw) return { risk_tolerance: raw.risk_tolerance || 'Moderate', target_return: raw.target_return || 0.10, sectors: raw.sectors || [] };
+  } catch {}
+  return { risk_tolerance: 'Moderate', target_return: 0.10, sectors: [] };
+};
+
+// Sector → recommended tickers for diversification suggestions
+const SECTOR_SUGGESTIONS: Record<string, string[]> = {
+  'Technology': ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'CRM', 'ADBE'],
+  'Healthcare': ['UNH', 'JNJ', 'LLY', 'ABBV', 'TMO', 'MRK'],
+  'Energy':     ['XOM', 'CVX', 'COP', 'EOG', 'MPC', 'SLB'],
+  'Financials': ['JPM', 'V', 'MA', 'GS', 'BLK', 'BAC'],
+  'Consumer':   ['AMZN', 'HD', 'MCD', 'COST', 'WMT', 'KO'],
+  'Real Estate':['O', 'PLD', 'AMT', 'WELL', 'SPG', 'CCI'],
+  'Utilities':  ['NEE', 'SO', 'DUK', 'AEP', 'SRE', 'D'],
+};
+
 // Returns up to 3 specific, actionable Sharpe-improvement tips.
-// Aware of what's already in the portfolio and what other sandboxes are doing.
+// Aware of what's already in the portfolio, other sandboxes, AND investor profile.
 const getSharpeRecs = (
   mockId: string,
   tickers: string[],
@@ -63,6 +90,7 @@ const getSharpeRecs = (
   const recs: string[] = [];
   if (tickers.length === 0) return ['Add some stocks to get recommendations.'];
 
+  const dna = loadInvestorDNA();
   const sorted = [...tickers].sort((a, b) => (weights[b] || 0) - (weights[a] || 0));
   const top = sorted[0] ?? '';
   const topW = weights[top] || 0;
@@ -73,6 +101,16 @@ const getSharpeRecs = (
   const hasTLT = tickers.includes('TLT');
   const hasIndex = tickers.some(t => INDEX_SET.has(t));
 
+  // Profile-aware thresholds
+  const isConservative = ['Conservative', 'Moderate'].includes(dna.risk_tolerance);
+  const isAggressive = ['Growth', 'Aggressive'].includes(dna.risk_tolerance);
+  const betaTarget = isConservative ? 0.80 : isAggressive ? 1.50 : 1.00;
+
+  // Detect which of the user's preferred sectors are represented vs missing
+  const tickerSectors = tickers.map(t => TICKER_SECTOR_MAP[t]).filter(Boolean);
+  const presentSectors = new Set(tickerSectors);
+  const missingSectors = dna.sectors.filter(s => !presentSectors.has(s));
+
   // ── 1. Cross-sandbox duplicate detection ────────────────────────────────
   for (const other of allMocks.filter(m => m.id !== mockId)) {
     const shared = tickers.filter(t => other.tickers.includes(t));
@@ -81,79 +119,126 @@ const getSharpeRecs = (
       const wDiff = shared.reduce((s, t) => s + Math.abs((weights[t] || 0) - (other.weights[t] || 0)), 0);
       if (wDiff < 0.12) {
         const last = sorted[sorted.length - 1];
-        recs.push(`Near-identical to ${other.label} (${Math.round(overlapRatio * 100)}% overlap). Swap ${last} for an uncorrelated asset (e.g. GLD, TLT, XOM) or try the Max Sharpe preset for a different allocation.`);
+        const altStocks = missingSectors.length > 0
+          ? (SECTOR_SUGGESTIONS[missingSectors[0]] || []).filter(t => !tickers.includes(t)).slice(0, 2).join(' or ')
+          : 'GLD, TLT, or XOM';
+        recs.push(`Near-identical to ${other.label} (${Math.round(overlapRatio * 100)}% overlap). Swap ${last} for ${altStocks} or try the Max Sharpe preset.`);
         break;
       }
     }
   }
 
-  // ── 2. Single-stock concentration ───────────────────────────────────────
-  if (topW > 0.35 && top && recs.length < 3) {
-    const reduceAmt = topW - 0.20;
-    const candidates = ['GLD', 'TLT', 'VOO', 'JNJ', 'JPM', 'XOM', 'PG'].filter(t => !tickers.includes(t));
-    if (candidates.length > 0) {
-      recs.push(`${top} = ${(topW * 100).toFixed(0)}% — reduce slider to 20%, add ${candidates[0]} at ${(reduceAmt * 100).toFixed(0)}%. Concentration >35% in one stock raises VaR and drags Sharpe. Est. Sharpe lift: +0.10–0.20.`);
-    } else {
-      const next = sorted.find(t => t !== top) ?? '';
-      if (next) {
-        const newNextW = (weights[next] || 0) + reduceAmt;
-        recs.push(`${top} = ${(topW * 100).toFixed(0)}% — slide to 20%. Move freed ${(reduceAmt * 100).toFixed(0)}% into ${next} (${((weights[next] || 0) * 100).toFixed(0)}% → ${(newNextW * 100).toFixed(0)}%) to reduce single-stock risk.`);
-      }
+  // ── 2. Sector alignment — suggest from user's preferred but missing sectors
+  if (missingSectors.length > 0 && recs.length < 3) {
+    const sec = missingSectors[0];
+    const candidates = (SECTOR_SUGGESTIONS[sec] || []).filter(t => !tickers.includes(t));
+    if (candidates.length >= 2) {
+      const riskC = TICKER_RISK_DB[candidates[0]];
+      const betaStr = riskC ? ` (β=${riskC.beta.toFixed(2)})` : '';
+      recs.push(`You selected ${sec} as a focus sector but have 0% exposure. Add ${candidates[0]}${betaStr} + ${candidates[1]} at 8–10% each. Cross-sector diversification reduces correlated drawdowns.`);
     }
   }
 
-  // ── 3. Defensive hedge (GLD / TLT) ──────────────────────────────────────
-  if (metrics.sharpe < 1.0 && recs.length < 3) {
+  // ── 3. Risk-profile-specific beta recommendation ────────────────────────
+  if (isConservative && metrics.beta > betaTarget && recs.length < 3) {
+    const lowBeta = ['O', 'NEE', 'DUK', 'SO', 'GLD', 'TLT', 'JNJ', 'MCD', 'PG', 'KO']
+      .filter(t => !tickers.includes(t) && (TICKER_RISK_DB[t]?.beta ?? 1) < 0.6);
+    if (lowBeta.length > 0) {
+      recs.push(`${dna.risk_tolerance} profile but Beta is ${metrics.beta.toFixed(2)} (target: <${betaTarget}). Add ${lowBeta[0]} (β≈${(TICKER_RISK_DB[lowBeta[0]]?.beta ?? 0.4).toFixed(2)}) at 12–15%. ${lowBeta[1] ? `Also consider ${lowBeta[1]}.` : ''}`);
+    }
+  } else if (isAggressive && metrics.beta < 0.8 && recs.length < 3) {
+    const highBeta = ['NVDA', 'AMD', 'TSLA', 'COIN', 'PLTR', 'COP', 'SLB']
+      .filter(t => !tickers.includes(t) && (TICKER_RISK_DB[t]?.beta ?? 1) > 1.3);
+    if (highBeta.length > 0) {
+      recs.push(`${dna.risk_tolerance} profile but Beta is only ${metrics.beta.toFixed(2)} — room for higher-return exposure. Consider ${highBeta[0]} (β=${(TICKER_RISK_DB[highBeta[0]]?.beta ?? 1.5).toFixed(2)}) at 10–15%.`);
+    }
+  }
+
+  // ── 4. Target return gap ────────────────────────────────────────────────
+  if (metrics.pRet < dna.target_return && recs.length < 3) {
+    const gap = dna.target_return - metrics.pRet;
+    const highRetCandidates = dna.sectors.length > 0
+      ? dna.sectors.flatMap(s => SECTOR_SUGGESTIONS[s] || []).filter(t => !tickers.includes(t) && (TICKER_RISK_DB[t]?.annRet ?? 0) > dna.target_return)
+      : ['NVDA', 'META', 'LLY', 'MPC', 'COST'].filter(t => !tickers.includes(t) && (TICKER_RISK_DB[t]?.annRet ?? 0) > dna.target_return);
+    if (highRetCandidates.length > 0) {
+      const pick = highRetCandidates[0];
+      const pickRet = TICKER_RISK_DB[pick]?.annRet ?? 0;
+      recs.push(`Expected return ${(metrics.pRet * 100).toFixed(1)}% vs your ${(dna.target_return * 100).toFixed(0)}% target (${(gap * 100).toFixed(1)}% gap). Add ${pick} (est. ${(pickRet * 100).toFixed(0)}% ann.) from ${TICKER_SECTOR_MAP[pick] || 'your sectors'} at 15%.`);
+    } else {
+      recs.push(`Expected return ${(metrics.pRet * 100).toFixed(1)}% is below your ${(dna.target_return * 100).toFixed(0)}% target. Try the Max Sharpe preset or increase weight in your highest-return holding.`);
+    }
+  }
+
+  // ── 5. Single-stock concentration ───────────────────────────────────────
+  if (topW > 0.35 && top && recs.length < 3) {
+    const reduceAmt = topW - 0.20;
+    const candidates = missingSectors.length > 0
+      ? (SECTOR_SUGGESTIONS[missingSectors[0]] || []).filter(t => !tickers.includes(t))
+      : ['GLD', 'TLT', 'VOO', 'JNJ', 'JPM', 'XOM', 'PG'].filter(t => !tickers.includes(t));
+    if (candidates.length > 0) {
+      recs.push(`${top} = ${(topW * 100).toFixed(0)}% — reduce slider to 20%, add ${candidates[0]} at ${(reduceAmt * 100).toFixed(0)}%. Concentration >35% drags Sharpe. Est. lift: +0.10–0.20.`);
+    }
+  }
+
+  // ── 6. Defensive hedge (GLD / TLT) — skip for aggressive profiles ──────
+  if (metrics.sharpe < 1.0 && !isAggressive && recs.length < 3) {
     if (!hasGLD && !hasTLT) {
       const trimFrom = topW > 0.15 ? ` (trim ${top} slider ${(topW * 100).toFixed(0)}%→${Math.max(Math.round((topW - 0.12) * 100), 5)}%)` : '';
       const estSharpe = (metrics.sharpe + 0.18).toFixed(2);
       recs.push(`No hedge. Add GLD at 12%${trimFrom}. Gold's near-zero equity correlation cushions volatility. Estimated Sharpe: ${estSharpe}.`);
     } else if (hasGLD && gldW < 0.08) {
-      const deficit = 0.12 - gldW;
-      recs.push(`GLD at ${(gldW * 100).toFixed(0)}% is below the 8% threshold for meaningful hedging. Slide GLD up to 12% (reduce ${top} by ${(deficit * 100).toFixed(0)}%). Below 8%, correlation benefits barely register.`);
+      recs.push(`GLD at ${(gldW * 100).toFixed(0)}% is below the 8% threshold for meaningful hedging. Slide GLD up to 12%.`);
     } else if (hasTLT && tltW < 0.08) {
-      recs.push(`TLT at ${(tltW * 100).toFixed(0)}% is too small to reduce equity beta. Increase TLT to 12–15% — bonds and equities historically rebalance profitably during volatility spikes.`);
-    } else {
-      recs.push(`Sharpe ${metrics.sharpe.toFixed(2)}: try Equal Weight preset to see if concentrated sliders are dragging risk-adjusted return below 1.0.`);
+      recs.push(`TLT at ${(tltW * 100).toFixed(0)}% is too small to reduce equity beta. Increase TLT to 12–15%.`);
     }
   }
 
-  // ── 4. Tech sector overweight ────────────────────────────────────────────
+  // ── 7. Tech sector overweight ──────────────────────────────────────────
   if (techW > 0.55 && recs.length < 3) {
-    const defensive = ['JNJ', 'JPM', 'XOM', 'PG', 'NEE', 'V', 'KO'].filter(t => !tickers.includes(t));
+    const nonTechSecs = dna.sectors.filter(s => s !== 'Technology');
+    const defensive = nonTechSecs.length > 0
+      ? nonTechSecs.flatMap(s => (SECTOR_SUGGESTIONS[s] || []).slice(0, 2)).filter(t => !tickers.includes(t))
+      : ['JNJ', 'JPM', 'XOM', 'PG', 'NEE', 'V', 'KO'].filter(t => !tickers.includes(t));
     if (defensive.length >= 2) {
       const trim = Math.round((techW - 0.40) * 100);
-      recs.push(`${(techW * 100).toFixed(0)}% tech = highly correlated drawdowns. Cut tech by ${trim}% total → add ${defensive[0]} + ${defensive[1]} at ${Math.round(trim / 2)}% each. Cross-sector diversification lowers max drawdown during tech sell-offs.`);
+      recs.push(`${(techW * 100).toFixed(0)}% tech = correlated drawdowns. Cut tech by ${trim}% → add ${defensive[0]} + ${defensive[1]} at ${Math.round(trim / 2)}% each from ${nonTechSecs[0] || 'another sector'}.`);
     }
   }
 
-  // ── 5. Too few holdings ──────────────────────────────────────────────────
+  // ── 8. Too few holdings ────────────────────────────────────────────────
   if (tickers.length < 4 && recs.length < 3) {
-    const suggest = ['VOO', 'GLD', 'JNJ', 'JPM', 'XOM'].filter(t => !tickers.includes(t)).slice(0, 2);
-    recs.push(`Only ${tickers.length} holding${tickers.length === 1 ? '' : 's'} — high unsystematic risk. Add ${suggest.join(' + ')}. Each uncorrelated stock cuts portfolio variance (Modern Portfolio Theory).`);
+    const suggest = dna.sectors.length > 0
+      ? dna.sectors.flatMap(s => (SECTOR_SUGGESTIONS[s] || []).slice(0, 1)).filter(t => !tickers.includes(t)).slice(0, 2)
+      : ['VOO', 'GLD', 'JNJ', 'JPM', 'XOM'].filter(t => !tickers.includes(t)).slice(0, 2);
+    recs.push(`Only ${tickers.length} holding${tickers.length === 1 ? '' : 's'} — high unsystematic risk. Add ${suggest.join(' + ')} for diversification.`);
   }
 
-  // ── 6. High beta ─────────────────────────────────────────────────────────
-  if (metrics.beta > 1.3 && recs.length < 3) {
-    const lowB = ['GLD', 'TLT', 'NEE', 'PG', 'KO', 'JNJ'].filter(t => !tickers.includes(t));
+  // ── 9. High beta (generic) ─────────────────────────────────────────────
+  if (metrics.beta > 1.3 && !isAggressive && recs.length < 3) {
+    const lowB = ['GLD', 'TLT', 'NEE', 'O', 'SO', 'PG', 'KO', 'JNJ'].filter(t => !tickers.includes(t));
     if (lowB.length > 0) {
-      const estBeta = (metrics.beta * 0.88).toFixed(2);
-      recs.push(`Beta ${metrics.beta.toFixed(2)} means a 10% market drop hits you ~${(metrics.beta * 10).toFixed(0)}%. Add ${lowB[0]} (β≈0.3) at 12% → est. portfolio beta drops to ~${estBeta}.`);
+      recs.push(`Beta ${metrics.beta.toFixed(2)} means a 10% market drop hits you ~${(metrics.beta * 10).toFixed(0)}%. Add ${lowB[0]} (β≈${(TICKER_RISK_DB[lowB[0]]?.beta ?? 0.3).toFixed(2)}) at 12%.`);
     }
   }
 
-  // ── 7. No index ETF anchor ───────────────────────────────────────────────
+  // ── 10. No index ETF anchor ────────────────────────────────────────────
   if (!hasIndex && metrics.sharpe < 1.5 && recs.length < 3) {
     recs.push('No index ETF. A 20% VOO core eliminates unsystematic risk and historically anchors Sharpe above 1.0 for equity portfolios.');
   }
 
-  // ── Healthy portfolio ────────────────────────────────────────────────────
+  // ── Healthy portfolio ──────────────────────────────────────────────────
   if (recs.length === 0) {
-    recs.push(`Sharpe ${metrics.sharpe.toFixed(2)} is strong. Use Equal Weight or Max Sharpe preset to confirm you are near the efficient frontier.`);
+    const profileLabel = dna.risk_tolerance || 'Balanced';
+    if (metrics.pRet >= dna.target_return) {
+      recs.push(`Sharpe ${metrics.sharpe.toFixed(2)} is strong and you're meeting your ${(dna.target_return * 100).toFixed(0)}% return target. Well-aligned for a ${profileLabel} profile.`);
+    } else {
+      recs.push(`Sharpe ${metrics.sharpe.toFixed(2)} is healthy. Use Equal Weight or Max Sharpe preset to check the efficient frontier.`);
+    }
   }
 
   return recs.slice(0, 3);
 };
+
 
 // ── Metric calculation ───────────────────────────────────────────────────
 // Uses a covariance-decomposition model for portfolio vol:
@@ -200,7 +285,7 @@ const calcMetrics = (tickers: string[], weights: Record<string, number>, scenari
   }, 0);
   const adjVol = Math.sqrt(sysVar + idioVar);
 
-  const sharpe = adjVol > 0 ? (pRet - 0.04) / adjVol : 0;
+  const sharpe = adjVol > 0 ? (pRet - loadSettings().riskFreeRate) / adjVol : 0;
   const var95 = -(1.645 * adjVol / Math.sqrt(252));
   const cvar = var95 * 1.4;
 
@@ -432,7 +517,7 @@ const Sandbox = () => {
       };
       const result = await optimizePortfolio(req);
       const strategies: { name: string; weights: { ticker: string; weight: number }[] }[] = result?.strategies ?? [];
-      const strategyName = preset === 'maxSharpe' ? 'maxsharpe' : 'riskparity';
+      const strategyName = preset === 'maxSharpe' ? 'maxsharpe' : 'minvariance';
       const strat = strategies.find(s => s.name?.toLowerCase().replace(/[^a-z]/g, '').includes(strategyName.replace(/[^a-z]/g, ''))) ?? strategies[0];
       if (!strat?.weights?.length) throw new Error('No weights returned');
       const newWeights: Record<string, number> = {};
