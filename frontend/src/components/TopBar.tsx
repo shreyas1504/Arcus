@@ -84,7 +84,7 @@ const TopBar = ({ title, onMenuClick, isMobile }: TopBarProps) => {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/settings')} className="cursor-pointer">
+            <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
               <UserCircle size={14} className="mr-2" />
               My Profile
             </DropdownMenuItem>

@@ -10,6 +10,7 @@ import Results from "./pages/Results.tsx";
 import Sandbox from "./pages/Sandbox.tsx";
 import Chat from "./pages/Chat.tsx";
 import SettingsPage from "./pages/Settings.tsx";
+import ProfilePage from "./pages/Profile.tsx";
 import Pricing from "./pages/Pricing.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import SandboxView from "./pages/SandboxView.tsx";
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/sandbox/view" element={<SandboxView />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
