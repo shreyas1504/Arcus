@@ -221,7 +221,7 @@ async def chat(req: ChatRequest):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "meta/llama3-8b-instruct",
+            "model": "minimaxai/minimax-m2.7",
             "messages": messages,
             "temperature": 1,
             "top_p": 0.95,
