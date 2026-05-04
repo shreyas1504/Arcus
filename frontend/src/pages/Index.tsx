@@ -30,6 +30,42 @@ const comparison = [
   { feature: 'Portfolio Tracking', robinhood: true, pc: true, arcus: true },
 ];
 
+const demoPortfolio = {
+  holdings: [
+    { ticker: 'AAPL', shares: '15', cost: '148.20' },
+    { ticker: 'NVDA', shares: '5', cost: '620.00' },
+    { ticker: 'MSFT', shares: '8', cost: '320.00' },
+    { ticker: 'GOOGL', shares: '12', cost: '132.50' },
+    { ticker: 'VOO', shares: '40', cost: '388.00' },
+  ],
+  livePrices: {
+    AAPL: 182.63,
+    NVDA: 875.40,
+    MSFT: 378.91,
+    GOOGL: 165.22,
+    VOO: 465.18,
+  },
+  startDate: '2023-01-01',
+  endDate: '2024-12-31',
+};
+
+const demoInvestorDna = {
+  risk_tolerance: 'Growth',
+  target_return: 0.15,
+  sectors: ['Technology', 'Consumer'],
+};
+
+const seedDemoResults = () => {
+  localStorage.setItem('arcus-portfolio', JSON.stringify(demoPortfolio));
+  localStorage.setItem('arcus-portfolio-draft', JSON.stringify({
+    holdings: demoPortfolio.holdings,
+    startDate: demoPortfolio.startDate,
+    endDate: demoPortfolio.endDate,
+  }));
+  localStorage.setItem('arcus-investor-dna', JSON.stringify(demoInvestorDna));
+  localStorage.removeItem('arcus-last-analysis');
+};
+
 const Landing = () => (
   <div className="min-h-screen bg-background teal-grid-bg">
     {/* News ticker at very top */}
@@ -82,7 +118,7 @@ const Landing = () => (
             Get Started <ChevronRight size={14} className="inline ml-1" />
           </motion.button>
         </Link>
-        <Link to="/dashboard/results">
+        <Link to="/dashboard/results" onClick={seedDemoResults}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="px-6 py-3 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-card transition-colors">
             See how it works
           </motion.button>
