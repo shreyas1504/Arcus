@@ -254,11 +254,6 @@ const Dashboard = () => {
     setHoldings(newHoldings);
   };
 
-  const analyse = () => {
-    localStorage.setItem(SAVED_KEY, JSON.stringify({ holdings, startDate, endDate, livePrices }));
-    navigate('/dashboard/results');
-  };
-
   const updateHolding = (idx: number, field: keyof Holding, value: string) => {
     if (field === 'shares' && value === '0') {
       toast.error('Minimum 1 needed', {
@@ -274,6 +269,20 @@ const Dashboard = () => {
   };
 
   const filledTickers = holdings.filter(h => h.ticker).map(h => h.ticker);
+  const activeHoldings = holdings.filter((holding) => holding.ticker.trim());
+  const holdingsMissingShares = activeHoldings.filter((holding) => {
+    const shares = parseFloat(holding.shares);
+    return !Number.isFinite(shares) || shares <= 0;
+  });
+  const hasInvalidDateRange = !!startDate && !!endDate && startDate > endDate;
+  const canAnalyzePortfolio = activeHoldings.length > 0 && holdingsMissingShares.length === 0 && !hasInvalidDateRange;
+  const analysisRequirementText = hasInvalidDateRange
+    ? 'Choose a valid date range.'
+    : activeHoldings.length === 0
+      ? 'Add at least one holding to run analysis.'
+      : holdingsMissingShares.length > 0
+        ? 'Enter shares greater than 0 for every selected holding.'
+        : '';
 
   // Compute total portfolio value
   const portfolioTotal = holdings
@@ -294,6 +303,19 @@ const Dashboard = () => {
 
   const refreshPrices = () => {
     queryClient.invalidateQueries({ queryKey: ['price'] });
+  };
+
+  const analyse = () => {
+    if (!canAnalyzePortfolio) {
+      toast.error(analysisRequirementText || 'Complete all required holdings before analysis.', {
+        className: 'border-signal-red bg-card-elevated text-signal-red font-mono',
+        duration: 3000,
+      });
+      return;
+    }
+
+    localStorage.setItem(SAVED_KEY, JSON.stringify({ holdings, startDate, endDate, livePrices }));
+    navigate('/dashboard/results');
   };
 
   return (
@@ -324,10 +346,23 @@ const Dashboard = () => {
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={() => window.scrollTo({ top: 300, behavior: 'smooth' })} className="px-4 py-2 rounded-lg border border-border text-sm text-foreground hover:bg-card-elevated transition-colors">
                 Update Portfolio
               </motion.button>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={analyse} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">
+              <motion.button
+                whileHover={canAnalyzePortfolio ? { scale: 1.02 } : undefined}
+                whileTap={canAnalyzePortfolio ? { scale: 0.96 } : undefined}
+                onClick={analyse}
+                disabled={!canAnalyzePortfolio}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  canAnalyzePortfolio
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-primary/30 text-primary-foreground/60 cursor-not-allowed'
+                }`}
+              >
                 Analyse Portfolio <ChevronRight size={14} className="inline ml-1" />
               </motion.button>
             </div>
+            {!canAnalyzePortfolio && (
+              <p className="mt-3 font-mono text-[10px] text-signal-amber">{analysisRequirementText}</p>
+            )}
           </motion.div>
         )}
 
@@ -471,9 +506,25 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.button initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={analyse} className="w-full py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">
+          <motion.button
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            whileHover={canAnalyzePortfolio ? { scale: 1.01 } : undefined}
+            whileTap={canAnalyzePortfolio ? { scale: 0.98 } : undefined}
+            onClick={analyse}
+            disabled={!canAnalyzePortfolio}
+            className={`w-full py-4 rounded-xl font-semibold text-sm transition-colors ${
+              canAnalyzePortfolio
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-primary/30 text-primary-foreground/60 cursor-not-allowed'
+            }`}
+          >
             Analyse Portfolio <ChevronRight size={14} className="inline ml-1" />
           </motion.button>
+          {!canAnalyzePortfolio && (
+            <p className="text-center font-mono text-[10px] text-signal-amber -mt-1">{analysisRequirementText}</p>
+          )}
         </div>
 
         {/* Preview */}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingChat from './FloatingChat';
@@ -15,6 +16,8 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
   const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const showFloatingChat = location.pathname !== '/chat';
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
@@ -48,7 +51,7 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
           <main className="flex-1">{children}</main>
         </div>
       </div>
-      <FloatingChat />
+      {showFloatingChat && <FloatingChat />}
     </div>
   );
 };

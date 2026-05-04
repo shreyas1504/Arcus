@@ -128,15 +128,31 @@ describe('chatbot portfolio context', () => {
 });
 
 describe('chat launcher flow', () => {
+  const originalLocation = window.location;
+
   beforeEach(() => {
     sessionStorage.clear();
   });
 
   afterEach(() => {
     sessionStorage.clear();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
-  it('stores and dispatches trimmed Ask AI prompts', () => {
+  it('stores and dispatches trimmed Ask AI prompts when already on the chat route', () => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        origin: 'https://arcus-insights.com',
+        pathname: '/chat',
+        assign: vi.fn(),
+      },
+    });
+
     const handler = vi.fn();
     window.addEventListener(ARCUS_CHAT_EVENT, handler);
 
@@ -148,6 +164,24 @@ describe('chat launcher flow', () => {
     expect(event.detail.message).toBe('Explain my Sharpe ratio');
 
     window.removeEventListener(ARCUS_CHAT_EVENT, handler);
+  });
+
+  it('navigates to the full chat page from non-chat routes', () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        origin: 'https://arcus-insights.com',
+        pathname: '/dashboard/results',
+        assign,
+      },
+    });
+
+    openArcusChat('Explain my Sharpe ratio');
+
+    expect(sessionStorage.getItem('arcus-chat-pending-message')).toBe('Explain my Sharpe ratio');
+    expect(assign).toHaveBeenCalledWith('https://arcus-insights.com/chat');
   });
 
   it('consumes pending prompts exactly once', () => {

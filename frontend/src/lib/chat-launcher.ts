@@ -7,7 +7,17 @@ export function openArcusChat(message: string) {
   if (!trimmed) return;
 
   sessionStorage.setItem(ARCUS_CHAT_PENDING_KEY, trimmed);
-  window.dispatchEvent(new CustomEvent(ARCUS_CHAT_EVENT, { detail: { message: trimmed } }));
+  const baseUrl = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
+  const chatUrl = new URL('chat', baseUrl);
+  const normalize = (value: string) => value.replace(/\/+$/, '') || '/';
+  const isOnChatRoute = normalize(window.location.pathname) === normalize(chatUrl.pathname);
+
+  if (isOnChatRoute) {
+    window.dispatchEvent(new CustomEvent(ARCUS_CHAT_EVENT, { detail: { message: trimmed } }));
+    return;
+  }
+
+  window.location.assign(chatUrl.toString());
 }
 
 export function consumePendingArcusChatMessage() {

@@ -177,6 +177,36 @@ describe('portfolioToRequest — request formation', () => {
     const valid = holdings.filter(h => h.ticker && h.shares);
     expect(valid).toHaveLength(2);
   });
+
+  it('analysis should stay disabled when any selected holding is missing shares', () => {
+    const holdings = [
+      { ticker: 'TSLA', shares: '', cost: '248.42' },
+      { ticker: 'AMZN', shares: '4', cost: '178.25' },
+    ];
+    const active = holdings.filter(h => h.ticker.trim());
+    const missingShares = active.filter((holding) => {
+      const shares = parseFloat(holding.shares);
+      return !Number.isFinite(shares) || shares <= 0;
+    });
+    const canAnalyze = active.length > 0 && missingShares.length === 0;
+
+    expect(canAnalyze).toBe(false);
+  });
+
+  it('analysis should enable only when every selected holding has shares > 0', () => {
+    const holdings = [
+      { ticker: 'TSLA', shares: '3', cost: '248.42' },
+      { ticker: 'AMZN', shares: '4', cost: '178.25' },
+    ];
+    const active = holdings.filter(h => h.ticker.trim());
+    const missingShares = active.filter((holding) => {
+      const shares = parseFloat(holding.shares);
+      return !Number.isFinite(shares) || shares <= 0;
+    });
+    const canAnalyze = active.length > 0 && missingShares.length === 0;
+
+    expect(canAnalyze).toBe(true);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

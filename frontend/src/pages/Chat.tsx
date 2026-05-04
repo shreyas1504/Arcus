@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SendHorizontal, Zap, User, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import Disclaimer from '@/components/legal/Disclaimer';
 import { sendChatMessage, ChatMessage } from '@/lib/api';
-import { consumePendingArcusChatMessage } from '@/lib/chat-launcher';
+import { ARCUS_CHAT_EVENT, consumePendingArcusChatMessage } from '@/lib/chat-launcher';
 import { buildChatPortfolioContext } from '@/lib/portfolio-context';
 
 const Chat = () => {
@@ -115,6 +115,21 @@ const Chat = () => {
       doSendMessage(pending);
     }, 150);
   }, []);
+
+  useEffect(() => {
+    const handleOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      const pending = detail?.message || consumePendingArcusChatMessage();
+      if (!pending) return;
+      setInput(pending);
+      window.setTimeout(() => {
+        doSendMessage(pending);
+      }, 150);
+    };
+
+    window.addEventListener(ARCUS_CHAT_EVENT, handleOpen);
+    return () => window.removeEventListener(ARCUS_CHAT_EVENT, handleOpen);
+  }, [history]);
 
   return (
     <AppLayout title="AI Chat">
