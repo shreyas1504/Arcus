@@ -5,8 +5,7 @@ import { sendChatMessage, ChatMessage, ChatPortfolioContext } from '@/lib/api';
 
 const quickPrompts = ['PORTFOLIO RISK', 'EXPLAIN SHARPE', 'STRESS TEST'];
 
-// Global event to open chat with a pre-filled message
-export const openChatWithMessage = new EventTarget();
+// Global event to open chat is handled via window.dispatchEvent('arcus-chat-open')
 
 function loadPortfolioContext(): ChatPortfolioContext | undefined {
   try {
@@ -63,8 +62,8 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
         }, 300);
       }
     };
-    openChatWithMessage.addEventListener('open', handler);
-    return () => openChatWithMessage.removeEventListener('open', handler);
+    window.addEventListener('arcus-chat-open', handler);
+    return () => window.removeEventListener('arcus-chat-open', handler);
   }, []);
 
   const doSendMessage = async (text: string) => {

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Zap, SendHorizontal, MessageSquare } from 'lucide-react';
 import { MOCK_AI_RECOMMENDATIONS } from '@/lib/mock-data';
-import { openChatWithMessage } from './FloatingChat';
 import { useNavigate } from 'react-router-dom';
 
 const tabs = ['Summary', 'Methodology', 'AI Analysis', 'Recommendations'] as const;
@@ -33,7 +32,7 @@ const FullReport = ({ metrics: m, tickers = [] }: FullReportProps) => {
   const navigate = useNavigate();
 
   const sendToChat = (message: string) => {
-    openChatWithMessage.dispatchEvent(new CustomEvent('open', { detail: { message } }));
+    window.dispatchEvent(new CustomEvent('arcus-chat-open', { detail: { message } }));
   };
 
   const methodologyItems = [

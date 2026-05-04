@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { LucideIcon, MessageSquare } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
 import Sparkline from './Sparkline';
-import { openChatWithMessage } from './FloatingChat';
+
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MetricCardProps {
@@ -22,7 +22,7 @@ const MetricCard = ({ icon: Icon, label, value, format, change, changeLabel, spa
 
   const handleClick = () => {
     if (chatQuestion) {
-      openChatWithMessage.dispatchEvent(new CustomEvent('open', { detail: { message: chatQuestion } }));
+      window.dispatchEvent(new CustomEvent('arcus-chat-open', { detail: { message: chatQuestion } }));
     }
   };
 
