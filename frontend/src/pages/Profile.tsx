@@ -209,7 +209,7 @@ const Profile = () => {
                 Total Portfolio Value
               </span>
               {hasPort ? (
-                <div className="font-mono text-4xl sm:text-5xl font-extrabold text-foreground tracking-tight leading-none">
+                <div className="font-mono text-[34px] sm:text-5xl font-extrabold text-foreground tracking-tight leading-none">
                   {vaultMode ? '$•••,•••.••' : <AnimVal value={totalMarketValue} prefix="$" />}
                 </div>
               ) : (
@@ -223,7 +223,7 @@ const Profile = () => {
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.2 }}
-                className={`inline-flex items-center gap-2.5 rounded-xl border px-4 py-2.5 mb-6 ${ragBg(gainRag)}`}
+                className={`flex w-full flex-wrap items-center gap-x-2.5 gap-y-1 rounded-xl border px-4 py-2.5 mb-6 sm:inline-flex sm:w-auto ${ragBg(gainRag)}`}
               >
                 <RAGDot level={gainRag} />
                 {isPositive
@@ -239,7 +239,7 @@ const Profile = () => {
                 <span className={`font-mono text-sm font-semibold ${ragColor(gainRag)}`}>
                   ({isPositive ? '+' : ''}{totalGainPct.toFixed(2)}%)
                 </span>
-                <span className="font-mono text-[9px] text-muted-foreground uppercase ml-1">
+                <span className="hidden font-mono text-[9px] text-muted-foreground uppercase ml-1 sm:inline">
                   {isPositive ? 'Gain' : totalGainLoss === 0 ? 'Flat' : 'Loss'} since invested
                 </span>
               </motion.div>

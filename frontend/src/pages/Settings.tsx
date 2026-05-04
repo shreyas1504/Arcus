@@ -41,12 +41,12 @@ const SettingRow = ({
   description: string;
   children: ReactNode;
 }) => (
-  <div className="flex items-center justify-between gap-6">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
     <div className="min-w-0">
       <div className="font-mono text-xs font-medium text-foreground">{label}</div>
       <div className="font-mono text-[10px] text-muted-foreground mt-0.5 leading-relaxed">{description}</div>
     </div>
-    <div className="flex-shrink-0">{children}</div>
+    <div className="w-full flex-shrink-0 sm:w-auto">{children}</div>
   </div>
 );
 
@@ -128,7 +128,7 @@ const Settings = () => {
             label="Risk-Free Rate"
             description="US Treasury yield used for Sharpe & Sortino ratio calculations"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex w-full items-center gap-3 sm:w-auto">
               <input
                 type="range"
                 min="0"
@@ -136,7 +136,7 @@ const Settings = () => {
                 step="0.1"
                 value={(settings.riskFreeRate * 100).toFixed(1)}
                 onChange={(e) => update({ riskFreeRate: parseFloat(e.target.value) / 100 })}
-                className="w-28 accent-primary cursor-pointer"
+                className="min-w-0 flex-1 accent-primary cursor-pointer sm:w-28 sm:flex-none"
               />
               <span className="font-mono text-sm font-semibold text-foreground w-12 text-right tabular-nums">
                 {(settings.riskFreeRate * 100).toFixed(1)}%
@@ -151,7 +151,7 @@ const Settings = () => {
             <select
               value={settings.benchmark}
               onChange={(e) => update({ benchmark: e.target.value as AppSettings['benchmark'] })}
-              className="bg-card border border-border rounded-lg px-3 py-1.5 font-mono text-xs text-foreground focus:outline-none focus:border-primary/50 cursor-pointer"
+              className="w-full bg-card border border-border rounded-lg px-3 py-2 font-mono text-xs text-foreground focus:outline-none focus:border-primary/50 cursor-pointer sm:w-auto sm:py-1.5"
             >
               <option value="SPY">S&amp;P 500 (SPY)</option>
               <option value="QQQ">Nasdaq 100 (QQQ)</option>
@@ -166,7 +166,7 @@ const Settings = () => {
             label="Target Annual Return"
             description="Renders a reference line on the Monte Carlo projection chart"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex w-full items-center gap-3 sm:w-auto">
               <input
                 type="range"
                 min="1"
@@ -174,7 +174,7 @@ const Settings = () => {
                 step="1"
                 value={Math.round(settings.targetReturn * 100)}
                 onChange={(e) => update({ targetReturn: parseFloat(e.target.value) / 100 })}
-                className="w-28 accent-primary cursor-pointer"
+                className="min-w-0 flex-1 accent-primary cursor-pointer sm:w-28 sm:flex-none"
               />
               <span className="font-mono text-sm font-semibold text-foreground w-12 text-right tabular-nums">
                 {(settings.targetReturn * 100).toFixed(0)}%
@@ -189,7 +189,7 @@ const Settings = () => {
             label="Vault Mode"
             description="Blur all dollar amounts — share your screen without revealing net worth"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               {settings.vaultMode && (
                 <span className="flex items-center gap-1 font-mono text-[10px] text-primary/70">
                   <EyeOff size={10} /> Active
@@ -205,7 +205,7 @@ const Settings = () => {
           >
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 font-mono text-xs border border-border hover:border-primary/40 text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg transition-colors"
+              className="flex w-full items-center justify-center gap-2 font-mono text-xs border border-border hover:border-primary/40 text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg transition-colors sm:w-auto sm:py-1.5"
             >
               <Download size={11} />
               {exported ? 'Downloaded!' : 'Export JSON'}
@@ -218,7 +218,7 @@ const Settings = () => {
           >
             <button
               onClick={handleWipe}
-              className="flex items-center gap-2 font-mono text-xs border border-red-500/30 hover:border-red-500/60 text-red-400/70 hover:text-red-400 px-3 py-1.5 rounded-lg transition-colors"
+              className="flex w-full items-center justify-center gap-2 font-mono text-xs border border-red-500/30 hover:border-red-500/60 text-red-400/70 hover:text-red-400 px-3 py-2 rounded-lg transition-colors sm:w-auto sm:py-1.5"
             >
               <Trash2 size={11} />
               Clear Data

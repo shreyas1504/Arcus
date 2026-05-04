@@ -80,7 +80,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
             exit={{ scale: 0 }}
             whileHover={{ scale: 1.08 }}
             onClick={() => setOpen(true)}
-            className="fixed bottom-6 right-6 z-50 w-[52px] h-[52px] rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg"
+            className="fixed bottom-6 right-6 z-50 hidden h-[52px] w-[52px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg sm:flex"
             title="Arcus AI"
           >
             <MessageSquare size={22} />
@@ -96,7 +96,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="fixed bottom-6 right-4 z-50 w-[calc(100vw-2rem)] sm:w-[360px] h-[480px] glass rounded-2xl border border-border flex flex-col overflow-hidden shadow-2xl"
+            className="fixed inset-x-3 bottom-3 z-50 flex h-[min(480px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl border border-border shadow-2xl glass sm:inset-x-auto sm:bottom-6 sm:right-4 sm:h-[480px] sm:w-[360px]"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -126,12 +126,12 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               {messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[280px] rounded-lg px-3 py-2 ${msg.role === 'user' ? 'bg-primary/20' : 'glass-elevated'}`}>
+                  <div className={`max-w-[280px] min-w-0 rounded-lg px-3 py-2 ${msg.role === 'user' ? 'bg-primary/20' : 'glass-elevated'}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       {msg.role === 'ai' ? <Zap size={10} className="text-primary" /> : <User size={10} className="text-muted-foreground" />}
                       <span className="font-mono text-[8px] uppercase text-muted-foreground">{msg.role === 'ai' ? 'ARCUS AI' : 'YOU'}</span>
                     </div>
-                    <p className="text-xs leading-relaxed text-foreground">
+                    <p className="break-words text-xs leading-relaxed text-foreground">
                       {msg.content.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
                         part.startsWith('**') && part.endsWith('**')
                           ? <span key={j} className="font-mono font-bold text-primary">{part.slice(2, -2)}</span>
@@ -161,7 +161,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && doSendMessage(input)}
                   placeholder="Ask about your portfolio..."
-                  className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none"
                 />
                 <button onClick={() => doSendMessage(input)} className="text-primary hover:text-accent-bright ml-2">
                   <SendHorizontal size={14} />

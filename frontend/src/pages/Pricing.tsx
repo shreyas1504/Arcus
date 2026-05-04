@@ -34,15 +34,15 @@ const Pricing = () => {
 
   return (
     <AppLayout title="Pricing">
-      <div className="max-w-4xl mx-auto px-6 py-16 text-zinc-100">
+      <div className="max-w-4xl mx-auto px-4 py-8 text-zinc-100 sm:px-6 sm:py-12 lg:py-16">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-extrabold mb-4 font-display">Unlock Your Full Portfolio Edge</h1>
-          <p className="text-xl text-zinc-400">Professional-grade analytics. Free to start.</p>
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl font-extrabold mb-3 font-display sm:text-4xl md:text-5xl">Unlock Your Full Portfolio Edge</h1>
+          <p className="text-base text-zinc-400 sm:text-xl">Professional-grade analytics. Free to start.</p>
         </div>
 
         {/* Pricing Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:mt-12">
           {/* FREE Card */}
           <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 flex flex-col">
             <div className="mb-6">
