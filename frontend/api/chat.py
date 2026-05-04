@@ -127,6 +127,7 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             import urllib.request
+            import ssl
             
             url = "https://integrate.api.nvidia.com/v1/chat/completions"
             headers = {
@@ -142,8 +143,13 @@ class handler(BaseHTTPRequestHandler):
                 "stream": False
             }
             
+            # macOS Python local certificate fix
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, context=ssl_ctx) as response:
                 res_body = response.read()
                 res_json = json.loads(res_body)
                 reply = res_json["choices"][0]["message"]["content"]
