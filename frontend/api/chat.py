@@ -139,7 +139,7 @@ class handler(BaseHTTPRequestHandler):
                 "Content-Type": "application/json"
             }
             payload = {
-                "model": "minimaxai/minimax-m2.7",
+                "model": "meta/llama3-8b-instruct",
                 "messages": messages,
                 "temperature": 1,
                 "top_p": 0.95,

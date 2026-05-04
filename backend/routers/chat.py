@@ -211,6 +211,7 @@ async def chat(req: ChatRequest):
 
     try:
         import urllib.request
+        import urllib.error
         import json
         import ssl
         
@@ -220,7 +221,7 @@ async def chat(req: ChatRequest):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "minimaxai/minimax-m2.7",
+            "model": "meta/llama3-8b-instruct",
             "messages": messages,
             "temperature": 1,
             "top_p": 0.95,
@@ -240,6 +241,13 @@ async def chat(req: ChatRequest):
             reply = res_json["choices"][0]["message"]["content"]
             
         return ChatResponse(reply=reply, fallback=False)
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode('utf-8')
+        logger.error(f"Arcus AI API HTTP Error: {e.code} - {err_body}")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": f"NVIDIA API Error: {e.code} - {err_body}", "fallback": True},
+        )
     except Exception as e:
         logger.error(f"Arcus AI API error: {e}")
         raise HTTPException(
