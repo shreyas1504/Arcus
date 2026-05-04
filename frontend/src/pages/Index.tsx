@@ -42,7 +42,6 @@ const Landing = () => (
         <span className="font-display font-extrabold text-foreground text-lg">Arcus</span>
       </div>
       <div className="flex gap-2 sm:gap-3">
-        <Link to="/dashboard" className="hidden sm:block px-4 py-1.5 rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
         <Link to="/onboarding" className="px-4 py-2 rounded-full text-sm bg-primary text-primary-foreground font-semibold hover:bg-accent-bright transition-colors">
           Get Started <ChevronRight size={14} className="inline ml-1" />
         </Link>
