@@ -1,12 +1,14 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from 'recharts';
 import { MOCK_PERFORMANCE_DATA } from '@/lib/mock-data';
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+type TooltipPayload = { color?: string; name?: string; value?: number };
+
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: TooltipPayload[]; label?: string }) => {
   if (!active || !payload) return null;
   return (
     <div className="glass-panel rounded-lg px-3 py-2 border border-primary/20">
       <p className="font-mono text-[10px] text-muted-foreground mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
+      {payload.map((p, i: number) => (
         <p key={i} className="font-mono text-xs" style={{ color: p.color }}>
           {p.name}: ${p.value?.toLocaleString()}
         </p>

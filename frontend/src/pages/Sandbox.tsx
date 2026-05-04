@@ -48,6 +48,19 @@ const SCENARIOS: { key: ScenarioKey; label: string }[] = [
 const TECH_TICKERS = new Set(['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AMD', 'NFLX', 'CRM', 'ADBE']);
 
 const DEFAULT_RISK = { annRet: 0.12, vol: 0.22, beta: 1.00, var95: -0.022, maxDD: -0.25, pe: 20 };
+type RiskProfile = typeof DEFAULT_RISK;
+type MockAnalysisResult = {
+  metrics: {
+    health_score?: number;
+    sharpe?: number;
+    var_95?: number;
+    beta?: number;
+    cvar_95?: number;
+    annualized_return?: number;
+    volatility?: number;
+  };
+  _offline?: boolean;
+};
 
 const TECH_SET = new Set(['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD','NFLX','CRM','ADBE','PLTR','SNOW','INTC','IBM','ORCL']);
 const INDEX_SET = new Set(['VOO','SPY','VTI','QQQ']);
@@ -63,7 +76,9 @@ const loadInvestorDNA = (): InvestorDNA => {
   try {
     const raw = JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null');
     if (raw) return { risk_tolerance: raw.risk_tolerance || 'Moderate', target_return: raw.target_return || 0.10, sectors: raw.sectors || [] };
-  } catch {}
+  } catch {
+    return { risk_tolerance: 'Moderate', target_return: 0.10, sectors: [] };
+  }
   return { risk_tolerance: 'Moderate', target_return: 0.10, sectors: [] };
 };
 
@@ -247,7 +262,7 @@ const getSharpeRecs = (
 // more than adding another high-beta equity, making recommendations measurably visible.
 const MKT_VOL = 0.16; // S&P 500 annualised vol proxy
 
-const calcMetrics = (tickers: string[], weights: Record<string, number>, scenario: ScenarioKey = 'normal', dynamicRiskDb: Record<string, any> = {}) => {
+const calcMetrics = (tickers: string[], weights: Record<string, number>, scenario: ScenarioKey = 'normal', dynamicRiskDb: Record<string, RiskProfile> = {}) => {
   // Filter out zero-weight tickers for metric calculation (they don't contribute)
   const activeTickers = tickers.filter(t => (weights[t] || 0) > 0.001);
   const src = activeTickers.length > 0 ? activeTickers : tickers;
@@ -264,7 +279,7 @@ const calcMetrics = (tickers: string[], weights: Record<string, number>, scenari
     const risk = dynamicRiskDb[t] ?? TICKER_RISK_DB[t] ?? DEFAULT_RISK;
     let ret = risk.annRet;
     let vol = risk.vol;
-    let beta = risk.beta;
+    const beta = risk.beta;
 
     if (scenario === '2008') { ret *= 0.616; vol *= 2.5; }
     else if (scenario === 'covid') { ret *= 0.769; vol *= 2.0; }
@@ -379,9 +394,9 @@ const Sandbox = () => {
   const [addingTickerTo, setAddingTickerTo] = useState<string | null>(null);
   const [applyingPreset, setApplyingPreset] = useState<Record<string, boolean>>({});
   const [applyDialogIdx, setApplyDialogIdx] = useState<number | null>(null);
-  const [dynamicRiskDb, setDynamicRiskDb] = useState<Record<string, any>>({});
+  const [dynamicRiskDb, setDynamicRiskDb] = useState<Record<string, RiskProfile>>({});
   const [showRecsFor, setShowRecsFor] = useState<Record<string, boolean>>({});
-  const [mockAnalysisResults, setMockAnalysisResults] = useState<Record<string, any>>({});
+  const [mockAnalysisResults, setMockAnalysisResults] = useState<Record<string, MockAnalysisResult>>({});
   const [analyzingMockId, setAnalyzingMockId] = useState<string | null>(null);
   const [analysisMockDialogId, setAnalysisMockDialogId] = useState<string | null>(null);
 
@@ -776,8 +791,8 @@ const Sandbox = () => {
               
               const isSavedLocally = (() => {
                 try {
-                  const items = JSON.parse(localStorage.getItem(MOCKS_STORAGE) || '[]');
-                  return items.some((i: any) => i.id === mock.id);
+                  const items = JSON.parse(localStorage.getItem(MOCKS_STORAGE) || '[]') as Array<{ id?: string }>;
+                  return items.some((i) => i.id === mock.id);
                 } catch { return false; }
               })();
 

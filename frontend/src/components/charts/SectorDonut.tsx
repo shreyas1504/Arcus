@@ -1,7 +1,9 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { MOCK_SECTORS } from '@/lib/mock-data';
 
-const SectorTooltip = ({ active, payload }: any) => {
+type SectorPayload = { payload: { name: string; value: number; color: string } };
+
+const SectorTooltip = ({ active, payload }: { active?: boolean; payload?: SectorPayload[] }) => {
   if (!active || !payload?.length) return null;
   const { name, value, color } = payload[0].payload;
   return (

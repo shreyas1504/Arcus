@@ -18,7 +18,10 @@ const FALLBACK_NEWS = [
   { type: 'headline' as const, text: 'Gold hits $2,340 all-time high' },
 ];
 
-const TickerContent = ({ items }: { items: typeof FALLBACK_NEWS }) => (
+type NewsItem = (typeof FALLBACK_NEWS)[number];
+type LiveNewsPayload = { news?: Array<{ headline?: string; title?: string }> };
+
+const TickerContent = ({ items }: { items: NewsItem[] }) => (
   <div className="flex items-center gap-0 whitespace-nowrap">
     {items.map((item, i) => (
       <span key={i} className="flex items-center gap-1.5 mx-3">
@@ -48,9 +51,9 @@ const NewsTicker = () => {
   let displayItems = FALLBACK_NEWS;
   try {
     if (liveNews) {
-      const newsArray = Array.isArray(liveNews) ? liveNews : (liveNews as any)?.news;
+      const newsArray = Array.isArray(liveNews) ? liveNews : (liveNews as LiveNewsPayload)?.news;
       if (Array.isArray(newsArray) && newsArray.length > 0) {
-        displayItems = newsArray.map((item: any) => ({
+        displayItems = newsArray.map((item) => ({
           type: 'headline' as const,
           text: item.headline || item.title || '',
           symbol: undefined as string | undefined,

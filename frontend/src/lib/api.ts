@@ -75,11 +75,17 @@ export interface ChatPortfolioContext {
     cvar: number; beta: number; maxDrawdown: number;
     annualizedReturn?: number; volatility?: number;
     sortino?: number; alpha?: number;
+    informationRatio?: number; information_ratio?: number;
+    calmar?: number; calmar_ratio?: number;
   };
   investorProfile: { riskTolerance: string; targetReturn: number };
 }
 
 type ChatContextLike = ChatPortfolioContext | Record<string, unknown> | undefined;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object';
+}
 
 export const sendChatMessage = async (
   message: string,
@@ -163,14 +169,14 @@ export async function getStockPrice(ticker: string) {
 }
 
 function normalizeChatContext(portfolioContext?: ChatContextLike): ChatPortfolioContext | null {
-  if (!portfolioContext || typeof portfolioContext !== 'object') return null;
-  const raw = portfolioContext as Record<string, any>;
+  if (!isRecord(portfolioContext)) return null;
+  const raw = portfolioContext;
   const holdingsRaw = Array.isArray(raw.holdings) ? raw.holdings : [];
-  const metricsRaw = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {};
-  const investorRaw = raw.investorProfile && typeof raw.investorProfile === 'object' ? raw.investorProfile : {};
+  const metricsRaw = isRecord(raw.metrics) ? raw.metrics : {};
+  const investorRaw = isRecord(raw.investorProfile) ? raw.investorProfile : {};
 
   const holdings = holdingsRaw
-    .filter((holding) => holding && typeof holding === 'object' && holding.ticker)
+    .filter((holding): holding is Record<string, unknown> => isRecord(holding) && !!holding.ticker)
     .map((holding) => ({
       ticker: String(holding.ticker).toUpperCase(),
       weight: Number(holding.weight) || 0,
@@ -190,6 +196,10 @@ function normalizeChatContext(portfolioContext?: ChatContextLike): ChatPortfolio
       volatility: metricsRaw.volatility != null ? Number(metricsRaw.volatility) : undefined,
       sortino: metricsRaw.sortino != null ? Number(metricsRaw.sortino) : undefined,
       alpha: metricsRaw.alpha != null ? Number(metricsRaw.alpha) : undefined,
+      informationRatio: metricsRaw.informationRatio != null ? Number(metricsRaw.informationRatio) : undefined,
+      information_ratio: metricsRaw.information_ratio != null ? Number(metricsRaw.information_ratio) : undefined,
+      calmar: metricsRaw.calmar != null ? Number(metricsRaw.calmar) : undefined,
+      calmar_ratio: metricsRaw.calmar_ratio != null ? Number(metricsRaw.calmar_ratio) : undefined,
     },
     investorProfile: {
       riskTolerance: String(investorRaw.riskTolerance || 'Moderate'),
@@ -360,7 +370,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('information ratio')) {
-    return `**Information Ratio**\n\n- Your information ratio is **${fmtNum((hydratedCtx.metrics as any).informationRatio ?? (hydratedCtx.metrics as any).information_ratio)}**.\n- This measures how consistently the portfolio has outperformed its benchmark per unit of tracking error.\n- Higher is better; low or negative values mean excess return has not been especially reliable.\n\nNext step: compare it against alpha to judge consistency versus magnitude.`;
+    return `**Information Ratio**\n\n- Your information ratio is **${fmtNum(hydratedCtx.metrics.informationRatio ?? hydratedCtx.metrics.information_ratio)}**.\n- This measures how consistently the portfolio has outperformed its benchmark per unit of tracking error.\n- Higher is better; low or negative values mean excess return has not been especially reliable.\n\nNext step: compare it against alpha to judge consistency versus magnitude.`;
   }
 
   if (msg.includes('var') || msg.includes('value at risk')) {
@@ -385,7 +395,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('calmar')) {
-    return `**Calmar Ratio**\n\n- Your Calmar ratio is **${fmtNum((ctx.metrics as any).calmar ?? (ctx.metrics as any).calmar_ratio)}**.\n- Calmar compares return to maximum drawdown, so it is useful when you care more about deep losses than about day-to-day noise.\n- If Calmar is weak while return looks fine, the portfolio may be earning return in an uncomfortably painful way.\n\nNext step: compare Calmar with Sharpe to see whether drawdowns are the main weakness.`;
+    return `**Calmar Ratio**\n\n- Your Calmar ratio is **${fmtNum(ctx.metrics.calmar ?? ctx.metrics.calmar_ratio)}**.\n- Calmar compares return to maximum drawdown, so it is useful when you care more about deep losses than about day-to-day noise.\n- If Calmar is weak while return looks fine, the portfolio may be earning return in an uncomfortably painful way.\n\nNext step: compare Calmar with Sharpe to see whether drawdowns are the main weakness.`;
   }
 
   if (msg.includes('annualized return') || msg.includes('return')) {

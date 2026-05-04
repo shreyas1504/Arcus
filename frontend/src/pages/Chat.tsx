@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SendHorizontal, Zap, User, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
@@ -57,7 +57,7 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typing]);
 
-  const doSendMessage = async (text: string) => {
+  const doSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     const userMsg = { role: 'user' as const, content: text };
     setMessages(prev => [...prev, userMsg]);
@@ -91,7 +91,7 @@ const Chat = () => {
     } finally {
       setTyping(false);
     }
-  };
+  }, [history]);
 
   const handleRetry = () => {
     if (pendingRetry) {
@@ -114,7 +114,7 @@ const Chat = () => {
     window.setTimeout(() => {
       doSendMessage(pending);
     }, 150);
-  }, []);
+  }, [doSendMessage]);
 
   useEffect(() => {
     const handleOpen = (event: Event) => {
@@ -129,7 +129,7 @@ const Chat = () => {
 
     window.addEventListener(ARCUS_CHAT_EVENT, handleOpen);
     return () => window.removeEventListener(ARCUS_CHAT_EVENT, handleOpen);
-  }, [history]);
+  }, [doSendMessage]);
 
   return (
     <AppLayout title="AI Chat">

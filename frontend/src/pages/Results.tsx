@@ -31,6 +31,15 @@ const askAI = (question: string) => {
   openArcusChat(question);
 };
 
+type SectorResponse = { name: string };
+type OptimalWeight = { ticker: string; weight: number };
+type OptimalStrategy = {
+  label: string;
+  sharpe?: number;
+  weights?: OptimalWeight[];
+  recommended?: boolean;
+};
+
 const SectionHeader = ({ label, chatQuestion }: { label: string; chatQuestion?: string }) => (
   <div className="flex items-center justify-between mb-4">
     <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>{label}</span>
@@ -308,7 +317,7 @@ const Results = () => {
           // ── Sector alignment (0-100) ──
           // Use API sectors if available, otherwise derive from tickers via local map
           const portfolioSectors: string[] = analysis?.sectors?.length
-            ? analysis.sectors.map((s: any) => s.name)
+            ? analysis.sectors.map((s: SectorResponse) => s.name)
             : [...new Set(tickers.map((t: string) => TICKER_SECTOR_MAP[t]).filter(Boolean))];
           const matchedSectors = userSectors.filter(s => portfolioSectors.some(ps => ps.toLowerCase().includes(s.toLowerCase())));
           const sectorScore = userSectors.length > 0 ? (matchedSectors.length / userSectors.length) * 100 : 100;
@@ -666,7 +675,7 @@ const Results = () => {
           <div className="glass rounded-xl p-5">
             <span className="label-mono mb-4 block" style={{ color: 'hsl(214 10% 57%)' }}>OPTIMAL WEIGHTS</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {Object.values(optWeights).map((strat: any) => (
+              {Object.values(optWeights as Record<string, OptimalStrategy>).map((strat) => (
                 <div key={strat.label} className="glass-elevated rounded-lg p-3 relative">
                   {strat.recommended && (
                     <span className="absolute -top-2 right-2 bg-primary text-primary-foreground font-mono text-[8px] uppercase px-2 py-0.5 rounded-full">RECOMMENDED</span>
@@ -674,7 +683,7 @@ const Results = () => {
                   <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{strat.label}</span>
                   <div className="font-mono text-lg font-bold text-foreground mt-1">{strat.sharpe?.toFixed(2) ?? '—'}</div>
                   <div className="space-y-1.5 mt-3">
-                    {strat.weights?.map((w: any) => (
+                    {strat.weights?.map((w) => (
                       <div key={w.ticker} className="flex items-center gap-2">
                         <span className="font-mono text-[10px] text-muted-foreground w-12">{w.ticker}</span>
                         <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">

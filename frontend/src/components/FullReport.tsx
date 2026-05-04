@@ -20,7 +20,15 @@ const glossary = [
 const recCategories = ['RISK', 'ALLOCATION', 'VALUATION', 'PROJECTION'];
 
 export interface FullReportProps {
-  metrics: any;
+  metrics: {
+    sharpe?: number;
+    var_95?: number;
+    cvar_95?: number;
+    beta?: number;
+    max_drawdown?: number;
+    health_score?: number;
+    healthScore?: number;
+  };
   tickers?: string[];
 }
 

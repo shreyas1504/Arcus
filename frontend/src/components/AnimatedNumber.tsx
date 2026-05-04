@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { useMotionValue, animate } from 'framer-motion';
 
 interface AnimatedNumberProps {
   value: number;
@@ -21,7 +21,7 @@ const AnimatedNumber = ({ value, format, duration = 1.2, className = '' }: Anima
       },
     });
     return controls.stop;
-  }, [value, format, duration]);
+  }, [motionVal, value, format, duration]);
 
   return <span className={className}>{display}</span>;
 };

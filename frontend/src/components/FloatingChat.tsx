@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, SendHorizontal, Zap, User } from 'lucide-react';
 import { sendChatMessage, ChatMessage } from '@/lib/api';
@@ -17,7 +17,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
   const [typing, setTyping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const doSendMessage = async (text: string) => {
+  const doSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setInput('');
@@ -39,9 +39,9 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
     } finally {
       setTyping(false);
     }
-  };
+  }, [history]);
 
-  const openAndSend = (message: string) => {
+  const openAndSend = useCallback((message: string) => {
     const trimmed = message.trim();
     if (!trimmed) return;
 
@@ -50,7 +50,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
     window.setTimeout(() => {
       doSendMessage(trimmed);
     }, 150);
-  };
+  }, [doSendMessage]);
 
   // Listen for external open events
   useEffect(() => {
@@ -67,7 +67,7 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
     if (pending) openAndSend(pending);
 
     return () => window.removeEventListener(ARCUS_CHAT_EVENT, handler);
-  }, []);
+  }, [openAndSend]);
 
   return (
     <>

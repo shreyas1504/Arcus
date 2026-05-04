@@ -15,6 +15,7 @@ const MKT_VOL = 0.16;
 const TECH_TICKERS = new Set(['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'META', 'AMZN', 'TSLA', 'AMD', 'NFLX', 'CRM', 'ADBE']);
 const TECH_SET = new Set(['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD','NFLX','CRM','ADBE','PLTR','SNOW','INTC','IBM','ORCL']);
 const INDEX_SET = new Set(['VOO','SPY','VTI','QQQ']);
+type RiskProfile = typeof DEFAULT_RISK;
 
 type ScenarioKey = 'normal' | '2008' | 'covid' | 'rateHike' | 'dotcom';
 
@@ -22,7 +23,7 @@ function calcMetrics(
   tickers: string[],
   weights: Record<string, number>,
   scenario: ScenarioKey = 'normal',
-  dynamicRiskDb: Record<string, any> = {}
+  dynamicRiskDb: Record<string, RiskProfile> = {}
 ) {
   const activeTickers = tickers.filter(t => (weights[t] || 0) > 0.001);
   const src = activeTickers.length > 0 ? activeTickers : tickers;
@@ -37,7 +38,7 @@ function calcMetrics(
     const risk = dynamicRiskDb[t] ?? TICKER_RISK_DB[t] ?? DEFAULT_RISK;
     let ret = risk.annRet;
     let vol = risk.vol;
-    let beta = risk.beta;
+    const beta = risk.beta;
 
     if (scenario === '2008') { ret *= 0.616; vol *= 2.5; }
     else if (scenario === 'covid') { ret *= 0.769; vol *= 2.0; }
