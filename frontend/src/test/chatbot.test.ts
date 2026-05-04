@@ -299,6 +299,82 @@ describe('chat API behavior', () => {
     expect(result.reply).toContain('holding is hurting Sharpe the most');
   });
 
+  it('extracts Sortino from the Ask AI prompt when cached context is missing that metric', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response);
+
+    const result = await sendChatMessage(
+      'My Sortino ratio is 0.21. What does this tell me about my downside risk?',
+      {
+        holdings: [
+          { ticker: 'AAPL', weight: 0.45, currentPrice: 200 },
+          { ticker: 'MSFT', weight: 0.35, currentPrice: 400 },
+          { ticker: 'VOO', weight: 0.20, currentPrice: 500 },
+        ],
+        metrics: {
+          healthScore: 45,
+          sharpe: 0.78,
+          var95: -0.021,
+          cvar: -0.027,
+          beta: 0.98,
+          maxDrawdown: -0.233,
+          annualizedReturn: 0.087,
+          volatility: 0.206,
+        },
+        investorProfile: { riskTolerance: 'Moderate', targetReturn: 0.1 },
+      },
+    );
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('Sortino Ratio');
+    expect(result.reply).toContain('Your Sortino ratio is **0.21**');
+    expect(result.reply).not.toContain('n/a');
+  });
+
+  it('extracts information ratio style values from prompt text when needed', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response);
+
+    const result = await sendChatMessage(
+      'My annualized return is 12.4%. How does this compare to the market?',
+      {
+        holdings: [
+          { ticker: 'NVDA', weight: 0.4, currentPrice: 900 },
+          { ticker: 'MSFT', weight: 0.35, currentPrice: 400 },
+          { ticker: 'VOO', weight: 0.25, currentPrice: 500 },
+        ],
+        metrics: {
+          healthScore: 61,
+          sharpe: 1.02,
+          var95: -0.03,
+          cvar: -0.041,
+          beta: 1.12,
+          maxDrawdown: -0.24,
+          volatility: 0.22,
+        },
+        investorProfile: { riskTolerance: 'Growth', targetReturn: 0.1 },
+      },
+    );
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('Annualized Return');
+    expect(result.reply).toContain('**12.4%**');
+  });
+
   it('returns offline guidance when fetch throws unexpectedly', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('network down'));
 

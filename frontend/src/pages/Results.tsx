@@ -85,11 +85,6 @@ const Results = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Cache analysis for chat context
-  useEffect(() => {
-    if (analysis) localStorage.setItem('arcus-last-analysis', JSON.stringify(analysis));
-  }, [analysis]);
-
   // Use real metrics or fallback to mock
   // When backend is unavailable, compute from the user's actual tickers
   const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
@@ -126,6 +121,18 @@ const Results = () => {
   //  - offline: computed by computePortfolioMetrics() with concentration penalty per ticker combo
   // Both sources already produce portfolio-specific values; no override needed.
   const m = rawMetrics;
+
+  // Cache the exact metrics currently shown so Ask AI stays in sync with the visible cards,
+  // including offline/fallback analysis.
+  useEffect(() => {
+    const effectiveAnalysis = {
+      tickers,
+      weights,
+      latest_prices: analysis?.latest_prices ?? config?.livePrices ?? {},
+      metrics: m,
+    };
+    localStorage.setItem('arcus-last-analysis', JSON.stringify(effectiveAnalysis));
+  }, [analysis?.latest_prices, config?.livePrices, m, tickers, weights]);
 
 
   // Build P&L rows from the user's actual holdings when API is unavailable

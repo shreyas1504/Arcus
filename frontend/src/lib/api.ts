@@ -198,6 +198,71 @@ function normalizeChatContext(portfolioContext?: ChatContextLike): ChatPortfolio
   };
 }
 
+function extractMetricFromMessage(message: string, patterns: RegExp[], isPercent = false): number | undefined {
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+    const value = Number(match[1]);
+    if (Number.isNaN(value)) continue;
+    return isPercent ? value / 100 : value;
+  }
+  return undefined;
+}
+
+function withMessageDerivedMetrics(message: string, ctx: ChatPortfolioContext): ChatPortfolioContext {
+  const derived = {
+    sortino: ctx.metrics.sortino ?? extractMetricFromMessage(message, [
+      /sortino ratio is\s*(-?\d+(?:\.\d+)?)/i,
+      /sortino(?: ratio)?[:\s]+(-?\d+(?:\.\d+)?)/i,
+    ]),
+    sharpe: ctx.metrics.sharpe || extractMetricFromMessage(message, [
+      /sharpe ratio is\s*(-?\d+(?:\.\d+)?)/i,
+      /sharpe(?: ratio)?[:\s]+(-?\d+(?:\.\d+)?)/i,
+    ]) || 0,
+    beta: ctx.metrics.beta || extractMetricFromMessage(message, [
+      /beta is\s*(-?\d+(?:\.\d+)?)/i,
+      /beta[:\s]+(-?\d+(?:\.\d+)?)/i,
+    ]) || 0,
+    alpha: ctx.metrics.alpha ?? extractMetricFromMessage(message, [
+      /alpha is\s*(-?\d+(?:\.\d+)?)%/i,
+      /alpha[:\s]+(-?\d+(?:\.\d+)?)%/i,
+    ], true),
+    annualizedReturn: ctx.metrics.annualizedReturn ?? extractMetricFromMessage(message, [
+      /annualized return is\s*(-?\d+(?:\.\d+)?)%/i,
+      /annualized return[:\s]+(-?\d+(?:\.\d+)?)%/i,
+    ], true),
+    volatility: ctx.metrics.volatility ?? extractMetricFromMessage(message, [
+      /volatility is\s*(-?\d+(?:\.\d+)?)%/i,
+      /portfolio volatility is\s*(-?\d+(?:\.\d+)?)%/i,
+      /volatility[:\s]+(-?\d+(?:\.\d+)?)%/i,
+    ], true),
+    var95: ctx.metrics.var95 || extractMetricFromMessage(message, [
+      /var(?: at 95%)? is\s*(-?\d+(?:\.\d+)?)%/i,
+      /value at risk(?: \(?95%?\)?)? is\s*(-?\d+(?:\.\d+)?)%/i,
+    ], true) || 0,
+    cvar: ctx.metrics.cvar || extractMetricFromMessage(message, [
+      /cvar is\s*(-?\d+(?:\.\d+)?)%/i,
+      /expected shortfall is\s*(-?\d+(?:\.\d+)?)%/i,
+    ], true) || 0,
+    maxDrawdown: ctx.metrics.maxDrawdown || extractMetricFromMessage(message, [
+      /maximum drawdown is\s*(-?\d+(?:\.\d+)?)%/i,
+      /max drawdown is\s*(-?\d+(?:\.\d+)?)%/i,
+    ], true) || 0,
+    healthScore: ctx.metrics.healthScore || extractMetricFromMessage(message, [
+      /health score is\s*(\d+(?:\.\d+)?)/i,
+      /health score[:\s]+(\d+(?:\.\d+)?)/i,
+    ]) || 0,
+  };
+
+  return {
+    ...ctx,
+    metrics: {
+      ...ctx.metrics,
+      ...derived,
+    },
+  };
+}
+
 function fmtPct(value?: number, digits = 1) {
   if (value == null || Number.isNaN(value)) return 'n/a';
   return `${(value * 100).toFixed(digits)}%`;
@@ -257,11 +322,12 @@ function buildSummaryResponse(ctx: ChatPortfolioContext) {
 
 function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   const msg = message.toLowerCase();
-  const { metrics } = ctx;
-  const { topSector, topWeight } = topSectorSummary(ctx);
+  const hydratedCtx = withMessageDerivedMetrics(message, ctx);
+  const { metrics } = hydratedCtx;
+  const { topSector, topWeight } = topSectorSummary(hydratedCtx);
 
   if (msg.includes('summary') || msg.includes('overview') || msg.includes('current portfolio')) {
-    return buildSummaryResponse(ctx);
+    return buildSummaryResponse(hydratedCtx);
   }
 
   if (msg.includes('sharpe')) {
