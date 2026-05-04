@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Zap, SendHorizontal, MessageSquare } from 'lucide-react';
 import { MOCK_AI_RECOMMENDATIONS } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
+import { openArcusChat } from '@/lib/chat-launcher';
 
 const tabs = ['Summary', 'Methodology', 'AI Analysis', 'Recommendations'] as const;
 type Tab = typeof tabs[number];
@@ -32,7 +33,7 @@ const FullReport = ({ metrics: m, tickers = [] }: FullReportProps) => {
   const navigate = useNavigate();
 
   const sendToChat = (message: string) => {
-    window.dispatchEvent(new CustomEvent('arcus-chat-open', { detail: { message } }));
+    openArcusChat(message);
   };
 
   const methodologyItems = [

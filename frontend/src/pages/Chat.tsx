@@ -1,48 +1,12 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SendHorizontal, Zap, User, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import AppLayout from '@/components/AppLayout';
 import BackButton from '@/components/BackButton';
 import Disclaimer from '@/components/legal/Disclaimer';
-import { sendChatMessage, ChatMessage, ChatPortfolioContext } from '@/lib/api';
-
-function loadPortfolioContext(): ChatPortfolioContext | undefined {
-  try {
-    const rawAnalysis = JSON.parse(localStorage.getItem('arcus-last-analysis') || '{}');
-    const rawDNA = JSON.parse(localStorage.getItem('arcus-investor-dna') || '{}');
-    const rawPortfolio = JSON.parse(localStorage.getItem('arcus-portfolio') || '{}');
-    const holdings = rawPortfolio?.holdings?.filter((h: { ticker?: string }) => h.ticker) || [];
-    const n = holdings.length || 1;
-
-    const metrics = rawAnalysis?.metrics || {};
-
-    return {
-      holdings: holdings.map((h: { ticker: string }) => ({
-        ticker: h.ticker,
-        weight: 1 / n,
-        currentPrice: 0,
-      })),
-      metrics: {
-        healthScore: metrics.health_score ?? 0,
-        sharpe: metrics.sharpe ?? 0,
-        var95: metrics.var_95 ?? 0,
-        cvar: metrics.cvar_95 ?? 0,
-        beta: metrics.beta ?? 1,
-        maxDrawdown: metrics.max_drawdown ?? 0,
-        annualizedReturn: metrics.annualized_return,
-        volatility: metrics.volatility,
-        sortino: metrics.sortino,
-        alpha: metrics.alpha,
-      },
-      investorProfile: {
-        riskTolerance: rawDNA?.risk_tolerance || 'Moderate',
-        targetReturn: rawDNA?.target_return || 0.10,
-      },
-    };
-  } catch {
-    return undefined;
-  }
-}
+import { sendChatMessage, ChatMessage } from '@/lib/api';
+import { consumePendingArcusChatMessage } from '@/lib/chat-launcher';
+import { buildChatPortfolioContext } from '@/lib/portfolio-context';
 
 const Chat = () => {
   const [messages, setMessages] = useState<{ role: 'ai' | 'user'; content: string }[]>([
@@ -55,7 +19,7 @@ const Chat = () => {
   const [pendingRetry, setPendingRetry] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const ctx = useMemo(() => loadPortfolioContext(), []);
+  const ctx = buildChatPortfolioContext();
   const healthScore = ctx?.metrics.healthScore ?? 0;
   const sharpe = ctx?.metrics.sharpe ?? 0;
   const var95 = ctx?.metrics.var95 ?? 0;
@@ -104,7 +68,8 @@ const Chat = () => {
     const newHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
 
     try {
-      const data = await sendChatMessage(text, ctx, newHistory);
+      const latestCtx = buildChatPortfolioContext();
+      const data = await sendChatMessage(text, latestCtx, newHistory);
 
       if (data.status503) {
         setShow503(true);
@@ -141,6 +106,15 @@ const Chat = () => {
     setShow503(false);
     setPendingRetry(null);
   };
+
+  useEffect(() => {
+    const pending = consumePendingArcusChatMessage();
+    if (!pending) return;
+    setInput(pending);
+    window.setTimeout(() => {
+      doSendMessage(pending);
+    }, 150);
+  }, []);
 
   return (
     <AppLayout title="AI Chat">

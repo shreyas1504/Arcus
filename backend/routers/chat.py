@@ -125,8 +125,11 @@ def _build_system_prompt(ctx: PortfolioContext | dict | None) -> str:
 
     return (
         f"{base}{context_block}\n\n"
-        "Rules: Reference specific numbers always. Be specific on tickers. "
-        "Under 200 words unless needed. Markdown bullets. "
+        "Rules: Answer the user's exact question first. "
+        "Use only the provided portfolio data when citing holdings, weights, prices, or metrics; do not invent missing values. "
+        "If the data needed to answer is missing, say that clearly and explain what is missing. "
+        "Reference specific numbers always. Be specific on tickers. "
+        "Keep it concise unless the user asks for detail. Markdown bullets when helpful. "
         "End with one actionable next step."
     )
 
@@ -185,7 +188,7 @@ def _dict_to_portfolio_context(raw: dict) -> PortfolioContext:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    api_key = os.getenv("NVIDIA_API_KEY")
+    api_key = os.getenv("ANTHROPIC_API_KEY")
 
     # Build context
     ctx = req.portfolio_context
@@ -197,57 +200,29 @@ async def chat(req: ChatRequest):
         role = "assistant" if msg.role == "assistant" else "user"
         messages.append({"role": role, "content": msg.content})
         
-    # Minimax optimization: Prepend system prompt to the latest user message
-    # because some models hang or fail when given a "system" role.
-    final_message = f"SYSTEM CONTEXT:\n{system_prompt}\n\nUSER MESSAGE:\n{req.message}"
-    messages.append({"role": "user", "content": final_message})
+    messages.append({"role": "user", "content": req.message})
 
     # If no API key, return 503 so frontend knows AI is unavailable
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail={"error": "AI unavailable — NVIDIA_API_KEY not set", "fallback": True},
+            detail={"error": "AI unavailable — ANTHROPIC_API_KEY not set", "fallback": True},
         )
 
     try:
-        import urllib.request
-        import urllib.error
-        import json
-        import ssl
-        
-        url = "https://integrate.api.nvidia.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "meta/llama3-70b-instruct",
-            "messages": messages,
-            "temperature": 1,
-            "top_p": 0.95,
-            "max_tokens": 1024,
-            "stream": False
-        }
-        
-        # macOS Python local certificate fix
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        
-        req_obj = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req_obj, context=ssl_ctx, timeout=60) as response:
-            res_body = response.read()
-            res_json = json.loads(res_body)
-            reply = res_json["choices"][0]["message"]["content"]
-            
-        return ChatResponse(reply=reply, fallback=False)
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode('utf-8')
-        logger.error(f"Arcus AI API HTTP Error: {e.code} - {err_body}")
-        raise HTTPException(
-            status_code=503,
-            detail={"error": f"NVIDIA API Error: {e.code} - {err_body}", "fallback": True},
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            temperature=0.2,
+            system=system_prompt,
+            messages=messages,
         )
+        reply = response.content[0].text
+
+        return ChatResponse(reply=reply, fallback=False)
     except Exception as e:
         logger.error(f"Arcus AI API error: {e}")
         raise HTTPException(

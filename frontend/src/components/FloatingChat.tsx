@@ -2,43 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, SendHorizontal, Zap, User } from 'lucide-react';
 import { sendChatMessage, ChatMessage, ChatPortfolioContext } from '@/lib/api';
+import { ARCUS_CHAT_EVENT, consumePendingArcusChatMessage } from '@/lib/chat-launcher';
+import { buildChatPortfolioContext } from '@/lib/portfolio-context';
 
 const quickPrompts = ['PORTFOLIO RISK', 'EXPLAIN SHARPE', 'STRESS TEST'];
-
-// Global event to open chat is handled via window.dispatchEvent('arcus-chat-open')
-
-function loadPortfolioContext(): ChatPortfolioContext | undefined {
-  try {
-    const rawAnalysis = JSON.parse(localStorage.getItem('arcus-last-analysis') || '{}');
-    const rawDNA = JSON.parse(localStorage.getItem('arcus-investor-dna') || '{}');
-    const rawPortfolio = JSON.parse(localStorage.getItem('arcus-portfolio') || '{}');
-    const holdings = rawPortfolio?.holdings?.filter((h: { ticker?: string }) => h.ticker) || [];
-    const n = holdings.length || 1;
-    const metrics = rawAnalysis?.metrics || {};
-
-    return {
-      holdings: holdings.map((h: { ticker: string }) => ({
-        ticker: h.ticker, weight: 1 / n, currentPrice: 0,
-      })),
-      metrics: {
-        healthScore: metrics.health_score ?? 0,
-        sharpe: metrics.sharpe ?? 0,
-        var95: metrics.var_95 ?? 0,
-        cvar: metrics.cvar_95 ?? 0,
-        beta: metrics.beta ?? 1,
-        maxDrawdown: metrics.max_drawdown ?? 0,
-        annualizedReturn: metrics.annualized_return,
-        volatility: metrics.volatility,
-        sortino: metrics.sortino,
-        alpha: metrics.alpha,
-      },
-      investorProfile: {
-        riskTolerance: rawDNA?.risk_tolerance || 'Moderate',
-        targetReturn: rawDNA?.target_return || 0.10,
-      },
-    };
-  } catch { return undefined; }
-}
 
 const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
   const [open, setOpen] = useState(false);
@@ -50,29 +17,13 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
   const [typing, setTyping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Listen for external open events
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setOpen(true);
-      if (detail?.message) {
-        setInput(detail.message);
-        setTimeout(() => {
-          doSendMessage(detail.message);
-        }, 300);
-      }
-    };
-    window.addEventListener('arcus-chat-open', handler);
-    return () => window.removeEventListener('arcus-chat-open', handler);
-  }, []);
-
   const doSendMessage = async (text: string) => {
     if (!text.trim()) return;
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setInput('');
     setTyping(true);
 
-    const ctx = loadPortfolioContext();
+    const ctx = buildChatPortfolioContext();
     const newHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
 
     try {
@@ -89,6 +40,34 @@ const FloatingChat = ({ initialMessage }: { initialMessage?: string }) => {
       setTyping(false);
     }
   };
+
+  const openAndSend = (message: string) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+
+    setOpen(true);
+    setInput(trimmed);
+    window.setTimeout(() => {
+      doSendMessage(trimmed);
+    }, 150);
+  };
+
+  // Listen for external open events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ message?: string }>).detail;
+      const pending = consumePendingArcusChatMessage();
+      const message = detail?.message || pending;
+      if (message) openAndSend(message);
+      else setOpen(true);
+    };
+    window.addEventListener(ARCUS_CHAT_EVENT, handler);
+
+    const pending = consumePendingArcusChatMessage();
+    if (pending) openAndSend(pending);
+
+    return () => window.removeEventListener(ARCUS_CHAT_EVENT, handler);
+  }, []);
 
   return (
     <>

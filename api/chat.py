@@ -77,9 +77,12 @@ def _build_system_prompt(ctx: dict | None) -> str:
 
     return (
         f"{base}{context_block}\n\n"
-        "Rules: Reference specific numbers from the portfolio data when available. "
+        "Rules: Answer the user's exact question first. "
+        "Use only the provided portfolio data when citing holdings, weights, prices, or metrics; do not invent missing values. "
+        "If the data needed to answer is missing, say that clearly and explain what is missing. "
+        "Reference specific numbers from the portfolio data when available. "
         "Be specific about tickers and weights. "
-        "Under 200 words unless the user asks for detail. Use markdown bullets. "
+        "Keep it concise unless the user asks for detail. Use markdown bullets when helpful. "
         "End with one actionable next step."
     )
 
@@ -131,6 +134,7 @@ class handler(BaseHTTPRequestHandler):
             response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=1024,
+                temperature=0.2,
                 system=system_prompt,
                 messages=messages,
             )

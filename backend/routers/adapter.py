@@ -197,6 +197,7 @@ def v2_analyze(req: V2PortfolioRequest):
     return {
         "tickers": tickers,
         "weights": weights,
+        "latest_prices": raw.get("latest_prices", {}),
         "metrics": {
             "sharpe": sharpe_val,
             "sortino": sortino_val,

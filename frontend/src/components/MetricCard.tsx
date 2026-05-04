@@ -4,6 +4,7 @@ import AnimatedNumber from './AnimatedNumber';
 import Sparkline from './Sparkline';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { openArcusChat } from '@/lib/chat-launcher';
 
 interface MetricCardProps {
   icon: LucideIcon;
@@ -22,7 +23,7 @@ const MetricCard = ({ icon: Icon, label, value, format, change, changeLabel, spa
 
   const handleClick = () => {
     if (chatQuestion) {
-      window.dispatchEvent(new CustomEvent('arcus-chat-open', { detail: { message: chatQuestion } }));
+      openArcusChat(chatQuestion);
     }
   };
 

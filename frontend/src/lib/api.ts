@@ -91,6 +91,7 @@ export const sendChatMessage = async (
     ];
 
     let lastError: Error | null = null;
+    let saw503 = false;
 
     for (const endpoint of chatEndpoints) {
       try {
@@ -106,6 +107,7 @@ export const sendChatMessage = async (
 
         if (res.status === 503) {
           // This endpoint's AI is unavailable, try next
+          saw503 = true;
           lastError = new Error('503');
           continue;
         }
@@ -130,7 +132,7 @@ export const sendChatMessage = async (
     }
 
     // All endpoints failed — use offline fallback
-    return { reply: getOfflineResponse(message), fallback: true };
+    return { reply: getOfflineResponse(message), fallback: true, status503: saw503 };
   } catch (err) {
     return { reply: getOfflineResponse(message), fallback: true };
   }

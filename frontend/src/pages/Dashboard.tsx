@@ -255,7 +255,7 @@ const Dashboard = () => {
   };
 
   const analyse = () => {
-    localStorage.setItem(SAVED_KEY, JSON.stringify({ holdings, startDate, endDate }));
+    localStorage.setItem(SAVED_KEY, JSON.stringify({ holdings, startDate, endDate, livePrices }));
     navigate('/dashboard/results');
   };
 

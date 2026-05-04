@@ -77,9 +77,12 @@ def _build_system_prompt(ctx: dict | None) -> str:
 
     return (
         f"{base}{context_block}\n\n"
-        "Rules: Reference specific numbers from the portfolio data when available. "
+        "Rules: Answer the user's exact question first. "
+        "Use only the provided portfolio data when citing holdings, weights, prices, or metrics; do not invent missing values. "
+        "If the data needed to answer is missing, say that clearly and explain what is missing. "
+        "Reference specific numbers from the portfolio data when available. "
         "Be specific about tickers and weights. "
-        "Under 200 words unless the user asks for detail. Use markdown bullets. "
+        "Keep it concise unless the user asks for detail. Use markdown bullets when helpful. "
         "End with one actionable next step."
     )
 
@@ -103,14 +106,14 @@ class handler(BaseHTTPRequestHandler):
         conversation_history = data.get("conversation_history", [])
         portfolio_context = data.get("portfolio_context")
 
-        api_key = os.environ.get("NVIDIA_API_KEY")
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
 
         if not api_key:
             self.send_response(503)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({
-                "error": "NVIDIA_API_KEY not configured",
+                "error": "ANTHROPIC_API_KEY not configured",
                 "fallback": True
             }).encode())
             return
@@ -118,45 +121,24 @@ class handler(BaseHTTPRequestHandler):
         # Build system prompt
         system_prompt = _build_system_prompt(portfolio_context)
 
-        # Build messages
         messages = []
         for msg in conversation_history:
             role = "assistant" if msg.get("role") == "assistant" else "user"
             messages.append({"role": role, "content": msg.get("content", "")})
-        
-        # Minimax optimization: Prepend system prompt to the latest user message
-        # because some models hang or fail when given a "system" role.
-        final_message = f"SYSTEM CONTEXT:\n{system_prompt}\n\nUSER MESSAGE:\n{message}"
-        messages.append({"role": "user", "content": final_message})
+        messages.append({"role": "user", "content": message})
 
         try:
-            import urllib.request
-            import ssl
-            
-            url = "https://integrate.api.nvidia.com/v1/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model": "meta/llama3-70b-instruct",
-                "messages": messages,
-                "temperature": 1,
-                "top_p": 0.95,
-                "max_tokens": 1024,
-                "stream": False
-            }
-            
-            # macOS Python local certificate fix
-            ssl_ctx = ssl.create_default_context()
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
-            
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ssl_ctx, timeout=60) as response:
-                res_body = response.read()
-                res_json = json.loads(res_body)
-                reply = res_json["choices"][0]["message"]["content"]
+            import anthropic
+
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                temperature=0.2,
+                system=system_prompt,
+                messages=messages,
+            )
+            reply = response.content[0].text
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

@@ -22,12 +22,13 @@ import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
 import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP, MOCK_SECTORS, computePortfolioMetrics } from '@/lib/mock-data';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
+import { openArcusChat } from '@/lib/chat-launcher';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
 import { loadSettings } from '@/hooks/use-settings';
 import Disclaimer from '@/components/legal/Disclaimer';
 
 const askAI = (question: string) => {
-  window.dispatchEvent(new CustomEvent('arcus-chat-open', { detail: { message: question } }));
+  openArcusChat(question);
 };
 
 const SectionHeader = ({ label, chatQuestion }: { label: string; chatQuestion?: string }) => (
