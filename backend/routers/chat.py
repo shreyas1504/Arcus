@@ -192,11 +192,15 @@ async def chat(req: ChatRequest):
     system_prompt = _build_system_prompt(ctx)
 
     # Build messages list from conversation history + new message
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages: list[dict[str, str]] = []
     for msg in req.conversation_history:
         role = "assistant" if msg.role == "assistant" else "user"
         messages.append({"role": role, "content": msg.content})
-    messages.append({"role": "user", "content": req.message})
+        
+    # Minimax optimization: Prepend system prompt to the latest user message
+    # because some models hang or fail when given a "system" role.
+    final_message = f"SYSTEM CONTEXT:\n{system_prompt}\n\nUSER MESSAGE:\n{req.message}"
+    messages.append({"role": "user", "content": final_message})
 
     # If no API key, return 503 so frontend knows AI is unavailable
     if not api_key:
@@ -218,7 +222,7 @@ async def chat(req: ChatRequest):
         payload = {
             "model": "minimaxai/minimax-m2.7",
             "messages": messages,
-            "temperature": 0.7,
+            "temperature": 1,
             "top_p": 0.95,
             "max_tokens": 1024,
             "stream": False
@@ -230,7 +234,7 @@ async def chat(req: ChatRequest):
         ssl_ctx.verify_mode = ssl.CERT_NONE
         
         req_obj = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req_obj, context=ssl_ctx, timeout=15) as response:
+        with urllib.request.urlopen(req_obj, context=ssl_ctx, timeout=60) as response:
             res_body = response.read()
             res_json = json.loads(res_body)
             reply = res_json["choices"][0]["message"]["content"]

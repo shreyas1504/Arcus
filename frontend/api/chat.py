@@ -119,11 +119,15 @@ class handler(BaseHTTPRequestHandler):
         system_prompt = _build_system_prompt(portfolio_context)
 
         # Build messages
-        messages = [{"role": "system", "content": system_prompt}]
+        messages = []
         for msg in conversation_history:
             role = "assistant" if msg.get("role") == "assistant" else "user"
             messages.append({"role": role, "content": msg.get("content", "")})
-        messages.append({"role": "user", "content": message})
+        
+        # Minimax optimization: Prepend system prompt to the latest user message
+        # because some models hang or fail when given a "system" role.
+        final_message = f"SYSTEM CONTEXT:\n{system_prompt}\n\nUSER MESSAGE:\n{message}"
+        messages.append({"role": "user", "content": final_message})
 
         try:
             import urllib.request
@@ -137,7 +141,7 @@ class handler(BaseHTTPRequestHandler):
             payload = {
                 "model": "minimaxai/minimax-m2.7",
                 "messages": messages,
-                "temperature": 0.7,
+                "temperature": 1,
                 "top_p": 0.95,
                 "max_tokens": 1024,
                 "stream": False
@@ -149,7 +153,7 @@ class handler(BaseHTTPRequestHandler):
             ssl_ctx.verify_mode = ssl.CERT_NONE
             
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, context=ssl_ctx, timeout=15) as response:
+            with urllib.request.urlopen(req, context=ssl_ctx, timeout=60) as response:
                 res_body = response.read()
                 res_json = json.loads(res_body)
                 reply = res_json["choices"][0]["message"]["content"]
