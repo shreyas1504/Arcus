@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, GitBranch, Zap, ChevronRight, CheckCircle, X, Calculator, PlayCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ArcusLogo from '@/components/ArcusLogo';
 import NewsTicker from '@/components/NewsTicker';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const stagger = {
   hidden: {},
@@ -55,24 +57,6 @@ const demoInvestorDna = {
   sectors: ['Technology', 'Consumer'],
 };
 
-const howItWorksSteps = [
-  {
-    step: '1',
-    title: 'Add sample holdings',
-    desc: 'Example: AAPL 15 shares at $148.20, NVDA 5 at $620, MSFT 8 at $320, GOOGL 12 at $132.50, VOO 40 at $388.',
-  },
-  {
-    step: '2',
-    title: 'Set your analysis window',
-    desc: 'Dummy setup uses Jan 1, 2023 to Dec 31, 2024 with a Growth profile and 15% annual target return.',
-  },
-  {
-    step: '3',
-    title: 'Review the risk report',
-    desc: 'Arcus calculates Sharpe, VaR, drawdown, beta, stress tests, Monte Carlo outcomes, and portfolio health.',
-  },
-];
-
 const demoOutput = [
   { label: 'Portfolio Value', value: '$42.7K', detail: 'sample market value' },
   { label: 'Sharpe Ratio', value: '1.84', detail: 'risk-adjusted return' },
@@ -90,7 +74,163 @@ const seedDemoResults = () => {
   localStorage.removeItem('arcus-last-analysis');
 };
 
-const Landing = () => (
+const DemoRecording = () => (
+  <div className="relative min-h-[340px] overflow-hidden rounded-xl border border-border bg-card-elevated p-3">
+    <div className="flex items-center gap-1.5 border-b border-border/80 pb-3">
+      <span className="h-2.5 w-2.5 rounded-full bg-signal-red" />
+      <span className="h-2.5 w-2.5 rounded-full bg-signal-amber" />
+      <span className="h-2.5 w-2.5 rounded-full bg-signal-green" />
+      <span className="ml-3 font-mono text-[10px] text-muted-foreground">arcus.app/dashboard</span>
+    </div>
+
+    <div className="relative mt-4 h-[284px]">
+      <motion.div
+        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-4"
+        animate={{ opacity: [1, 1, 0, 0, 1] }}
+        transition={{ duration: 9, repeat: Infinity, times: [0, 0.36, 0.43, 0.92, 1] }}
+      >
+        <span className="label-mono">ADD HOLDINGS</span>
+        <div className="mt-3 space-y-2">
+          {demoPortfolio.holdings.map((holding, index) => (
+            <motion.div
+              key={holding.ticker}
+              className="grid grid-cols-[1fr_54px_72px] gap-2 rounded-lg border border-border bg-card px-3 py-2"
+              initial={false}
+              animate={{ opacity: [0, 1, 1], x: [-12, 0, 0] }}
+              transition={{ duration: 9, repeat: Infinity, delay: index * 0.28, times: [0, 0.12, 1] }}
+            >
+              <span className="font-mono text-xs font-bold text-primary">{holding.ticker}</span>
+              <span className="font-mono text-[11px] text-foreground">{holding.shares}</span>
+              <span className="font-mono text-[11px] text-muted-foreground">${holding.cost}</span>
+            </motion.div>
+          ))}
+        </div>
+        <motion.div
+          className="mt-4 rounded-lg bg-primary py-2.5 text-center font-mono text-[11px] font-bold text-primary-foreground"
+          animate={{ scale: [1, 1, 1.03, 1] }}
+          transition={{ duration: 9, repeat: Infinity, times: [0, 0.62, 0.68, 1] }}
+        >
+          Analyse Portfolio
+        </motion.div>
+      </motion.div>
+
+      <motion.div
+        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-4"
+        animate={{ opacity: [0, 0, 1, 1, 0] }}
+        transition={{ duration: 9, repeat: Infinity, times: [0, 0.4, 0.48, 0.86, 0.94] }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="label-mono">RISK REPORT</span>
+          <span className="rounded-full bg-primary/10 px-2 py-1 font-mono text-[10px] text-primary">Growth · 15%</span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {demoOutput.map((item, index) => (
+            <motion.div
+              key={item.label}
+              className="rounded-lg border border-border bg-card p-3"
+              animate={{ y: [10, 0, 0], opacity: [0, 1, 1] }}
+              transition={{ duration: 9, repeat: Infinity, delay: 3.7 + index * 0.18, times: [0, 0.1, 1] }}
+            >
+              <span className="font-mono text-[9px] uppercase text-muted-foreground">{item.label}</span>
+              <div className="mt-1 font-mono text-base font-bold text-foreground">{item.value}</div>
+            </motion.div>
+          ))}
+        </div>
+        <div className="mt-4 rounded-lg border border-border bg-card p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-mono text-[10px] text-muted-foreground">Monte Carlo range</span>
+            <span className="font-mono text-[10px] text-signal-green">1,000 sims</span>
+          </div>
+          <svg width="100%" height="84" viewBox="0 0 320 84" preserveAspectRatio="none">
+            <motion.path
+              d="M0 58 C45 42 65 66 104 48 C145 30 168 44 202 24 C240 4 276 32 320 14"
+              fill="none"
+              stroke="#38BDA4"
+              strokeWidth="3"
+              strokeLinecap="round"
+              initial={false}
+              animate={{ pathLength: [0, 1, 1] }}
+              transition={{ duration: 9, repeat: Infinity, times: [0.47, 0.66, 1] }}
+            />
+            <path d="M0 70 C58 54 96 74 144 56 C204 34 250 48 320 28" fill="none" stroke="#4F9CF0" strokeWidth="1.5" strokeOpacity="0.55" />
+          </svg>
+        </div>
+        <div className="mt-3 flex gap-2">
+          {['Stress tests', 'Risk contribution', 'AI insights'].map((label) => (
+            <span key={label} className="rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[10px] text-primary">{label}</span>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.div
+        className="absolute h-5 w-5 rounded-full border-2 border-primary bg-primary/25 shadow-[0_0_18px_rgba(56,189,164,0.6)]"
+        animate={{ x: [18, 126, 242, 164, 164, 250], y: [38, 76, 214, 246, 246, 50], scale: [1, 1, 1.25, 0.82, 1, 1] }}
+        transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  </div>
+);
+
+const HowItWorksModal = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="max-h-[92vh] max-w-[920px] overflow-y-auto border-border bg-background p-4 sm:p-6">
+      <DialogHeader>
+        <DialogTitle className="font-display text-2xl font-extrabold text-foreground">See how Arcus calculates risk</DialogTitle>
+        <DialogDescription>
+          A quick animated walkthrough using dummy values, then you can start your own analysis.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <DemoRecording />
+
+        <div className="space-y-4">
+          <div className="glass rounded-xl p-4">
+            <span className="label-mono">DUMMY VALUES USED</span>
+            <div className="mt-3 space-y-2">
+              {demoPortfolio.holdings.map((holding) => (
+                <div key={holding.ticker} className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-card-elevated px-3 py-2">
+                  <span className="font-mono text-xs font-bold text-primary">{holding.ticker}</span>
+                  <span className="font-mono text-xs text-foreground">{holding.shares} shares @ ${holding.cost}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Date range: Jan 1, 2023 to Dec 31, 2024. Profile: Growth. Target return: 15% per year.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {demoOutput.map((item) => (
+              <div key={item.label} className="glass-elevated rounded-lg p-3">
+                <span className="font-mono text-[9px] uppercase text-muted-foreground">{item.label}</span>
+                <div className="mt-1 font-mono text-lg font-bold text-foreground">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link to="/dashboard/results" onClick={seedDemoResults} className="flex-1">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full rounded-xl border border-border px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-card-elevated">
+                <PlayCircle size={15} className="mr-1.5 inline" /> View Demo Results
+              </motion.button>
+            </Link>
+            <Link to="/onboarding" className="flex-1">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">
+                <Calculator size={15} className="mr-1.5 inline" /> Get Started to Analyse
+              </motion.button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+);
+
+const Landing = () => {
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+
+  return (
   <div className="min-h-screen bg-background teal-grid-bg">
     {/* News ticker at very top */}
     <NewsTicker />
@@ -142,11 +282,14 @@ const Landing = () => (
             Get Started <ChevronRight size={14} className="inline ml-1" />
           </motion.button>
         </Link>
-        <Link to="/dashboard/results" onClick={seedDemoResults}>
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="px-6 py-3 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-card transition-colors">
-            See how it works
-          </motion.button>
-        </Link>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => setHowItWorksOpen(true)}
+          className="px-6 py-3 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-card transition-colors"
+        >
+          See how it works
+        </motion.button>
       </motion.div>
 
       {/* Floating dashboard preview */}
@@ -172,60 +315,6 @@ const Landing = () => (
           </div>
         </div>
       </motion.div>
-    </section>
-
-    {/* How it works */}
-    <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-      <div className="text-center mb-8">
-        <span className="label-mono">SEE HOW IT WORKS</span>
-        <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground mt-3">Try dummy values, then calculate your real portfolio.</h2>
-        <p className="text-muted-foreground text-sm mt-3 max-w-2xl mx-auto">
-          Use the example below to understand the flow, or start fresh and enter your own tickers, shares, buy prices, and date range.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4 items-stretch">
-        <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="glass rounded-xl p-5 sm:p-6">
-          <div className="space-y-4">
-            {howItWorksSteps.map((item) => (
-              <motion.div key={item.step} variants={fadeUp} className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-mono text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {item.step}
-                </div>
-                <div>
-                  <h3 className="font-display font-bold text-foreground text-base">{item.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed mt-1">{item.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="glass rounded-xl p-5 sm:p-6">
-          <span className="label-mono">DUMMY RESULT PREVIEW</span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
-            {demoOutput.map((item) => (
-              <div key={item.label} className="glass-elevated rounded-lg p-4">
-                <span className="label-mono">{item.label}</span>
-                <div className="font-mono text-2xl font-bold text-foreground mt-1">{item.value}</div>
-                <p className="text-muted-foreground text-xs mt-1">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 mt-5">
-            <Link to="/dashboard/results" onClick={seedDemoResults} className="flex-1">
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full px-4 py-3 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-card-elevated transition-colors">
-                <PlayCircle size={15} className="inline mr-1.5" /> View Dummy Demo
-              </motion.button>
-            </Link>
-            <Link to="/onboarding" className="flex-1">
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">
-                <Calculator size={15} className="inline mr-1.5" /> Get Started
-              </motion.button>
-            </Link>
-          </div>
-        </motion.div>
-      </div>
     </section>
 
     {/* Stats bar */}
@@ -293,7 +382,10 @@ const Landing = () => (
         </motion.button>
       </Link>
     </section>
+
+    <HowItWorksModal open={howItWorksOpen} onOpenChange={setHowItWorksOpen} />
   </div>
-);
+  );
+};
 
 export default Landing;
