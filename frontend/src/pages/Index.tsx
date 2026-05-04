@@ -3,7 +3,6 @@ import { Activity, GitBranch, Zap, ChevronRight, CheckCircle, X } from 'lucide-r
 import { Link } from 'react-router-dom';
 import ArcusLogo from '@/components/ArcusLogo';
 import NewsTicker from '@/components/NewsTicker';
-import FloatingChat from '@/components/FloatingChat';
 
 const stagger = {
   hidden: {},
@@ -181,8 +180,6 @@ const Landing = () => (
         </motion.button>
       </Link>
     </section>
-
-    <FloatingChat />
   </div>
 );
 

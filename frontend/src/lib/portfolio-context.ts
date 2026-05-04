@@ -11,6 +11,18 @@ type SavedPortfolioLike = {
   livePrices?: Record<string, number>;
 };
 
+function normalizeWeights(weights: number[]): number[] {
+  const cleaned = weights.map((weight) => (Number.isFinite(weight) && weight > 0 ? weight : 0));
+  const total = cleaned.reduce((sum, weight) => sum + weight, 0);
+  if (total <= 0) return cleaned;
+  return cleaned.map((weight) => weight / total);
+}
+
+function sameTickerSet(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  return a.every((ticker, index) => ticker.toUpperCase() === b[index]?.toUpperCase());
+}
+
 function parsePositiveNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? ''));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -52,18 +64,24 @@ export function buildChatPortfolioContext(): ChatPortfolioContext | undefined {
     const portfolioWeights = derivePortfolioWeights(portfolioHoldings, rawPortfolio?.livePrices);
 
     const analysisTickers: string[] = Array.isArray(rawAnalysis?.tickers) ? rawAnalysis.tickers : [];
-    const analysisWeights: number[] = Array.isArray(rawAnalysis?.weights) ? rawAnalysis.weights : [];
+    const analysisWeightsRaw: number[] = Array.isArray(rawAnalysis?.weights) ? rawAnalysis.weights : [];
+    const analysisWeights = normalizeWeights(analysisWeightsRaw.map((weight) => Number(weight) || 0));
     const metrics = rawAnalysis?.metrics || {};
     const latestPrices: Record<string, number> = rawAnalysis?.latest_prices || rawPortfolio?.livePrices || {};
 
-    const holdings = analysisTickers.length > 0
+    const portfolioTickers = portfolioHoldings.map((holding) => holding.ticker.toUpperCase());
+    const useAnalysisHoldings = analysisTickers.length > 0
+      && analysisWeights.length === analysisTickers.length
+      && (portfolioTickers.length === 0 || sameTickerSet(analysisTickers, portfolioTickers));
+
+    const holdings = useAnalysisHoldings
       ? analysisTickers.map((ticker, index) => ({
-          ticker,
+          ticker: ticker.toUpperCase(),
           weight: analysisWeights[index] ?? 1 / analysisTickers.length,
-          currentPrice: latestPrices[ticker] ?? 0,
+          currentPrice: latestPrices[ticker.toUpperCase()] ?? 0,
         }))
       : portfolioHoldings.map((holding, index) => ({
-          ticker: holding.ticker,
+          ticker: holding.ticker.toUpperCase(),
           weight: portfolioWeights[index] ?? 1 / Math.max(portfolioHoldings.length, 1),
           currentPrice: latestPrices[holding.ticker.toUpperCase()] ?? 0,
         }));

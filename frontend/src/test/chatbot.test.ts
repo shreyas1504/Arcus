@@ -86,6 +86,31 @@ describe('chatbot portfolio context', () => {
     expect(context?.investorProfile.riskTolerance).toBe('Growth');
   });
 
+  it('falls back to current saved holdings when cached analysis tickers do not match', () => {
+    localStorage.setItem('arcus-last-analysis', JSON.stringify({
+      tickers: ['AAPL', 'MSFT'],
+      weights: [0.9, 0.9],
+      latest_prices: { AAPL: 210.12, MSFT: 401.55 },
+      metrics: { health_score: 82, sharpe: 1.46, var_95: -0.031, cvar_95: -0.044, beta: 1.08, max_drawdown: -0.18, annualized_return: 0.16, volatility: 0.19 },
+    }));
+    localStorage.setItem('arcus-investor-dna', JSON.stringify({
+      risk_tolerance: 'Growth',
+      target_return: 0.15,
+    }));
+    localStorage.setItem('arcus-portfolio', JSON.stringify({
+      holdings: [
+        { ticker: 'TSLA', shares: '10', cost: '200' },
+        { ticker: 'AMZN', shares: '5', cost: '200' },
+        { ticker: 'NKE', shares: '5', cost: '100' },
+      ],
+      livePrices: { TSLA: 250, AMZN: 180, NKE: 100 },
+    }));
+
+    const context = buildChatPortfolioContext();
+    expect(context?.holdings.map((holding) => holding.ticker)).toEqual(['TSLA', 'AMZN', 'NKE']);
+    expect(context?.holdings.reduce((sum, holding) => sum + holding.weight, 0)).toBeCloseTo(1, 6);
+  });
+
   it('falls back to saved holdings when no analysis is cached', () => {
     localStorage.setItem('arcus-investor-dna', JSON.stringify({
       risk_tolerance: 'Moderate',
@@ -158,10 +183,10 @@ describe('chat launcher flow', () => {
 
     openArcusChat('  Explain my Sharpe ratio  ');
 
-    expect(sessionStorage.getItem('arcus-chat-pending-message')).toBe('Explain my Sharpe ratio');
     expect(handler).toHaveBeenCalledTimes(1);
     const event = handler.mock.calls[0][0] as CustomEvent<{ message: string }>;
     expect(event.detail.message).toBe('Explain my Sharpe ratio');
+    expect(consumePendingArcusChatMessage()).toBe('');
 
     window.removeEventListener(ARCUS_CHAT_EVENT, handler);
   });
@@ -331,6 +356,69 @@ describe('chat API behavior', () => {
     expect(result.reply).toContain('Sharpe Ratio');
     expect(result.reply).toContain('Your Sharpe is **1.24**');
     expect(result.reply).toContain('holding is hurting Sharpe the most');
+  });
+
+  it('returns ticker-specific guidance for single-ticker prompts when live APIs fail', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 404 } as Response);
+
+    const result = await sendChatMessage('tsla', {
+      holdings: [
+        { ticker: 'TSLA', weight: 0.25, currentPrice: 250 },
+        { ticker: 'AMZN', weight: 0.20, currentPrice: 180 },
+        { ticker: 'NKE', weight: 0.20, currentPrice: 100 },
+      ],
+      metrics: {
+        healthScore: 37,
+        sharpe: 0.43,
+        var95: -0.031,
+        cvar: -0.041,
+        beta: 1.3,
+        maxDrawdown: -0.22,
+        annualizedReturn: 0.175,
+        volatility: 0.31,
+      },
+      investorProfile: { riskTolerance: 'Aggressive', targetReturn: 0.15 },
+    });
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('TSLA Snapshot');
+    expect(result.reply).toContain('25%');
+    expect(result.reply).not.toContain('Current Portfolio Summary');
+  });
+
+  it('returns suggestion guidance for suggest-style prompts when live APIs fail', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 } as Response)
+      .mockResolvedValueOnce({ ok: false, status: 404 } as Response);
+
+    const result = await sendChatMessage('suggest', {
+      holdings: [
+        { ticker: 'TSLA', weight: 0.25, currentPrice: 250 },
+        { ticker: 'AMZN', weight: 0.20, currentPrice: 180 },
+        { ticker: 'NKE', weight: 0.20, currentPrice: 100 },
+        { ticker: 'HD', weight: 0.18, currentPrice: 345 },
+        { ticker: 'SBUX', weight: 0.09, currentPrice: 92 },
+        { ticker: 'MCD', weight: 0.08, currentPrice: 285 },
+      ],
+      metrics: {
+        healthScore: 37,
+        sharpe: 0.43,
+        var95: -0.031,
+        cvar: -0.041,
+        beta: 1.3,
+        maxDrawdown: -0.22,
+        annualizedReturn: 0.175,
+        volatility: 0.31,
+      },
+      investorProfile: { riskTolerance: 'Aggressive', targetReturn: 0.15 },
+    });
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('Suggestions Based on Current Portfolio');
+    expect(result.reply).not.toContain('Current Portfolio Summary');
+    expect(result.reply).not.toContain('117%');
   });
 
   it('extracts Sortino from the Ask AI prompt when cached context is missing that metric', async () => {

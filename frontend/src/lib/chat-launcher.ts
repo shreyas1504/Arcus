@@ -14,6 +14,7 @@ export function openArcusChat(message: string) {
 
   if (isOnChatRoute) {
     window.dispatchEvent(new CustomEvent(ARCUS_CHAT_EVENT, { detail: { message: trimmed } }));
+    sessionStorage.removeItem(ARCUS_CHAT_PENDING_KEY);
     return;
   }
 

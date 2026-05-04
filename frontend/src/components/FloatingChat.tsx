@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, X, SendHorizontal, Zap, User } from 'lucide-react';
-import { sendChatMessage, ChatMessage, ChatPortfolioContext } from '@/lib/api';
+import { sendChatMessage, ChatMessage } from '@/lib/api';
 import { ARCUS_CHAT_EVENT, consumePendingArcusChatMessage } from '@/lib/chat-launcher';
 import { buildChatPortfolioContext } from '@/lib/portfolio-context';
 

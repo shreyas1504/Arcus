@@ -291,6 +291,11 @@ function topSectorSummary(ctx: ChatPortfolioContext) {
   return { topSector, topWeight };
 }
 
+function findTickerInMessage(message: string, ctx: ChatPortfolioContext) {
+  const words = message.toUpperCase().match(/[A-Z]{1,6}/g) || [];
+  return ctx.holdings.find((holding) => words.includes(holding.ticker));
+}
+
 function concentrationRiskLine(ctx: ChatPortfolioContext) {
   const topHolding = [...ctx.holdings].sort((a, b) => b.weight - a.weight)[0];
   if (!topHolding) return 'No holdings are available in the current portfolio context.';
@@ -325,9 +330,20 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   const hydratedCtx = withMessageDerivedMetrics(message, ctx);
   const { metrics } = hydratedCtx;
   const { topSector, topWeight } = topSectorSummary(hydratedCtx);
+  const matchedHolding = findTickerInMessage(message, hydratedCtx);
 
   if (msg.includes('summary') || msg.includes('overview') || msg.includes('current portfolio')) {
     return buildSummaryResponse(hydratedCtx);
+  }
+
+  if (matchedHolding) {
+    const sector = TICKER_SECTOR_MAP[matchedHolding.ticker] ?? 'Other';
+    const concentrationView = matchedHolding.weight >= 0.2 ? 'one of your key exposures' : 'a smaller supporting position';
+    return `**${matchedHolding.ticker} Snapshot**\n\n- **${matchedHolding.ticker}** is about **${fmtPct(matchedHolding.weight, 0)}** of your portfolio, which makes it ${concentrationView}.\n- Sector: **${sector}**\n- Current price in context: **$${fmtNum(matchedHolding.currentPrice)}**\n- If you are asking about risk, compare this holding against portfolio beta **${fmtNum(metrics.beta)}** and volatility **${fmtPct(metrics.volatility)}**.\n\nNext step: ask whether you should trim, hold, or add to ${matchedHolding.ticker}.`;
+  }
+
+  if (msg.includes('suggest') || msg.includes('recommend') || msg.includes('what should i do')) {
+    return `**Suggestions Based on Current Portfolio**\n\n- ${concentrationRiskLine(hydratedCtx)}\n- Your health score is **${Math.round(metrics.healthScore)}/100**, with Sharpe **${fmtNum(metrics.sharpe)}** and volatility **${fmtPct(metrics.volatility)}**.\n- The clearest first action is usually trimming the biggest concentration source and adding a lower-correlation holding if your goal is smoother risk-adjusted returns.\n\nNext step: ask for 3 specific portfolio changes and I’ll suggest them in order.`;
   }
 
   if (msg.includes('sharpe')) {
@@ -344,7 +360,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('information ratio')) {
-    return `**Information Ratio**\n\n- Your information ratio is **${fmtNum((ctx.metrics as any).informationRatio ?? (ctx.metrics as any).information_ratio)}**.\n- This measures how consistently the portfolio has outperformed its benchmark per unit of tracking error.\n- Higher is better; low or negative values mean excess return has not been especially reliable.\n\nNext step: compare it against alpha to judge consistency versus magnitude.`;
+    return `**Information Ratio**\n\n- Your information ratio is **${fmtNum((hydratedCtx.metrics as any).informationRatio ?? (hydratedCtx.metrics as any).information_ratio)}**.\n- This measures how consistently the portfolio has outperformed its benchmark per unit of tracking error.\n- Higher is better; low or negative values mean excess return has not been especially reliable.\n\nNext step: compare it against alpha to judge consistency versus magnitude.`;
   }
 
   if (msg.includes('var') || msg.includes('value at risk')) {
@@ -352,7 +368,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('cvar') || msg.includes('expected shortfall')) {
-    return `**CVaR / Expected Shortfall**\n\n- Your CVaR is **${fmtPct(metrics.cvar)}**.\n- CVaR looks beyond the VaR cutoff and estimates the average loss on the worst days, so it is the better measure of extreme downside.\n- Since your VaR is **${fmtPct(metrics.var95)}**, the gap between VaR and CVaR shows how nasty the tail gets once losses move beyond the initial threshold.\n\nNext step: ask whether your tail risk is acceptable for a ${ctx.investorProfile.riskTolerance.toLowerCase()} investor.`;
+    return `**CVaR / Expected Shortfall**\n\n- Your CVaR is **${fmtPct(metrics.cvar)}**.\n- CVaR looks beyond the VaR cutoff and estimates the average loss on the worst days, so it is the better measure of extreme downside.\n- Since your VaR is **${fmtPct(metrics.var95)}**, the gap between VaR and CVaR shows how nasty the tail gets once losses move beyond the initial threshold.\n\nNext step: ask whether your tail risk is acceptable for a ${hydratedCtx.investorProfile.riskTolerance.toLowerCase()} investor.`;
   }
 
   if (msg.includes('drawdown')) {
@@ -365,7 +381,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('volatility')) {
-    return `**Volatility**\n\n- Your annualized volatility is **${fmtPct(metrics.volatility)}**.\n- That is the size of the portfolio’s typical swings over time, not the direction.\n- Combined with Sharpe **${fmtNum(metrics.sharpe)}**, this tells you whether the swings are being rewarded well enough.\n\nNext step: ask whether your volatility is high or low for a ${ctx.investorProfile.riskTolerance.toLowerCase()} investor.`;
+    return `**Volatility**\n\n- Your annualized volatility is **${fmtPct(metrics.volatility)}**.\n- That is the size of the portfolio’s typical swings over time, not the direction.\n- Combined with Sharpe **${fmtNum(metrics.sharpe)}**, this tells you whether the swings are being rewarded well enough.\n\nNext step: ask whether your volatility is high or low for a ${hydratedCtx.investorProfile.riskTolerance.toLowerCase()} investor.`;
   }
 
   if (msg.includes('calmar')) {
@@ -373,7 +389,7 @@ function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   }
 
   if (msg.includes('annualized return') || msg.includes('return')) {
-    return `**Annualized Return**\n\n- Your annualized return is **${fmtPct(metrics.annualizedReturn)}** versus a target of **${fmtPct(ctx.investorProfile.targetReturn)}**.\n- That means you are ${metrics.annualizedReturn != null && metrics.annualizedReturn >= ctx.investorProfile.targetReturn ? 'meeting or beating' : 'below'} your stated return target.\n- The key question is whether that return is coming with acceptable risk, which is where Sharpe **${fmtNum(metrics.sharpe)}** and drawdown **${fmtPct(metrics.maxDrawdown)}** matter.\n\nNext step: ask whether the return is strong enough for the risk you are taking.`;
+    return `**Annualized Return**\n\n- Your annualized return is **${fmtPct(metrics.annualizedReturn)}** versus a target of **${fmtPct(hydratedCtx.investorProfile.targetReturn)}**.\n- That means you are ${metrics.annualizedReturn != null && metrics.annualizedReturn >= hydratedCtx.investorProfile.targetReturn ? 'meeting or beating' : 'below'} your stated return target.\n- The key question is whether that return is coming with acceptable risk, which is where Sharpe **${fmtNum(metrics.sharpe)}** and drawdown **${fmtPct(metrics.maxDrawdown)}** matter.\n\nNext step: ask whether the return is strong enough for the risk you are taking.`;
   }
 
   if (msg.includes('p/e') || msg.includes('overvalued') || msg.includes('valuation')) {
