@@ -1,3 +1,5 @@
+import { TICKER_SECTOR_MAP } from '@/lib/mock-data';
+
 // In production (Vercel / GitHub Pages), use Render backend; locally, use localhost
 const BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
@@ -77,6 +79,8 @@ export interface ChatPortfolioContext {
   investorProfile: { riskTolerance: string; targetReturn: number };
 }
 
+type ChatContextLike = ChatPortfolioContext | Record<string, unknown> | undefined;
+
 export const sendChatMessage = async (
   message: string,
   portfolioContext?: ChatPortfolioContext | object,
@@ -132,9 +136,9 @@ export const sendChatMessage = async (
     }
 
     // All endpoints failed — use offline fallback
-    return { reply: getOfflineResponse(message), fallback: true, status503: saw503 };
+    return { reply: getOfflineResponse(message, portfolioContext), fallback: true, status503: saw503 };
   } catch (err) {
-    return { reply: getOfflineResponse(message), fallback: true };
+    return { reply: getOfflineResponse(message, portfolioContext), fallback: true };
   }
 };
 
@@ -158,9 +162,190 @@ export async function getStockPrice(ticker: string) {
   };
 }
 
-// ── Offline AI fallback ──────────────────────────────────────────────────
-function getOfflineResponse(message: string): string {
+function normalizeChatContext(portfolioContext?: ChatContextLike): ChatPortfolioContext | null {
+  if (!portfolioContext || typeof portfolioContext !== 'object') return null;
+  const raw = portfolioContext as Record<string, any>;
+  const holdingsRaw = Array.isArray(raw.holdings) ? raw.holdings : [];
+  const metricsRaw = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {};
+  const investorRaw = raw.investorProfile && typeof raw.investorProfile === 'object' ? raw.investorProfile : {};
+
+  const holdings = holdingsRaw
+    .filter((holding) => holding && typeof holding === 'object' && holding.ticker)
+    .map((holding) => ({
+      ticker: String(holding.ticker).toUpperCase(),
+      weight: Number(holding.weight) || 0,
+      currentPrice: Number(holding.currentPrice) || 0,
+    }));
+
+  return {
+    holdings,
+    metrics: {
+      healthScore: Number(metricsRaw.healthScore) || 0,
+      sharpe: Number(metricsRaw.sharpe) || 0,
+      var95: Number(metricsRaw.var95) || 0,
+      cvar: Number(metricsRaw.cvar) || 0,
+      beta: Number(metricsRaw.beta) || 0,
+      maxDrawdown: Number(metricsRaw.maxDrawdown) || 0,
+      annualizedReturn: metricsRaw.annualizedReturn != null ? Number(metricsRaw.annualizedReturn) : undefined,
+      volatility: metricsRaw.volatility != null ? Number(metricsRaw.volatility) : undefined,
+      sortino: metricsRaw.sortino != null ? Number(metricsRaw.sortino) : undefined,
+      alpha: metricsRaw.alpha != null ? Number(metricsRaw.alpha) : undefined,
+    },
+    investorProfile: {
+      riskTolerance: String(investorRaw.riskTolerance || 'Moderate'),
+      targetReturn: Number(investorRaw.targetReturn) || 0.10,
+    },
+  };
+}
+
+function fmtPct(value?: number, digits = 1) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function fmtNum(value?: number, digits = 2) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  return value.toFixed(digits);
+}
+
+function topHoldingsSummary(ctx: ChatPortfolioContext) {
+  return [...ctx.holdings]
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 3)
+    .map((holding) => `${holding.ticker} ${fmtPct(holding.weight, 0)}`)
+    .join(', ');
+}
+
+function topSectorSummary(ctx: ChatPortfolioContext) {
+  const sectors = ctx.holdings.reduce<Record<string, number>>((acc, holding) => {
+    const sector = TICKER_SECTOR_MAP[holding.ticker] ?? 'Other';
+    acc[sector] = (acc[sector] || 0) + holding.weight;
+    return acc;
+  }, {});
+  const [topSector, topWeight] = Object.entries(sectors).sort((a, b) => b[1] - a[1])[0] || ['Other', 0];
+  return { topSector, topWeight };
+}
+
+function concentrationRiskLine(ctx: ChatPortfolioContext) {
+  const topHolding = [...ctx.holdings].sort((a, b) => b.weight - a.weight)[0];
+  if (!topHolding) return 'No holdings are available in the current portfolio context.';
+  if (topHolding.weight >= 0.35) {
+    return `Your biggest concentration risk is **${topHolding.ticker}** at roughly ${fmtPct(topHolding.weight, 0)} of the portfolio.`;
+  }
+  return `Your largest holding is **${topHolding.ticker}** at about ${fmtPct(topHolding.weight, 0)}, which is not extreme on its own but is still the first position to watch.`;
+}
+
+function buildSummaryResponse(ctx: ChatPortfolioContext) {
+  const { topSector, topWeight } = topSectorSummary(ctx);
+  const healthBand = ctx.metrics.healthScore >= 70 ? 'healthy' : ctx.metrics.healthScore >= 40 ? 'mixed' : 'fragile';
+  return [
+    `**Current Portfolio Summary**`,
+    ``,
+    `- Health Score: **${Math.round(ctx.metrics.healthScore)}/100** (${healthBand})`,
+    `- Sharpe: **${fmtNum(ctx.metrics.sharpe)}**`,
+    `- Annualized Return: **${fmtPct(ctx.metrics.annualizedReturn)}**`,
+    `- Volatility: **${fmtPct(ctx.metrics.volatility)}**`,
+    `- Beta: **${fmtNum(ctx.metrics.beta)}**`,
+    `- Top holdings: **${topHoldingsSummary(ctx) || 'n/a'}**`,
+    `- Largest sector tilt: **${topSector} ${fmtPct(topWeight, 0)}**`,
+    ``,
+    `Main takeaway: ${concentrationRiskLine(ctx).replace(/^Your /, 'your ')}`,
+    ``,
+    `Next step: ask which metric or holding you want to drill into first.`,
+  ].join('\n');
+}
+
+function buildMetricResponse(message: string, ctx: ChatPortfolioContext) {
   const msg = message.toLowerCase();
+  const { metrics } = ctx;
+  const { topSector, topWeight } = topSectorSummary(ctx);
+
+  if (msg.includes('summary') || msg.includes('overview') || msg.includes('current portfolio')) {
+    return buildSummaryResponse(ctx);
+  }
+
+  if (msg.includes('sharpe')) {
+    const verdict = metrics.sharpe >= 1.5 ? 'strong' : metrics.sharpe >= 1 ? 'decent' : metrics.sharpe >= 0 ? 'weak' : 'poor';
+    return `**Sharpe Ratio**\n\n- Your Sharpe is **${fmtNum(metrics.sharpe)}**, which is a **${verdict}** level of risk-adjusted return.\n- This means the portfolio is generating ${verdict === 'poor' ? 'too little' : 'a reasonable amount of'} return for the volatility it takes.\n- With annualized return **${fmtPct(metrics.annualizedReturn)}** and volatility **${fmtPct(metrics.volatility)}**, the main way to improve Sharpe is usually trimming concentrated high-volatility exposure.\n\nNext step: ask which holding is hurting Sharpe the most.`;
+  }
+
+  if (msg.includes('sortino')) {
+    return `**Sortino Ratio**\n\n- Your Sortino ratio is **${fmtNum(metrics.sortino)}**.\n- Sortino focuses only on downside volatility, so it tells you how efficiently the portfolio is handling bad risk rather than all volatility.\n- If Sortino is materially better than Sharpe, upside swings are not the main issue; downside protection is holding up better.\n\nNext step: compare Sortino and Sharpe together to see whether downside risk is your main problem.`;
+  }
+
+  if (msg.includes('alpha')) {
+    return `**Alpha**\n\n- Your portfolio alpha is **${fmtPct(metrics.alpha)}**.\n- Positive alpha means you have outperformed what your market exposure alone would suggest; negative alpha means the portfolio has lagged that hurdle.\n- Read this alongside beta **${fmtNum(metrics.beta)}** so you separate stock selection from plain market risk.\n\nNext step: ask whether the alpha looks persistent or just market-driven.`;
+  }
+
+  if (msg.includes('information ratio')) {
+    return `**Information Ratio**\n\n- Your information ratio is **${fmtNum((ctx.metrics as any).informationRatio ?? (ctx.metrics as any).information_ratio)}**.\n- This measures how consistently the portfolio has outperformed its benchmark per unit of tracking error.\n- Higher is better; low or negative values mean excess return has not been especially reliable.\n\nNext step: compare it against alpha to judge consistency versus magnitude.`;
+  }
+
+  if (msg.includes('var') || msg.includes('value at risk')) {
+    return `**Value at Risk (95%)**\n\n- Your VaR is **${fmtPct(metrics.var95)}**.\n- In plain terms, on a rough day in the worst 5% range, the portfolio can reasonably lose around that amount or more.\n- Your CVaR is **${fmtPct(metrics.cvar)}**, which is the average of those worst outcomes and gives the better tail-risk read.\n\nNext step: ask which holdings are driving tail risk the most.`;
+  }
+
+  if (msg.includes('cvar') || msg.includes('expected shortfall')) {
+    return `**CVaR / Expected Shortfall**\n\n- Your CVaR is **${fmtPct(metrics.cvar)}**.\n- CVaR looks beyond the VaR cutoff and estimates the average loss on the worst days, so it is the better measure of extreme downside.\n- Since your VaR is **${fmtPct(metrics.var95)}**, the gap between VaR and CVaR shows how nasty the tail gets once losses move beyond the initial threshold.\n\nNext step: ask whether your tail risk is acceptable for a ${ctx.investorProfile.riskTolerance.toLowerCase()} investor.`;
+  }
+
+  if (msg.includes('drawdown')) {
+    return `**Maximum Drawdown**\n\n- Your max drawdown is **${fmtPct(metrics.maxDrawdown)}**.\n- That is the deepest peak-to-trough loss the portfolio profile implies, and it is the best gut-check for how painful a bad stretch can feel.\n- Pair it with beta **${fmtNum(metrics.beta)}** and volatility **${fmtPct(metrics.volatility)}** to judge whether the portfolio is taking more pain than you want.\n\nNext step: ask how to reduce drawdown without killing return.`;
+  }
+
+  if (msg.includes('beta') || msg.includes('market risk')) {
+    const betaView = metrics.beta > 1.2 ? 'more sensitive to market swings than the market itself' : metrics.beta < 0.9 ? 'more defensive than the market' : 'moving broadly in line with the market';
+    return `**Beta**\n\n- Your beta is **${fmtNum(metrics.beta)}**.\n- That means the portfolio is **${betaView}**.\n- If the market drops sharply, higher-beta holdings usually do the most damage first.\n\nNext step: ask which positions are likely pushing beta up.`;
+  }
+
+  if (msg.includes('volatility')) {
+    return `**Volatility**\n\n- Your annualized volatility is **${fmtPct(metrics.volatility)}**.\n- That is the size of the portfolio’s typical swings over time, not the direction.\n- Combined with Sharpe **${fmtNum(metrics.sharpe)}**, this tells you whether the swings are being rewarded well enough.\n\nNext step: ask whether your volatility is high or low for a ${ctx.investorProfile.riskTolerance.toLowerCase()} investor.`;
+  }
+
+  if (msg.includes('calmar')) {
+    return `**Calmar Ratio**\n\n- Your Calmar ratio is **${fmtNum((ctx.metrics as any).calmar ?? (ctx.metrics as any).calmar_ratio)}**.\n- Calmar compares return to maximum drawdown, so it is useful when you care more about deep losses than about day-to-day noise.\n- If Calmar is weak while return looks fine, the portfolio may be earning return in an uncomfortably painful way.\n\nNext step: compare Calmar with Sharpe to see whether drawdowns are the main weakness.`;
+  }
+
+  if (msg.includes('annualized return') || msg.includes('return')) {
+    return `**Annualized Return**\n\n- Your annualized return is **${fmtPct(metrics.annualizedReturn)}** versus a target of **${fmtPct(ctx.investorProfile.targetReturn)}**.\n- That means you are ${metrics.annualizedReturn != null && metrics.annualizedReturn >= ctx.investorProfile.targetReturn ? 'meeting or beating' : 'below'} your stated return target.\n- The key question is whether that return is coming with acceptable risk, which is where Sharpe **${fmtNum(metrics.sharpe)}** and drawdown **${fmtPct(metrics.maxDrawdown)}** matter.\n\nNext step: ask whether the return is strong enough for the risk you are taking.`;
+  }
+
+  if (msg.includes('p/e') || msg.includes('overvalued') || msg.includes('valuation')) {
+    return `**Valuation View**\n\n- I can comment on valuation only if weighted valuation metrics are available in the current analysis.\n- From the portfolio context I have here, the stronger practical signal is still concentration: ${concentrationRiskLine(ctx)}\n- If you want a valuation-specific read, ask from the Results page after the latest analysis has loaded.\n\nNext step: ask whether your largest holdings look too concentrated for their valuation risk.`;
+  }
+
+  if (msg.includes('stress') || msg.includes('crash') || msg.includes('2008') || msg.includes('covid') || msg.includes('rate hike') || msg.includes('dot-com')) {
+    return `**Stress and Crash Read**\n\n- Your portfolio beta of **${fmtNum(metrics.beta)}** suggests stress losses would likely be around market-scale or larger if beta stays above 1.\n- VaR **${fmtPct(metrics.var95)}** and max drawdown **${fmtPct(metrics.maxDrawdown)}** already tell us the downside profile is not trivial.\n- ${concentrationRiskLine(ctx)}\n\nNext step: ask which defensive allocation would reduce crash sensitivity most.`;
+  }
+
+  if (msg.includes('sector') || msg.includes('correlation') || msg.includes('diversification') || msg.includes('concentration') || msg.includes('risk attribution')) {
+    return `**Risk Intelligence**\n\n- Your largest sector tilt is **${topSector} ${fmtPct(topWeight, 0)}**.\n- ${concentrationRiskLine(ctx)}\n- If your biggest holding and biggest sector are the same theme, correlation risk is likely more important than the number of tickers alone.\n\nNext step: ask whether you are diversified by ticker count or by real economic exposure.`;
+  }
+
+  if (msg.includes('efficient frontier') || msg.includes('optimization') || msg.includes('rebalance') || msg.includes('weight')) {
+    return `**Optimization / Rebalancing**\n\n- The first rebalance candidate is usually the biggest concentration source, not every holding equally.\n- ${concentrationRiskLine(ctx)}\n- If Sharpe **${fmtNum(metrics.sharpe)}** is mediocre while beta **${fmtNum(metrics.beta)}** is elevated, trimming the top risk contributor is usually the cleanest first move.\n\nNext step: ask which exact holding I would trim first and why.`;
+  }
+
+  if (msg.includes('monte carlo') || msg.includes('simulation') || msg.includes('future') || msg.includes('projection')) {
+    return `**Simulation / Forward-Looking Read**\n\n- Your return profile of **${fmtPct(metrics.annualizedReturn)}** and volatility of **${fmtPct(metrics.volatility)}** imply a decent expected path, but with meaningful dispersion if volatility stays elevated.\n- The wider the volatility band, the less confidence you should have in any single forecast.\n- ${concentrationRiskLine(ctx)}\n\nNext step: ask whether the current return target looks realistic under your volatility level.`;
+  }
+
+  if (msg.includes('market mood') || msg.includes('watch for')) {
+    return `**What to Watch Right Now**\n\n- Watch your biggest position first: ${concentrationRiskLine(ctx)}\n- Watch overall market sensitivity through beta **${fmtNum(metrics.beta)}**.\n- Watch whether volatility **${fmtPct(metrics.volatility)}** is being rewarded by Sharpe **${fmtNum(metrics.sharpe)}**.\n\nNext step: ask for the top 3 live risks in priority order.`;
+  }
+
+  return '';
+}
+
+// ── Offline AI fallback ──────────────────────────────────────────────────
+function getOfflineResponse(message: string, portfolioContext?: ChatContextLike): string {
+  const msg = message.toLowerCase();
+  const ctx = normalizeChatContext(portfolioContext);
+
+  if (ctx) {
+    const contextualReply = buildMetricResponse(message, ctx);
+    if (contextualReply) return contextualReply;
+  }
 
   if (msg.includes('sharpe') || msg.includes('ratio')) {
     return "**Sharpe Ratio** measures risk-adjusted return — how much return you're getting per unit of risk.\n\n• **Above 1.0** — Good. You're being compensated for the risk.\n• **Above 2.0** — Excellent. Institutional-quality returns.\n• **Below 0** — A savings account would have beaten you.\n\nIt's calculated as: (Portfolio Return − Risk-Free Rate) ÷ Portfolio Volatility, annualised. The risk-free rate used is typically the 10-year Treasury yield (~4%).";
@@ -192,6 +377,10 @@ function getOfflineResponse(message: string): string {
 
   if (msg.includes('health') || msg.includes('score')) {
     return "**Portfolio Health Score (0-100)** is a weighted composite of four risk metrics:\n\n• **Sharpe Ratio** (40 points) — Risk-adjusted return quality\n• **Value at Risk** (25 points) — Downside risk exposure\n• **Volatility** (20 points) — Overall price swing magnitude\n• **Concentration** (15 points) — Diversification of holdings\n\nScoring: **70+** = Healthy (green), **40-70** = Needs attention (yellow), **Below 40** = Concern (red).";
+  }
+
+  if (ctx) {
+    return buildSummaryResponse(ctx);
   }
 
   return "I'm **Arcus AI**, your portfolio analytics assistant. I can explain any metric you see on the dashboard.\n\nTry asking about:\n• **Sharpe Ratio** — Risk-adjusted returns\n• **Portfolio Risk** — VaR, volatility, drawdowns\n• **Stress Testing** — Historical crash scenarios\n• **Monte Carlo** — Future projections\n• **Sector Diversification** — Concentration analysis\n• **Health Score** — Overall portfolio quality\n\n💡 *AI is temporarily connecting. Try asking a specific question about your portfolio metrics.*";

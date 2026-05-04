@@ -224,6 +224,81 @@ describe('chat API behavior', () => {
     expect(result.reply).toContain('Sharpe Ratio');
   });
 
+  it('returns a portfolio-specific summary when the user asks for a current portfolio overview and live APIs fail', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response);
+
+    const result = await sendChatMessage('Give summary of my current portfolio', {
+      holdings: [
+        { ticker: 'AAPL', weight: 0.5, currentPrice: 200 },
+        { ticker: 'MSFT', weight: 0.3, currentPrice: 400 },
+        { ticker: 'VOO', weight: 0.2, currentPrice: 500 },
+      ],
+      metrics: {
+        healthScore: 72,
+        sharpe: 1.24,
+        var95: -0.028,
+        cvar: -0.041,
+        beta: 1.07,
+        maxDrawdown: -0.18,
+        annualizedReturn: 0.14,
+        volatility: 0.19,
+      },
+      investorProfile: { riskTolerance: 'Moderate', targetReturn: 0.1 },
+    });
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('Current Portfolio Summary');
+    expect(result.reply).toContain('Health Score: **72/100**');
+    expect(result.reply).toContain('Top holdings: **AAPL 50%, MSFT 30%, VOO 20%**');
+  });
+
+  it('returns a metric-specific portfolio answer for Ask AI prompts when live APIs fail', async () => {
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      } as Response);
+
+    const result = await sendChatMessage(
+      'My Sharpe ratio is 1.24. Explain what this means in simple terms and whether it is good or bad for my portfolio.',
+      {
+        holdings: [
+          { ticker: 'NVDA', weight: 0.4, currentPrice: 900 },
+          { ticker: 'MSFT', weight: 0.35, currentPrice: 400 },
+          { ticker: 'VOO', weight: 0.25, currentPrice: 500 },
+        ],
+        metrics: {
+          healthScore: 68,
+          sharpe: 1.24,
+          var95: -0.031,
+          cvar: -0.045,
+          beta: 1.19,
+          maxDrawdown: -0.22,
+          annualizedReturn: 0.15,
+          volatility: 0.21,
+        },
+        investorProfile: { riskTolerance: 'Growth', targetReturn: 0.15 },
+      },
+    );
+
+    expect(result.fallback).toBe(true);
+    expect(result.reply).toContain('Sharpe Ratio');
+    expect(result.reply).toContain('Your Sharpe is **1.24**');
+    expect(result.reply).toContain('holding is hurting Sharpe the most');
+  });
+
   it('returns offline guidance when fetch throws unexpectedly', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('network down'));
 
