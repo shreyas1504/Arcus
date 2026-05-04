@@ -103,14 +103,14 @@ class handler(BaseHTTPRequestHandler):
         conversation_history = data.get("conversation_history", [])
         portfolio_context = data.get("portfolio_context")
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("NVIDIA_API_KEY")
 
         if not api_key:
             self.send_response(503)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({
-                "error": "ANTHROPIC_API_KEY not configured",
+                "error": "NVIDIA_API_KEY not configured",
                 "fallback": True
             }).encode())
             return
@@ -119,22 +119,34 @@ class handler(BaseHTTPRequestHandler):
         system_prompt = _build_system_prompt(portfolio_context)
 
         # Build messages
-        messages = []
+        messages = [{"role": "system", "content": system_prompt}]
         for msg in conversation_history:
             role = "assistant" if msg.get("role") == "assistant" else "user"
             messages.append({"role": role, "content": msg.get("content", "")})
         messages.append({"role": "user", "content": message})
 
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=1024,
-                system=system_prompt,
-                messages=messages,
-            )
-            reply = response.content[0].text
+            import urllib.request
+            
+            url = "https://integrate.api.nvidia.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "model": "minimaxai/minimax-m2.7",
+                "messages": messages,
+                "temperature": 1,
+                "top_p": 0.95,
+                "max_tokens": 8192,
+                "stream": False
+            }
+            
+            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+            with urllib.request.urlopen(req) as response:
+                res_body = response.read()
+                res_json = json.loads(res_body)
+                reply = res_json["choices"][0]["message"]["content"]
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
