@@ -8,11 +8,11 @@ interface BackButtonProps {
 }
 
 const BackButton = ({ to, label = 'Back' }: BackButtonProps) => (
-  <Link to={to} className="inline-flex items-center gap-1.5 group mb-4">
-    <motion.div whileHover={{ x: -2 }} transition={{ type: 'spring', stiffness: 300 }}>
-      <ArrowLeft size={16} className="text-primary group-hover:text-foreground transition-colors" />
+  <Link to={to} className="inline-flex max-w-full items-center gap-1.5 group mb-4 -ml-1 rounded-lg px-1 py-1">
+    <motion.div className="flex h-4 w-4 flex-shrink-0 items-center justify-center" whileHover={{ x: -2 }} transition={{ type: 'spring', stiffness: 300 }}>
+      <ArrowLeft size={16} className="block text-primary group-hover:text-foreground transition-colors" />
     </motion.div>
-    <span className="font-display font-medium text-[13px] text-muted-foreground group-hover:text-foreground transition-colors">
+    <span className="min-w-0 truncate font-display font-medium text-[13px] text-muted-foreground group-hover:text-foreground transition-colors">
       {label}
     </span>
   </Link>

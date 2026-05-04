@@ -22,7 +22,7 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <NewsTicker />
-      <div className="flex pt-9 relative overflow-x-hidden">
+      <div className="flex pt-9 relative w-full min-w-0 overflow-x-hidden">
         {/* Mobile backdrop */}
         {isMobile && mobileOpen && (
           <div
@@ -40,7 +40,7 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
         />
 
         <div
-          className="flex-1 flex flex-col min-h-screen transition-all duration-300"
+          className="flex-1 min-w-0 w-full flex flex-col min-h-screen transition-all duration-300"
           style={{ marginLeft: isMobile ? 0 : (collapsed ? 64 : 220) }}
         >
           <TopBar
@@ -48,7 +48,7 @@ const AppLayout = ({ children, title }: AppLayoutProps) => {
             onMenuClick={() => setMobileOpen(true)}
             isMobile={isMobile}
           />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1 min-w-0 w-full">{children}</main>
         </div>
       </div>
       {showFloatingChat && <FloatingChat />}

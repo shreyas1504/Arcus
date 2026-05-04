@@ -1,4 +1,4 @@
-import { Bell, User, Menu, Home, Settings, LogOut, UserCircle } from 'lucide-react';
+import { Bell, User, Menu, Settings, LogOut, UserCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import ArcusLogo from './ArcusLogo';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,20 +25,20 @@ const TopBar = ({ title, onMenuClick, isMobile }: TopBarProps) => {
   };
 
   return (
-    <header className="glass-navbar sticky top-0 z-30 h-[52px] flex items-center px-4 md:px-6 justify-between gap-3">
-      <div className="flex items-center gap-2 min-w-0">
+    <header className="glass-navbar sticky top-0 z-30 h-[52px] w-full max-w-full overflow-hidden flex items-center px-4 md:px-6 justify-between gap-2 sm:gap-3">
+      <div className="flex flex-1 items-center gap-2 min-w-0">
         {isMobile && (
           <>
             <button
               onClick={onMenuClick}
-              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 p-1"
+              className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 p-1 -ml-1"
               aria-label="Open menu"
             >
               <Menu size={20} />
             </button>
-            <Link to="/" className="flex items-center gap-1">
+            <Link to="/" className="flex items-center gap-1 min-w-0 flex-shrink-0">
               <ArcusLogo size={22} />
-              <span className="font-display font-extrabold text-foreground text-sm mr-1">Arcus</span>
+              <span className="font-display font-extrabold text-foreground text-sm mr-1 max-[360px]:hidden">Arcus</span>
             </Link>
           </>
         )}
@@ -46,11 +46,6 @@ const TopBar = ({ title, onMenuClick, isMobile }: TopBarProps) => {
       </div>
 
       <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-        {isMobile && (
-          <Link to="/" aria-label="Home" className="text-muted-foreground hover:text-primary transition-colors p-1">
-            <Home size={18} />
-          </Link>
-        )}
         <div className="hidden sm:flex glass-panel rounded-full px-3 py-1 items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-signal-green" />
           <span className="font-mono text-[10px] text-muted-foreground">SPY $512.40</span>
