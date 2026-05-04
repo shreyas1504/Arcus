@@ -1,26 +1,12 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Zap, SendHorizontal, MessageSquare } from 'lucide-react';
-import { MOCK_PORTFOLIO, MOCK_AI_RECOMMENDATIONS } from '@/lib/mock-data';
+import { MOCK_AI_RECOMMENDATIONS } from '@/lib/mock-data';
 import { openChatWithMessage } from './FloatingChat';
 import { useNavigate } from 'react-router-dom';
 
-const m = MOCK_PORTFOLIO.metrics;
-
 const tabs = ['Summary', 'Methodology', 'AI Analysis', 'Recommendations'] as const;
 type Tab = typeof tabs[number];
-
-const methodologyItems = [
-  { metric: 'Sharpe Ratio', formula: '(Portfolio Return − Risk-Free Rate) / Portfolio Volatility', plain: 'For every unit of risk you take, this is how much return you get.', result: `${m.sharpe.toFixed(2)} — above average (benchmark: ~1.0)` },
-  { metric: 'VaR (Value at Risk)', formula: 'Historical simulation at 95th percentile of daily return distribution', plain: "On 95% of days, you won't lose more than this amount.", result: `${(m.var_95 * 100).toFixed(1)}% — meaning -$3,200 on a $100K portfolio` },
-  { metric: 'CVaR (Expected Shortfall)', formula: 'Average of all returns below the VaR threshold', plain: "On your very worst days, this is what you'd typically lose.", result: `${(m.cvar_95 * 100).toFixed(1)}% — more conservative metric than VaR` },
-  { metric: 'Beta', formula: 'Covariance(portfolio, benchmark) / Variance(benchmark)', plain: 'How closely your portfolio moves with the S&P 500.', result: `${m.beta.toFixed(2)} — your portfolio moves close to the market` },
-  { metric: 'Max Drawdown', formula: '(Trough value − Peak value) / Peak value', plain: 'The biggest drop from a peak before recovery.', result: `${(m.max_drawdown * 100).toFixed(1)}%` },
-  { metric: 'Health Score', formula: 'Weighted composite of Sharpe, Drawdown, Diversification, VaR', plain: "Arcus's overall rating of your portfolio quality.", result: `${m.health_score}/100` },
-  { metric: 'Monte Carlo Simulation', formula: 'Geometric Brownian Motion — simulates thousands of return paths', plain: 'We run 1,000 versions of the future using your historical returns and volatility, then show you the range of likely outcomes.', result: '' },
-  { metric: 'Efficient Frontier', formula: 'Modern Portfolio Theory — Markowitz mean-variance optimization', plain: 'The curve showing every possible mix of your assets that gives the best return for a given level of risk.', result: '' },
-  { metric: 'Correlation Matrix', formula: 'Pearson correlation of daily returns between each pair of assets', plain: 'Shows which of your stocks move together. High correlation means less real diversification than you think.', result: '' },
-];
 
 const glossary = [
   { term: 'Sharpe Ratio', def: 'How much return you get per unit of risk. Higher is better.' },
@@ -33,7 +19,12 @@ const glossary = [
 
 const recCategories = ['RISK', 'ALLOCATION', 'VALUATION', 'PROJECTION'];
 
-const FullReport = () => {
+export interface FullReportProps {
+  metrics: any;
+  tickers?: string[];
+}
+
+const FullReport = ({ metrics: m, tickers = [] }: FullReportProps) => {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('Summary');
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -44,6 +35,21 @@ const FullReport = () => {
   const sendToChat = (message: string) => {
     openChatWithMessage.dispatchEvent(new CustomEvent('open', { detail: { message } }));
   };
+
+  const methodologyItems = [
+    { metric: 'Sharpe Ratio', formula: '(Portfolio Return − Risk-Free Rate) / Portfolio Volatility', plain: 'For every unit of risk you take, this is how much return you get.', result: `${m.sharpe?.toFixed(2)} — above average (benchmark: ~1.0)` },
+    { metric: 'VaR (Value at Risk)', formula: 'Historical simulation at 95th percentile of daily return distribution', plain: "On 95% of days, you won't lose more than this amount.", result: `${(m.var_95 * 100).toFixed(1)}% — meaning -$3,200 on a $100K portfolio` },
+    { metric: 'CVaR (Expected Shortfall)', formula: 'Average of all returns below the VaR threshold', plain: "On your very worst days, this is what you'd typically lose.", result: `${(m.cvar_95 * 100).toFixed(1)}% — more conservative metric than VaR` },
+    { metric: 'Beta', formula: 'Covariance(portfolio, benchmark) / Variance(benchmark)', plain: 'How closely your portfolio moves with the S&P 500.', result: `${m.beta?.toFixed(2)} — your portfolio moves close to the market` },
+    { metric: 'Max Drawdown', formula: '(Trough value − Peak value) / Peak value', plain: 'The biggest drop from a peak before recovery.', result: `${(m.max_drawdown * 100).toFixed(1)}%` },
+    { metric: 'Health Score', formula: 'Weighted composite of Sharpe, Drawdown, Diversification, VaR', plain: "Arcus's overall rating of your portfolio quality.", result: `${Math.round(m.health_score || m.healthScore || 0)}/100` },
+    { metric: 'Monte Carlo Simulation', formula: 'Geometric Brownian Motion — simulates thousands of return paths', plain: 'We run 1,000 versions of the future using your historical returns and volatility, then show you the range of likely outcomes.', result: '' },
+    { metric: 'Efficient Frontier', formula: 'Modern Portfolio Theory — Markowitz mean-variance optimization', plain: 'The curve showing every possible mix of your assets that gives the best return for a given level of risk.', result: '' },
+    { metric: 'Correlation Matrix', formula: 'Pearson correlation of daily returns between each pair of assets', plain: 'Shows which of your stocks move together. High correlation means less real diversification than you think.', result: '' },
+  ];
+
+  const topTicker = tickers.length > 0 ? tickers[0] : 'your largest holding';
+  const secondTicker = tickers.length > 1 ? tickers[1] : 'other assets';
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
@@ -110,8 +116,8 @@ const FullReport = () => {
                       <span className="text-sm font-semibold text-signal-amber">What to watch</span>
                     </div>
                     <ul className="space-y-1.5 text-sm text-foreground/85 leading-relaxed">
-                      <li>• NVDA makes up 41% of your total risk — if it drops, your whole portfolio feels it</li>
-                      <li>• Your portfolio has a Beta of {m.beta.toFixed(2)} — it moves with the market</li>
+                      <li>• {topTicker} makes up a significant portion of your total risk — if it drops, your whole portfolio feels it</li>
+                      <li>• Your portfolio has a Beta of {m.beta?.toFixed(2)} — it moves with the market</li>
                       <li>• In the worst 5% of days, you could lose {(m.cvar_95 * 100).toFixed(1)}% — that's your CVaR</li>
                     </ul>
                   </div>
@@ -122,7 +128,7 @@ const FullReport = () => {
                       <span className="text-sm font-semibold text-primary">Bottom line</span>
                     </div>
                     <p className="text-sm text-foreground/85 leading-relaxed">
-                      Overall you're in good shape, but consider trimming NVDA slightly and adding a defensive position to balance out the tech-heavy risk.
+                      Overall you're in good shape, but consider trimming {topTicker} slightly and adding a defensive position to balance out the risk.
                     </p>
                   </div>
 
@@ -184,10 +190,10 @@ const FullReport = () => {
                       <span className="font-mono text-[10px] uppercase tracking-wider text-primary">ARCUS AI ANALYSIS</span>
                     </div>
                     <div className="text-sm text-foreground/85 leading-[1.7] space-y-3">
-                      <p>Your portfolio shows a <span className="font-mono text-primary font-medium">Sharpe ratio of {m.sharpe.toFixed(2)}</span>, indicating strong risk-adjusted returns above the typical benchmark of 1.0. This means you're being well-compensated for the risk you're taking.</p>
-                      <p>However, concentration risk is your biggest concern. <span className="font-mono text-primary font-medium">NVDA contributes 34.2%</span> of total portfolio risk despite being only 20% of weight. This asymmetric risk contribution means a significant NVDA drawdown would disproportionately impact your returns.</p>
-                      <p>Your <span className="font-mono text-primary font-medium">Beta of {m.beta.toFixed(2)}</span> suggests the portfolio moves roughly in line with the market. Monte Carlo simulations show an <span className="font-mono text-primary font-medium">82% probability</span> of achieving your 15% annual return target over 12 months.</p>
-                      <p>Recommendation: Consider reducing NVDA to 15% and redistributing to VOO (25%) for improved diversification without significantly sacrificing returns.</p>
+                      <p>Your portfolio shows a <span className="font-mono text-primary font-medium">Sharpe ratio of {m.sharpe?.toFixed(2)}</span>, indicating strong risk-adjusted returns compared to typical benchmarks. This means you're being well-compensated for the risk you're taking.</p>
+                      <p>However, concentration risk should be monitored. <span className="font-mono text-primary font-medium">{topTicker}</span> contributes heavily to your total portfolio risk. This asymmetric risk contribution means a significant {topTicker} drawdown would disproportionately impact your returns.</p>
+                      <p>Your <span className="font-mono text-primary font-medium">Beta of {m.beta?.toFixed(2)}</span> suggests the portfolio moves roughly in line with the market. Our simulation models show a high probability of achieving moderate annual return targets.</p>
+                      <p>Recommendation: Consider ensuring your allocations are properly distributed. If {topTicker} exceeds 25% of your portfolio weight, consider taking profits and redistributing to {secondTicker} for improved diversification.</p>
                     </div>
                   </div>
                   <div className="glass-elevated rounded-lg flex items-center px-3 py-2">
