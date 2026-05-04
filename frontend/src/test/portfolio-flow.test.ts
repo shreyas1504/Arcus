@@ -75,6 +75,18 @@ describe('computePortfolioMetrics — risk-free rate from settings', () => {
     expect(m.sharpe).toBeGreaterThan(-5); // Not absurdly negative
     expect(m.sharpe).toBeLessThan(10);    // Not absurdly positive
   });
+
+  it('market benchmark changes benchmark-relative metrics', () => {
+    const tickers = ['AAPL', 'MSFT', 'NVDA'];
+    const spy = computePortfolioMetrics(tickers, [1, 1, 1], 0.04, 'SPY');
+    const qqq = computePortfolioMetrics(tickers, [1, 1, 1], 0.04, 'QQQ');
+    const vt = computePortfolioMetrics(tickers, [1, 1, 1], 0.04, 'VT');
+
+    expect(qqq.beta).not.toBe(spy.beta);
+    expect(vt.beta).not.toBe(spy.beta);
+    expect(qqq.alpha).not.toBe(spy.alpha);
+    expect(vt.alpha).not.toBe(spy.alpha);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

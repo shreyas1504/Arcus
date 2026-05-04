@@ -17,7 +17,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-const PerformanceChart = ({ data }: { data?: typeof MOCK_PERFORMANCE_DATA }) => {
+const PerformanceChart = ({ data, benchmarkLabel = 'SPY' }: { data?: typeof MOCK_PERFORMANCE_DATA; benchmarkLabel?: string }) => {
   const chartData = data ?? MOCK_PERFORMANCE_DATA;
   return (
     <div className="glass rounded-xl p-5">
@@ -44,7 +44,7 @@ const PerformanceChart = ({ data }: { data?: typeof MOCK_PERFORMANCE_DATA }) => 
             </linearGradient>
           </defs>
           <Area type="monotone" dataKey="portfolio" stroke="#38BDA4" strokeWidth={2} fill="url(#tealGrad)" name="Portfolio" />
-          <Line type="monotone" dataKey="benchmark" stroke="#4F9CF0" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name="S&P 500" />
+          <Line type="monotone" dataKey="benchmark" stroke="#4F9CF0" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name={benchmarkLabel} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

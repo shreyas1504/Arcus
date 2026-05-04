@@ -15,6 +15,7 @@ export const TICKER_RISK_DB: Record<string, {
   'SPY':     { annRet: 0.12,  vol: 0.16,  beta: 1.00, var95: -0.016, maxDD: -0.19, pe: 22 },
   'VOO':     { annRet: 0.12,  vol: 0.16,  beta: 0.99, var95: -0.016, maxDD: -0.19, pe: 22 },
   'QQQ':     { annRet: 0.16,  vol: 0.22,  beta: 1.15, var95: -0.022, maxDD: -0.30, pe: 30 },
+  'VT':      { annRet: 0.09,  vol: 0.15,  beta: 0.88, var95: -0.015, maxDD: -0.21, pe: 18 },
   'VTI':     { annRet: 0.11,  vol: 0.17,  beta: 1.00, var95: -0.017, maxDD: -0.20, pe: 21 },
   'IVV':     { annRet: 0.12,  vol: 0.16,  beta: 0.99, var95: -0.016, maxDD: -0.19, pe: 22 },
   'GLD':     { annRet: 0.08,  vol: 0.14,  beta: 0.05, var95: -0.014, maxDD: -0.20, pe: 0  },
@@ -80,6 +81,7 @@ export const computePortfolioMetrics = (
   tickers: string[],
   sharesOrWeights?: number[],
   riskFreeRate = 0.05,
+  benchmark = 'SPY',
 ) => {
   if (tickers.length === 0) return MOCK_PORTFOLIO.metrics;
 
@@ -98,11 +100,15 @@ export const computePortfolioMetrics = (
 
   // Covariance-decomposition vol: σp² = βp²·σm² + Σi wi²·max(0, σi²−βi²·σm²)
   // This correctly rewards low-beta assets (GLD, TLT, bonds) — same formula as sandbox calcMetrics.
-  const MKT_VOL = 0.16;
-  const sysVar = pBeta * pBeta * MKT_VOL * MKT_VOL;
+  const benchmarkRisk = TICKER_RISK_DB[benchmark] ?? TICKER_RISK_DB['SPY'];
+  const benchmarkBeta = benchmarkRisk.beta || 1;
+  const benchmarkVol = benchmarkRisk.vol || 0.16;
+  const betaVsBenchmark = pBeta / benchmarkBeta;
+  const sysVar = betaVsBenchmark * betaVsBenchmark * benchmarkVol * benchmarkVol;
   const idioVar = tickers.reduce((s, t, i) => {
     const risk = TICKER_RISK_DB[t] ?? DEFAULT_RISK;
-    const idio = Math.max(0, risk.vol * risk.vol - risk.beta * risk.beta * MKT_VOL * MKT_VOL);
+    const tickerBetaVsBenchmark = risk.beta / benchmarkBeta;
+    const idio = Math.max(0, risk.vol * risk.vol - tickerBetaVsBenchmark * tickerBetaVsBenchmark * benchmarkVol * benchmarkVol);
     return s + w[i] * w[i] * idio;
   }, 0);
   const adjVol = Math.sqrt(sysVar + idioVar);
@@ -115,7 +121,8 @@ export const computePortfolioMetrics = (
   const rf = riskFreeRate;
   const sharpe            = adjVol > 0 ? (pRet - rf) / adjVol : 0;
   const sortino           = Math.abs(adjVar) > 0 ? (pRet - rf) / Math.abs(adjVar * Math.sqrt(252)) : 0;
-  const alpha             = pRet - (rf + pBeta * 0.07);   // market premium 7%
+  const benchmarkPremium  = Math.max(0.01, benchmarkRisk.annRet - rf);
+  const alpha             = pRet - (rf + betaVsBenchmark * benchmarkPremium);
   const information_ratio = Math.min(1.5, Math.max(-1, alpha / Math.max(0.01, adjVol * 0.4)));
   const calmar            = Math.abs(adjDD) > 0 ? pRet / Math.abs(adjDD) : 0;
   const cvar_95           = adjVar * 1.45;
@@ -143,7 +150,7 @@ export const computePortfolioMetrics = (
     var_95:            Math.round(adjVar * 1000) / 1000,
     cvar_95:           Math.round(cvar_95 * 1000) / 1000,
     max_drawdown:      Math.round(adjDD * 1000) / 1000,
-    beta:              Math.round(pBeta * 100) / 100,
+    beta:              Math.round(betaVsBenchmark * 100) / 100,
     annualized_return: Math.round(pRet * 1000) / 1000,
     volatility:        Math.round(adjVol * 1000) / 1000,
     health_score,

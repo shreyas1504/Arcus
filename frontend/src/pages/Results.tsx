@@ -24,11 +24,17 @@ import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICE
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { openArcusChat } from '@/lib/chat-launcher';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
-import { loadSettings } from '@/hooks/use-settings';
+import { useSettings, type AppSettings } from '@/hooks/use-settings';
 import Disclaimer from '@/components/legal/Disclaimer';
 
 const askAI = (question: string) => {
   openArcusChat(question);
+};
+
+const BENCHMARK_LABELS: Record<AppSettings['benchmark'], string> = {
+  SPY: 'S&P 500',
+  QQQ: 'Nasdaq 100',
+  VT: 'Global All-World',
 };
 
 type SectorResponse = { name: string };
@@ -56,7 +62,8 @@ const Results = () => {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   const config = usePortfolioConfig();
-  const settings = loadSettings();
+  const [settings, updateSettings] = useSettings();
+  const benchmarkLabel = BENCHMARK_LABELS[settings.benchmark];
   const req = config ? portfolioToRequest(config, settings) : null;
 
   const { data: analysis, isLoading } = useQuery({
@@ -99,7 +106,7 @@ const Results = () => {
   const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
   const userShares  = config?.holdings.filter(h => h.ticker).map(h => parseFloat(h.shares) || 1) ?? [];
   const rawMetrics = analysis?.metrics
-    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares, settings.riskFreeRate) : MOCK_PORTFOLIO.metrics);
+    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares, settings.riskFreeRate, settings.benchmark) : MOCK_PORTFOLIO.metrics);
 
   const tickers = analysis?.tickers ?? (userTickers.length > 0 ? userTickers : MOCK_PORTFOLIO.tickers);
   const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
@@ -139,9 +146,10 @@ const Results = () => {
       weights,
       latest_prices: analysis?.latest_prices ?? config?.livePrices ?? {},
       metrics: m,
+      benchmark: settings.benchmark,
     };
     localStorage.setItem('arcus-last-analysis', JSON.stringify(effectiveAnalysis));
-  }, [analysis?.latest_prices, config?.livePrices, m, tickers, weights]);
+  }, [analysis?.latest_prices, config?.livePrices, m, settings.benchmark, tickers, weights]);
 
 
   // Build P&L rows from the user's actual holdings when API is unavailable
@@ -266,11 +274,27 @@ const Results = () => {
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="font-mono text-xs text-muted-foreground break-all">{tickerStr}</span>
               <span className="font-mono text-[10px] bg-card-elevated text-muted-foreground px-2 py-0.5 rounded-full whitespace-nowrap">{dateRange}</span>
+              <span className="font-mono text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full whitespace-nowrap">
+                Benchmark: {settings.benchmark}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {isLoading && <span className="font-mono text-[10px] text-primary animate-pulse">LOADING...</span>}
             <span className="hidden md:block font-mono text-[10px] text-muted-foreground">LAST UPDATED: {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+            <label className="glass rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Benchmark</span>
+              <select
+                value={settings.benchmark}
+                onChange={(event) => updateSettings({ benchmark: event.target.value as AppSettings['benchmark'] })}
+                className="bg-transparent font-mono text-xs text-foreground outline-none cursor-pointer"
+                aria-label="Market benchmark"
+              >
+                <option value="SPY">SPY</option>
+                <option value="QQQ">QQQ</option>
+                <option value="VT">VT</option>
+              </select>
+            </label>
             <button data-export-btn onClick={handleExportPDF} disabled={pdfGenerating} className="glass rounded-lg px-3 py-2 font-mono text-xs text-foreground hover:teal-glow transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <Download size={14} className="text-primary" /> {pdfGenerating ? 'Generating…' : 'Export PDF'}
             </button>
@@ -544,8 +568,8 @@ const Results = () => {
             <>
               <MetricCard icon={Activity} label="SHARPE RATIO" value={m.sharpe} format={(n) => n.toFixed(2)} change={0.12} sparklineData={MOCK_SPARKLINES.sharpe} delay={0.15} chatQuestion={`My Sharpe ratio is ${m.sharpe.toFixed(2)}. Explain what this means in simple terms and whether it's good or bad for my portfolio.`} />
               <MetricCard icon={Activity} label="SORTINO RATIO" value={m.sortino} format={(n) => n.toFixed(2)} change={0.18} sparklineData={MOCK_SPARKLINES.sortino} delay={0.2} chatQuestion={`My Sortino ratio is ${m.sortino.toFixed(2)}. What does this tell me about my downside risk?`} />
-              <MetricCard icon={TrendingUp} label="ALPHA" value={m.alpha * 100} format={(n) => `${n.toFixed(1)}%`} change={0.5} changeLabel="+0.5%" sparklineData={MOCK_SPARKLINES.alpha} delay={0.25} chatQuestion={`My portfolio alpha is ${(m.alpha * 100).toFixed(1)}%. Explain what alpha means and whether I'm outperforming.`} />
-              <MetricCard icon={GitBranch} label="INFO RATIO" value={m.information_ratio} format={(n) => n.toFixed(2)} change={0.04} delay={0.3} chatQuestion={`My information ratio is ${m.information_ratio.toFixed(2)}. What does this tell me about my portfolio performance?`} />
+              <MetricCard icon={TrendingUp} label={`ALPHA VS ${settings.benchmark}`} value={m.alpha * 100} format={(n) => `${n.toFixed(1)}%`} change={0.5} changeLabel="+0.5%" sparklineData={MOCK_SPARKLINES.alpha} delay={0.25} chatQuestion={`My portfolio alpha versus ${settings.benchmark} (${benchmarkLabel}) is ${(m.alpha * 100).toFixed(1)}%. Explain what alpha means and whether I'm outperforming.`} />
+              <MetricCard icon={GitBranch} label={`INFO RATIO VS ${settings.benchmark}`} value={m.information_ratio} format={(n) => n.toFixed(2)} change={0.04} delay={0.3} chatQuestion={`My information ratio versus ${settings.benchmark} (${benchmarkLabel}) is ${m.information_ratio.toFixed(2)}. What does this tell me about my portfolio performance?`} />
             </>
           )}
         </div>
@@ -580,7 +604,7 @@ const Results = () => {
               <MetricCard icon={Shield} label="VAR 95%" value={m.var_95 * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.3} changeLabel="±0.3%" sparklineData={MOCK_SPARKLINES.var_95} delay={0.35} chatQuestion={`My VaR at 95% is ${(m.var_95 * 100).toFixed(1)}%. Explain Value at Risk in simple language — what could I actually lose?`} />
               <MetricCard icon={Shield} label="CVAR 95%" value={m.cvar_95 * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.2} sparklineData={MOCK_SPARKLINES.cvar_95} delay={0.4} chatQuestion={`My CVaR is ${(m.cvar_95 * 100).toFixed(1)}%. What is Expected Shortfall and how does it differ from VaR?`} />
               <MetricCard icon={TrendingDown} label="MAX DRAWDOWN" value={m.max_drawdown * 100} format={(n) => `${n.toFixed(1)}%`} change={-1.2} sparklineData={MOCK_SPARKLINES.max_drawdown} delay={0.45} chatQuestion={`My maximum drawdown is ${(m.max_drawdown * 100).toFixed(1)}%. What does this mean and should I be worried?`} />
-              <MetricCard icon={Activity} label="BETA" value={m.beta} format={(n) => n.toFixed(2)} change={-0.03} sparklineData={MOCK_SPARKLINES.beta} delay={0.5} chatQuestion={`My portfolio Beta is ${m.beta.toFixed(2)}. Explain Beta in plain English — am I taking too much market risk?`} />
+              <MetricCard icon={Activity} label={`BETA VS ${settings.benchmark}`} value={m.beta} format={(n) => n.toFixed(2)} change={-0.03} sparklineData={MOCK_SPARKLINES.beta} delay={0.5} chatQuestion={`My portfolio Beta versus ${settings.benchmark} (${benchmarkLabel}) is ${m.beta.toFixed(2)}. Explain Beta in plain English — am I taking too much market risk?`} />
             </>
           )}
         </div>
@@ -647,7 +671,7 @@ const Results = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           <div>
             <SectionHeader label="PERFORMANCE" chatQuestion="Explain my portfolio performance chart — what trends do you see and what should I watch?" />
-            <PerformanceChart data={analysis?.performance} />
+            <PerformanceChart data={analysis?.performance} benchmarkLabel={settings.benchmark} />
           </div>
           <div>
             <SectionHeader label="DRAWDOWN" chatQuestion="Explain what my drawdown chart means and whether my worst periods are concerning." />
