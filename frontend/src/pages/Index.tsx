@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Activity, GitBranch, Zap, ChevronRight, CheckCircle, X } from 'lucide-react';
+import { Activity, GitBranch, Zap, ChevronRight, CheckCircle, X, Calculator, PlayCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ArcusLogo from '@/components/ArcusLogo';
 import NewsTicker from '@/components/NewsTicker';
@@ -54,6 +54,30 @@ const demoInvestorDna = {
   target_return: 0.15,
   sectors: ['Technology', 'Consumer'],
 };
+
+const howItWorksSteps = [
+  {
+    step: '1',
+    title: 'Add sample holdings',
+    desc: 'Example: AAPL 15 shares at $148.20, NVDA 5 at $620, MSFT 8 at $320, GOOGL 12 at $132.50, VOO 40 at $388.',
+  },
+  {
+    step: '2',
+    title: 'Set your analysis window',
+    desc: 'Dummy setup uses Jan 1, 2023 to Dec 31, 2024 with a Growth profile and 15% annual target return.',
+  },
+  {
+    step: '3',
+    title: 'Review the risk report',
+    desc: 'Arcus calculates Sharpe, VaR, drawdown, beta, stress tests, Monte Carlo outcomes, and portfolio health.',
+  },
+];
+
+const demoOutput = [
+  { label: 'Portfolio Value', value: '$42.7K', detail: 'sample market value' },
+  { label: 'Sharpe Ratio', value: '1.84', detail: 'risk-adjusted return' },
+  { label: 'VaR 95%', value: '-3.2%', detail: 'sample daily downside' },
+];
 
 const seedDemoResults = () => {
   localStorage.setItem('arcus-portfolio', JSON.stringify(demoPortfolio));
@@ -148,6 +172,60 @@ const Landing = () => (
           </div>
         </div>
       </motion.div>
+    </section>
+
+    {/* How it works */}
+    <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
+      <div className="text-center mb-8">
+        <span className="label-mono">SEE HOW IT WORKS</span>
+        <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-foreground mt-3">Try dummy values, then calculate your real portfolio.</h2>
+        <p className="text-muted-foreground text-sm mt-3 max-w-2xl mx-auto">
+          Use the example below to understand the flow, or start fresh and enter your own tickers, shares, buy prices, and date range.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-4 items-stretch">
+        <motion.div variants={stagger} initial="hidden" whileInView="show" viewport={{ once: true }} className="glass rounded-xl p-5 sm:p-6">
+          <div className="space-y-4">
+            {howItWorksSteps.map((item) => (
+              <motion.div key={item.step} variants={fadeUp} className="flex gap-4">
+                <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground font-mono text-xs font-bold flex items-center justify-center flex-shrink-0">
+                  {item.step}
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-foreground text-base">{item.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed mt-1">{item.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="glass rounded-xl p-5 sm:p-6">
+          <span className="label-mono">DUMMY RESULT PREVIEW</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3 mt-4">
+            {demoOutput.map((item) => (
+              <div key={item.label} className="glass-elevated rounded-lg p-4">
+                <span className="label-mono">{item.label}</span>
+                <div className="font-mono text-2xl font-bold text-foreground mt-1">{item.value}</div>
+                <p className="text-muted-foreground text-xs mt-1">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 mt-5">
+            <Link to="/dashboard/results" onClick={seedDemoResults} className="flex-1">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full px-4 py-3 rounded-xl border border-border text-foreground font-semibold text-sm hover:bg-card-elevated transition-colors">
+                <PlayCircle size={15} className="inline mr-1.5" /> View Dummy Demo
+              </motion.button>
+            </Link>
+            <Link to="/onboarding" className="flex-1">
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold text-sm">
+                <Calculator size={15} className="inline mr-1.5" /> Get Started
+              </motion.button>
+            </Link>
+          </div>
+        </motion.div>
+      </div>
     </section>
 
     {/* Stats bar */}
