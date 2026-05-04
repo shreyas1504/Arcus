@@ -218,9 +218,9 @@ async def chat(req: ChatRequest):
         payload = {
             "model": "minimaxai/minimax-m2.7",
             "messages": messages,
-            "temperature": 1,
+            "temperature": 0.7,
             "top_p": 0.95,
-            "max_tokens": 8192,
+            "max_tokens": 1024,
             "stream": False
         }
         
@@ -230,7 +230,7 @@ async def chat(req: ChatRequest):
         ssl_ctx.verify_mode = ssl.CERT_NONE
         
         req_obj = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req_obj, context=ssl_ctx) as response:
+        with urllib.request.urlopen(req_obj, context=ssl_ctx, timeout=15) as response:
             res_body = response.read()
             res_json = json.loads(res_body)
             reply = res_json["choices"][0]["message"]["content"]
