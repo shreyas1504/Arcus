@@ -185,14 +185,14 @@ def _dict_to_portfolio_context(raw: dict) -> PortfolioContext:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("NVIDIA_API_KEY")
 
     # Build context
     ctx = req.portfolio_context
     system_prompt = _build_system_prompt(ctx)
 
     # Build messages list from conversation history + new message
-    messages: list[dict[str, str]] = []
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     for msg in req.conversation_history:
         role = "assistant" if msg.role == "assistant" else "user"
         messages.append({"role": role, "content": msg.content})
@@ -202,24 +202,34 @@ async def chat(req: ChatRequest):
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail={"error": "AI unavailable — ANTHROPIC_API_KEY not set", "fallback": True},
+            detail={"error": "AI unavailable — NVIDIA_API_KEY not set", "fallback": True},
         )
 
     try:
-        import anthropic  # type: ignore
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=system_prompt,
-            messages=messages,
-        )
-        return ChatResponse(reply=response.content[0].text, fallback=False)
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "anthropic package not installed", "fallback": True},
-        )
+        import urllib.request
+        import json
+        
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "minimaxai/minimax-m2.7",
+            "messages": messages,
+            "temperature": 1,
+            "top_p": 0.95,
+            "max_tokens": 8192,
+            "stream": False
+        }
+        
+        req_obj = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req_obj) as response:
+            res_body = response.read()
+            res_json = json.loads(res_body)
+            reply = res_json["choices"][0]["message"]["content"]
+            
+        return ChatResponse(reply=reply, fallback=False)
     except Exception as e:
         logger.error(f"Arcus AI API error: {e}")
         raise HTTPException(
