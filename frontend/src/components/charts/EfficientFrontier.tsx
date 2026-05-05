@@ -20,12 +20,12 @@ const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
 
   const getPointStyle = (type: string) => {
     if (type === 'current') {
-      return { fill: '#F0A44F', stroke: '#FFE2B8', strokeWidth: 2, radius: 8 };
+      return { fill: '#FFAD4D', stroke: '#FFF1D8', strokeWidth: 2.5, radius: 9 };
     }
     if (type === 'optimal') {
-      return { fill: '#38BDA4', stroke: '#B9F5E8', strokeWidth: 2, radius: 8 };
+      return { fill: '#40D9BD', stroke: '#D7FFF5', strokeWidth: 2.5, radius: 9 };
     }
-    return { fill: '#A7B0BD', stroke: '#E5EAF0', strokeWidth: 1.25, radius: 4 };
+    return { fill: '#7F8A98', stroke: '#B8C1CC', strokeWidth: 0.9, radius: 3.5 };
   };
 
   return (
@@ -54,9 +54,9 @@ const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
         </ScatterChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2 justify-center">
-        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#A7B0BD] ring-1 ring-[#E5EAF0]/80" /><span className="font-mono text-[10px] text-muted-foreground">Frontier Points</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-signal-amber" /><span className="font-mono text-[10px] text-muted-foreground">Your Portfolio</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary" /><span className="font-mono text-[10px] text-muted-foreground">Optimal</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#7F8A98] ring-1 ring-[#B8C1CC]/70" /><span className="font-mono text-[10px] text-muted-foreground">Frontier Points</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#FFAD4D] ring-1 ring-[#FFF1D8]/90" /><span className="font-mono text-[10px] text-muted-foreground">Your Portfolio</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#40D9BD] ring-1 ring-[#D7FFF5]/90" /><span className="font-mono text-[10px] text-muted-foreground">Optimal</span></div>
       </div>
     </div>
   );
