@@ -548,7 +548,7 @@ const Results = () => {
                   ? `Portfolio needs attention (score ${m.health_score}/100). Consider diversifying to improve risk-adjusted returns.`
                   : `Portfolio is under-optimised (score ${m.health_score}/100). High risk relative to returns — rebalancing is recommended.`}
               </p>
-              <p className="text-[13px] text-secondary mt-2">
+              <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
                 In the analysis period you made {(m.annualized_return * 100).toFixed(1)}% annualised{m.sharpe >= 1 ? ` with a solid Sharpe of ${m.sharpe.toFixed(2)}` : `, but risk-adjusted returns (Sharpe ${m.sharpe.toFixed(2)}) have room to improve`} — on a bad day you could lose around {Math.abs(m.var_95 * 100).toFixed(1)}%.
               </p>
             </div>
