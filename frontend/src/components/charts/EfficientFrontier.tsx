@@ -18,6 +18,16 @@ const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
     ];
   }
 
+  const getPointStyle = (type: string) => {
+    if (type === 'current') {
+      return { fill: '#F0A44F', stroke: '#FFE2B8', strokeWidth: 2, radius: 8 };
+    }
+    if (type === 'optimal') {
+      return { fill: '#38BDA4', stroke: '#B9F5E8', strokeWidth: 2, radius: 8 };
+    }
+    return { fill: '#A7B0BD', stroke: '#E5EAF0', strokeWidth: 1.25, radius: 4 };
+  };
+
   return (
     <div className="glass rounded-xl p-5">
       <span className="label-mono">EFFICIENT FRONTIER</span>
@@ -28,17 +38,23 @@ const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
           <YAxis type="number" dataKey="return" name="Return" unit="%" tick={{ fill: '#8B949E', fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} />
           <Tooltip contentStyle={{ background: '#161B22', border: '1px solid rgba(56,189,148,0.2)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }} />
           <Scatter data={scatterData}>
-            {scatterData.map((entry, i) => (
-              <Cell
-                key={i}
-                fill={entry.type === 'current' ? '#F0A44F' : entry.type === 'optimal' ? '#38BDA4' : 'rgba(139,148,158,0.3)'}
-                r={entry.type === 'random' ? 3 : 8}
-              />
-            ))}
+            {scatterData.map((entry, i) => {
+              const point = getPointStyle(entry.type);
+              return (
+                <Cell
+                  key={i}
+                  fill={point.fill}
+                  stroke={point.stroke}
+                  strokeWidth={point.strokeWidth}
+                  r={point.radius}
+                />
+              );
+            })}
           </Scatter>
         </ScatterChart>
       </ResponsiveContainer>
-      <div className="flex gap-4 mt-2 justify-center">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2 justify-center">
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#A7B0BD] ring-1 ring-[#E5EAF0]/80" /><span className="font-mono text-[10px] text-muted-foreground">Frontier Points</span></div>
         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-signal-amber" /><span className="font-mono text-[10px] text-muted-foreground">Your Portfolio</span></div>
         <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-primary" /><span className="font-mono text-[10px] text-muted-foreground">Optimal</span></div>
       </div>
