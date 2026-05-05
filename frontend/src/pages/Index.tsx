@@ -75,38 +75,38 @@ const seedDemoResults = () => {
 };
 
 const DemoRecording = () => (
-  <div className="relative min-h-[340px] overflow-hidden rounded-xl border border-border bg-card-elevated p-3">
-    <div className="flex items-center gap-1.5 border-b border-border/80 pb-3">
+  <div className="relative min-h-[326px] overflow-hidden rounded-xl border border-border bg-card-elevated p-2.5 sm:min-h-[340px] sm:p-3">
+    <div className="flex items-center gap-1.5 border-b border-border/80 pb-2.5 sm:pb-3">
       <span className="h-2.5 w-2.5 rounded-full bg-signal-red" />
       <span className="h-2.5 w-2.5 rounded-full bg-signal-amber" />
       <span className="h-2.5 w-2.5 rounded-full bg-signal-green" />
       <span className="ml-3 font-mono text-[10px] text-muted-foreground">arcus.app/dashboard</span>
     </div>
 
-    <div className="relative mt-4 h-[284px]">
+    <div className="relative mt-3 h-[274px] sm:mt-4 sm:h-[284px]">
       <motion.div
-        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-4"
+        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-3 sm:p-4"
         animate={{ opacity: [1, 1, 0, 0, 1] }}
         transition={{ duration: 9, repeat: Infinity, times: [0, 0.36, 0.43, 0.92, 1] }}
       >
         <span className="label-mono">ADD HOLDINGS</span>
-        <div className="mt-3 space-y-2">
+        <div className="mt-2 space-y-1.5 sm:mt-3 sm:space-y-2">
           {demoPortfolio.holdings.map((holding, index) => (
             <motion.div
               key={holding.ticker}
-              className="grid grid-cols-[1fr_54px_72px] gap-2 rounded-lg border border-border bg-card px-3 py-2"
+              className="grid grid-cols-[1fr_44px_64px] gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 sm:grid-cols-[1fr_54px_72px] sm:gap-2 sm:px-3 sm:py-2"
               initial={false}
               animate={{ opacity: [0, 1, 1], x: [-12, 0, 0] }}
               transition={{ duration: 9, repeat: Infinity, delay: index * 0.28, times: [0, 0.12, 1] }}
             >
               <span className="font-mono text-xs font-bold text-primary">{holding.ticker}</span>
-              <span className="font-mono text-[11px] text-foreground">{holding.shares}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">${holding.cost}</span>
+              <span className="font-mono text-[10px] text-foreground sm:text-[11px]">{holding.shares}</span>
+              <span className="font-mono text-[10px] text-muted-foreground sm:text-[11px]">${holding.cost}</span>
             </motion.div>
           ))}
         </div>
         <motion.div
-          className="mt-4 rounded-lg bg-primary py-2.5 text-center font-mono text-[11px] font-bold text-primary-foreground"
+          className="mt-3 rounded-lg bg-primary py-2 text-center font-mono text-[11px] font-bold text-primary-foreground sm:mt-4 sm:py-2.5"
           animate={{ scale: [1, 1, 1.03, 1] }}
           transition={{ duration: 9, repeat: Infinity, times: [0, 0.62, 0.68, 1] }}
         >
@@ -115,7 +115,7 @@ const DemoRecording = () => (
       </motion.div>
 
       <motion.div
-        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-4"
+        className="absolute inset-0 rounded-lg border border-border bg-background/80 p-3 sm:p-4"
         animate={{ opacity: [0, 0, 1, 1, 0] }}
         transition={{ duration: 9, repeat: Infinity, times: [0, 0.4, 0.48, 0.86, 0.94] }}
       >
@@ -123,25 +123,25 @@ const DemoRecording = () => (
           <span className="label-mono">RISK REPORT</span>
           <span className="rounded-full bg-primary/10 px-2 py-1 font-mono text-[10px] text-primary">Growth · 15%</span>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-1.5 sm:mt-4 sm:gap-2">
           {demoOutput.map((item, index) => (
             <motion.div
               key={item.label}
-              className="rounded-lg border border-border bg-card p-3"
+              className="rounded-lg border border-border bg-card p-2 sm:p-3"
               animate={{ y: [10, 0, 0], opacity: [0, 1, 1] }}
               transition={{ duration: 9, repeat: Infinity, delay: 3.7 + index * 0.18, times: [0, 0.1, 1] }}
             >
-              <span className="font-mono text-[9px] uppercase text-muted-foreground">{item.label}</span>
-              <div className="mt-1 font-mono text-base font-bold text-foreground">{item.value}</div>
+              <span className="font-mono text-[8px] uppercase text-muted-foreground sm:text-[9px]">{item.label}</span>
+              <div className="mt-1 font-mono text-sm font-bold text-foreground sm:text-base">{item.value}</div>
             </motion.div>
           ))}
         </div>
-        <div className="mt-4 rounded-lg border border-border bg-card p-3">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="mt-3 rounded-lg border border-border bg-card p-2.5 sm:mt-4 sm:p-3">
+          <div className="mb-2 flex items-center justify-between sm:mb-3">
             <span className="font-mono text-[10px] text-muted-foreground">Monte Carlo range</span>
             <span className="font-mono text-[10px] text-signal-green">1,000 sims</span>
           </div>
-          <svg width="100%" height="84" viewBox="0 0 320 84" preserveAspectRatio="none">
+          <svg width="100%" height="64" viewBox="0 0 320 84" preserveAspectRatio="none" className="h-16 sm:h-[84px]">
             <motion.path
               d="M0 58 C45 42 65 66 104 48 C145 30 168 44 202 24 C240 4 276 32 320 14"
               fill="none"
@@ -155,9 +155,9 @@ const DemoRecording = () => (
             <path d="M0 70 C58 54 96 74 144 56 C204 34 250 48 320 28" fill="none" stroke="#4F9CF0" strokeWidth="1.5" strokeOpacity="0.55" />
           </svg>
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-2 hidden flex-wrap gap-1.5 sm:mt-3 sm:flex sm:gap-2">
           {['Stress tests', 'Risk contribution', 'AI insights'].map((label) => (
-            <span key={label} className="rounded-full bg-primary/10 px-2.5 py-1 font-mono text-[10px] text-primary">{label}</span>
+            <span key={label} className="rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[9px] text-primary sm:px-2.5 sm:py-1 sm:text-[10px]">{label}</span>
           ))}
         </div>
       </motion.div>
@@ -173,9 +173,9 @@ const DemoRecording = () => (
 
 const HowItWorksModal = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="max-h-[92vh] max-w-[920px] overflow-y-auto border-border bg-background p-4 sm:p-6">
+    <DialogContent className="max-h-[92vh] max-w-[920px] overflow-y-auto border-border bg-background p-4 pr-9 sm:p-6">
       <DialogHeader>
-        <DialogTitle className="font-display text-2xl font-extrabold text-foreground">See how Arcus calculates risk</DialogTitle>
+        <DialogTitle className="font-display text-2xl font-extrabold leading-tight text-foreground">See how Arcus calculates risk</DialogTitle>
         <DialogDescription>
           A quick animated walkthrough using dummy values, then you can start your own analysis.
         </DialogDescription>
