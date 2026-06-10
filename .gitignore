@@ -19,3 +19,4 @@ frontend/bun.lock
 frontend/package-lock.json
 frontend/playwright-fixture.ts
 frontend/playwright.config.ts
+linkedin-screenshots/

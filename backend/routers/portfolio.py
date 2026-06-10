@@ -100,7 +100,24 @@ def _load_data(tickers: list[str], start_date: str, end_date: str):
 
 @router.post("/analyze")
 def analyze_portfolio(req: AnalyzeRequest):
-    tickers, prices, returns, errors = _load_data(req.tickers, req.start_date, req.end_date)
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.data.fetcher import download_prices, download_benchmark
+
+    # Download prices and benchmark concurrently
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_prices = executor.submit(download_prices, req.tickers, req.start_date, req.end_date)
+        future_benchmark = executor.submit(download_benchmark, "^GSPC", req.start_date, req.end_date)
+        
+        prices, errors = future_prices.result()
+        mkt_close = future_benchmark.result()
+
+    if prices.empty:
+        raise HTTPException(status_code=400, detail="No price data loaded. Check tickers and date range.")
+    tickers = [t for t in req.tickers if t in prices.columns]
+    if not tickers:
+        raise HTTPException(status_code=400, detail="None of the tickers returned data.")
+    returns = calculate_returns(prices)
+    tickers = [t for t in tickers if t in returns.columns]
 
     # Use custom weights if provided, otherwise equal weight
     if req.weights is not None and len(req.weights) == len(tickers):  # type: ignore[arg-type]
@@ -129,8 +146,6 @@ def analyze_portfolio(req: AnalyzeRequest):
     alpha_val = 0.0
     info_ratio = 0.0
     try:
-        from backend.data.fetcher import download_benchmark  # type: ignore
-        mkt_close = download_benchmark("^GSPC", req.start_date, req.end_date)
         if not mkt_close.empty:
             mkt_ret = mkt_close.pct_change().dropna()
             mkt_ret.index = pd.DatetimeIndex(mkt_ret.index).normalize()
@@ -179,8 +194,17 @@ def analyze_portfolio(req: AnalyzeRequest):
             for d, v in norm_prices[t].items()
         ]
 
-    # Latest prices
-    latest = get_latest_prices(tickers)
+    # Latest prices: extract from prices dataframe if available, otherwise fetch
+    latest = {}
+    missing_for_latest = []
+    for t in req.tickers:
+        if t in prices.columns and not prices[t].empty:
+            latest[t] = round(float(prices[t].iloc[-1]), 2)
+        else:
+            missing_for_latest.append(t)
+            
+    if missing_for_latest:
+        latest.update(get_latest_prices(missing_for_latest))
 
     return {
         "tickers": tickers,
@@ -283,7 +307,24 @@ def portfolio_sectors(req: SectorRequest):
 @router.post("/recommendations")
 def get_recommendations(req: AnalyzeRequest):
     """Generate portfolio improvement recommendations based on metrics."""
-    tickers, prices, returns, errors = _load_data(req.tickers, req.start_date, req.end_date)
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.data.fetcher import download_prices, download_benchmark
+
+    # Download prices and benchmark concurrently
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_prices = executor.submit(download_prices, req.tickers, req.start_date, req.end_date)
+        future_benchmark = executor.submit(download_benchmark, "^GSPC", req.start_date, req.end_date)
+        
+        prices, errors = future_prices.result()
+        mkt_close = future_benchmark.result()
+
+    if prices.empty:
+        raise HTTPException(status_code=400, detail="No price data loaded. Check tickers and date range.")
+    tickers = [t for t in req.tickers if t in prices.columns]
+    if not tickers:
+        raise HTTPException(status_code=400, detail="None of the tickers returned data.")
+    returns = calculate_returns(prices)
+    tickers = [t for t in tickers if t in returns.columns]
 
     eq_weights = np.array([1.0 / len(tickers)] * len(tickers))
     port_ret = (returns[tickers] * eq_weights).sum(axis=1)
@@ -346,8 +387,6 @@ def get_recommendations(req: AnalyzeRequest):
 
     # 7. Beta
     try:
-        from backend.data.fetcher import download_benchmark  # type: ignore
-        mkt_close = download_benchmark("^GSPC", req.start_date, req.end_date)
         if not mkt_close.empty:
             mkt_ret = mkt_close.pct_change().dropna()
             mkt_ret.index = pd.DatetimeIndex(mkt_ret.index).normalize()
@@ -453,14 +492,30 @@ _SCENARIOS = {
 @router.post("/stress-test")
 def stress_test(req: StressTestRequest):
     """Estimate portfolio loss under historical crash scenarios using beta."""
-    tickers, prices, returns, errors = _load_data(req.tickers, req.start_date, req.end_date)
+    from concurrent.futures import ThreadPoolExecutor
+    from backend.data.fetcher import download_prices, download_benchmark
+
+    # Download prices and benchmark concurrently
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_prices = executor.submit(download_prices, req.tickers, req.start_date, req.end_date)
+        future_benchmark = executor.submit(download_benchmark, "^GSPC", req.start_date, req.end_date)
+        
+        prices, errors = future_prices.result()
+        mkt_close = future_benchmark.result()
+
+    if prices.empty:
+        raise HTTPException(status_code=400, detail="No price data loaded. Check tickers and date range.")
+    tickers = [t for t in req.tickers if t in prices.columns]
+    if not tickers:
+        raise HTTPException(status_code=400, detail="None of the tickers returned data.")
+    returns = calculate_returns(prices)
+    tickers = [t for t in tickers if t in returns.columns]
+
     eq_weights = np.array([1.0 / len(tickers)] * len(tickers))
     port_ret = (returns[tickers] * eq_weights).sum(axis=1)
 
     # Compute beta
     try:
-        from backend.data.fetcher import download_benchmark  # type: ignore
-        mkt_close = download_benchmark("^GSPC", req.start_date, req.end_date)
         if not mkt_close.empty:
             mkt_ret = mkt_close.pct_change().dropna()
             mkt_ret.index = pd.DatetimeIndex(mkt_ret.index).normalize()

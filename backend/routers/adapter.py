@@ -6,6 +6,7 @@
 # The v2 endpoints call them internally and transform the output.
 
 import logging
+import time
 from typing import Optional
 
 import numpy as np  # type: ignore
@@ -70,157 +71,168 @@ def _build_analyze_request(req: V2PortfolioRequest) -> AnalyzeRequest:
 @router.post("/analyze")
 def v2_analyze(req: V2PortfolioRequest):
     """Reshape the analyze response to match the new frontend's expected format."""
-    internal_req = _build_analyze_request(req)
-    raw = analyze_portfolio(internal_req)
-
-    m = raw["metrics"]
-    tickers = raw["tickers"]
-    weights = raw.get("weights", [1.0 / len(tickers)] * len(tickers))
-
-    # Build performance data (portfolio weighted line + benchmark)
-    performance = []
-    price_history = raw.get("price_history", {})
-    if price_history and tickers:
-        # Collect all dates
-        all_dates = set()
-        for t in tickers:
-            for dp in price_history.get(t, []):
-                all_dates.add(dp["date"])
-        sorted_dates = sorted(all_dates)
-
-        # S&P benchmark from benchmark comparison data
-        bmark = raw.get("benchmark", {})
-        bmark_return = bmark.get("bmark_return", 0.0) if bmark else 0.0
-
-        for i, date in enumerate(sorted_dates):
-            # Weighted portfolio value
-            port_val = 0.0
-            for j, t in enumerate(tickers):
-                hist = price_history.get(t, [])
-                matched = [dp for dp in hist if dp["date"] == date]
-                if matched:
-                    port_val += matched[0]["value"] * weights[j]
-            # Scale to starting $10,000
-            port_value = round(port_val * 100, 2)
-            bench_value = round(10000 * (1 + bmark_return * i / max(len(sorted_dates) - 1, 1)), 2)
-
-            date_label = date[:10]
-            try:
-                from datetime import datetime
-                dt = datetime.fromisoformat(date[:10])
-                date_label = dt.strftime("%b %d")
-            except Exception:
-                pass
-
-            performance.append({
-                "date": date_label,
-                "portfolio": port_value,
-                "benchmark": bench_value,
-            })
-
-    # Reshape rolling_sharpe: value -> sharpe
-    rolling_sharpe = [
-        {"date": d.get("date", "")[:10], "sharpe": d.get("value", 0)}
-        for d in raw.get("rolling_sharpe", [])
-    ]
-
-    # Reshape drawdown: value -> drawdown
-    drawdown = [
-        {"date": d.get("date", "")[:10], "drawdown": round(d.get("value", 0), 4)}
-        for d in raw.get("drawdown", [])
-    ]
-
-    # Reshape risk_contribution dict -> risk_attribution array
-    risk_contrib = raw.get("risk_contribution", {})
-    risk_attribution = []
-    if isinstance(risk_contrib, dict):
-        sorted_contrib = sorted(risk_contrib.items(), key=lambda x: x[1], reverse=True)
-        for i, (ticker, contrib) in enumerate(sorted_contrib):
-            risk_attribution.append({
-                "ticker": ticker,
-                "contribution": round(contrib * 100, 1),
-                "color": "#F0514F" if i == 0 else "#38BDA4",
-            })
-
-    # Reshape correlation_matrix -> correlation
-    corr = raw.get("correlation_matrix", {})
-    correlation = {
-        "tickers": corr.get("tickers", tickers),
-        "matrix": corr.get("matrix", []),
-    }
-
-    # Build sectors from backend sectors endpoint (inline)
-    sectors = []
+    start = time.perf_counter()
     try:
-        sector_req = SectorRequest(
-            tickers=req.tickers, start_date=req.start_date, end_date=req.end_date
-        )
-        sector_data = portfolio_sectors(sector_req)
-        if sector_data and "sectors" in sector_data:
-            for i, (name, val) in enumerate(sector_data["sectors"].items()):
-                sectors.append({
-                    "name": name,
-                    "value": round(val * 100, 1),
-                    "color": CHART_COLORS[i % len(CHART_COLORS)],
+        internal_req = _build_analyze_request(req)
+        raw = analyze_portfolio(internal_req)
+
+        m = raw["metrics"]
+        tickers = raw["tickers"]
+        weights = raw.get("weights", [1.0 / len(tickers)] * len(tickers))
+
+        # Build performance data (portfolio weighted line + benchmark)
+        performance = []
+        price_history = raw.get("price_history", {})
+        if price_history and tickers:
+            # Collect all dates
+            all_dates = set()
+            for t in tickers:
+                for dp in price_history.get(t, []):
+                    all_dates.add(dp["date"])
+            sorted_dates = sorted(all_dates)
+
+            # S&P benchmark from benchmark comparison data
+            bmark = raw.get("benchmark", {})
+            bmark_return = bmark.get("bmark_return", 0.0) if bmark else 0.0
+
+            for i, date in enumerate(sorted_dates):
+                # Weighted portfolio value
+                port_val = 0.0
+                for j, t in enumerate(tickers):
+                    hist = price_history.get(t, [])
+                    matched = [dp for dp in hist if dp["date"] == date]
+                    if matched:
+                        port_val += matched[0]["value"] * weights[j]
+                # Scale to starting $10,000
+                port_value = round(port_val * 100, 2)
+                bench_value = round(10000 * (1 + bmark_return * i / max(len(sorted_dates) - 1, 1)), 2)
+
+                date_label = date[:10]
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(date[:10])
+                    date_label = dt.strftime("%b %d")
+                except Exception:
+                    pass
+
+                performance.append({
+                    "date": date_label,
+                    "portfolio": port_value,
+                    "benchmark": bench_value,
                 })
-    except Exception:
-        # Fallback — put all in "Equities"
-        sectors = [{"name": "Equities", "value": 100, "color": "#38BDA4"}]
 
-    # Compute valuation metrics
-    weighted_pe = m.get("weighted_pe", None)
-    weighted_ps = m.get("weighted_ps", None)
-    if weighted_pe is None:
+        # Reshape rolling_sharpe: value -> sharpe
+        rolling_sharpe = [
+            {"date": d.get("date", "")[:10], "sharpe": d.get("value", 0)}
+            for d in raw.get("rolling_sharpe", [])
+        ]
+
+        # Reshape drawdown: value -> drawdown
+        drawdown = [
+            {"date": d.get("date", "")[:10], "drawdown": round(d.get("value", 0), 4)}
+            for d in raw.get("drawdown", [])
+        ]
+
+        # Reshape risk_contribution dict -> risk_attribution array
+        risk_contrib = raw.get("risk_contribution", {})
+        risk_attribution = []
+        if isinstance(risk_contrib, dict):
+            sorted_contrib = sorted(risk_contrib.items(), key=lambda x: x[1], reverse=True)
+            for i, (ticker, contrib) in enumerate(sorted_contrib):
+                risk_attribution.append({
+                    "ticker": ticker,
+                    "contribution": round(contrib * 100, 1),
+                    "color": "#F0514F" if i == 0 else "#38BDA4",
+                })
+
+        # Reshape correlation_matrix -> correlation
+        corr = raw.get("correlation_matrix", {})
+        correlation = {
+            "tickers": corr.get("tickers", tickers),
+            "matrix": corr.get("matrix", []),
+        }
+
+        # Build sectors from backend sectors endpoint (inline)
+        sectors = []
         try:
-            from backend.analytics.metrics import compute_valuation_metrics  # type: ignore
-            from backend.data.fetcher import get_latest_prices  # type: ignore
-            val_metrics = compute_valuation_metrics(tickers, weights)
-            weighted_pe = val_metrics.get("weighted_pe", 0)
-            weighted_ps = val_metrics.get("weighted_ps", 0)
+            sector_req = SectorRequest(
+                tickers=req.tickers, start_date=req.start_date, end_date=req.end_date
+            )
+            sector_data = portfolio_sectors(sector_req)
+            if sector_data and "sectors" in sector_data:
+                for i, (name, val) in enumerate(sector_data["sectors"].items()):
+                    sectors.append({
+                        "name": name,
+                        "value": round(val * 100, 1),
+                        "color": CHART_COLORS[i % len(CHART_COLORS)],
+                    })
         except Exception:
-            weighted_pe = 0
-            weighted_ps = 0
+            # Fallback — put all in "Equities"
+            sectors = [{"name": "Equities", "value": 100, "color": "#38BDA4"}]
 
-    # Recalculate Sharpe/Sortino if the user supplied a custom risk-free rate
-    sharpe_val = round(m.get("sharpe_ratio", 0), 2)
-    sortino_val = round(m.get("sortino_ratio", 0), 2)
-    rfr: Optional[float] = req.risk_free_rate
-    if rfr is not None:
-        ann_ret: float = float(m.get("annualized_return", 0) or 0.0)
-        ann_vol: float = float(m.get("annualized_volatility", 0) or 0.01)
-        new_sharpe: float = (ann_ret - rfr) / ann_vol
-        old_sharpe: float = float(m.get("sharpe_ratio", new_sharpe) or new_sharpe)
-        sharpe_val = round(new_sharpe, 2)
-        if old_sharpe != 0:
-            sortino_val = round(float(m.get("sortino_ratio", 0)) * (new_sharpe / old_sharpe), 2)
+        # Compute valuation metrics
+        weighted_pe = m.get("weighted_pe", None)
+        weighted_ps = m.get("weighted_ps", None)
+        if weighted_pe is None:
+            try:
+                from backend.analytics.metrics import compute_valuation_metrics  # type: ignore
+                from backend.data.fetcher import get_latest_prices  # type: ignore
+                val_metrics = compute_valuation_metrics(tickers, weights)
+                weighted_pe = val_metrics.get("weighted_pe", 0)
+                weighted_ps = val_metrics.get("weighted_ps", 0)
+            except Exception:
+                weighted_pe = 0
+                weighted_ps = 0
 
-    return {
-        "tickers": tickers,
-        "weights": weights,
-        "latest_prices": raw.get("latest_prices", {}),
-        "metrics": {
-            "sharpe": sharpe_val,
-            "sortino": sortino_val,
-            "alpha": round(m.get("alpha", 0), 4),
-            "information_ratio": round(m.get("information_ratio", 0), 2),
-            "calmar": round(m.get("calmar_ratio", 0), 2),
-            "var_95": round(m.get("value_at_risk", 0), 4),
-            "cvar_95": round(m.get("cvar_95", 0), 4),
-            "max_drawdown": round(m.get("max_drawdown", 0), 4),
-            "beta": round(m.get("beta", 1), 2),
-            "annualized_return": round(m.get("annualized_return", 0), 4),
-            "volatility": round(m.get("annualized_volatility", 0), 4),
-            "health_score": m.get("health_score", 50),
-            "weighted_pe": round(weighted_pe or 0, 1),
-            "weighted_ps": round(weighted_ps or 0, 1),
-        },
-        "performance": performance,
-        "rolling_sharpe": rolling_sharpe,
-        "drawdown": drawdown,
-        "risk_attribution": risk_attribution,
-        "correlation": correlation,
-        "sectors": sectors,
-    }
+        # Recalculate Sharpe/Sortino if the user supplied a custom risk-free rate
+        sharpe_val = round(m.get("sharpe_ratio", 0), 2)
+        sortino_val = round(m.get("sortino_ratio", 0), 2)
+        rfr: Optional[float] = req.risk_free_rate
+        if rfr is not None:
+            ann_ret: float = float(m.get("annualized_return", 0) or 0.0)
+            ann_vol: float = float(m.get("annualized_volatility", 0) or 0.01)
+            new_sharpe: float = (ann_ret - rfr) / ann_vol
+            old_sharpe: float = float(m.get("sharpe_ratio", new_sharpe) or new_sharpe)
+            sharpe_val = round(new_sharpe, 2)
+            if old_sharpe != 0:
+                sortino_val = round(float(m.get("sortino_ratio", 0)) * (new_sharpe / old_sharpe), 2)
+
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        logger.info("[v2_analyze] duration_ms=%f", duration_ms)
+
+        return {
+            "tickers": tickers,
+            "weights": weights,
+            "latest_prices": raw.get("latest_prices", {}),
+            "metrics": {
+                "sharpe": sharpe_val,
+                "sortino": sortino_val,
+                "alpha": round(m.get("alpha", 0), 4),
+                "information_ratio": round(m.get("information_ratio", 0), 2),
+                "calmar": round(m.get("calmar_ratio", 0), 2),
+                "var_95": round(m.get("value_at_risk", 0), 4),
+                "cvar_95": round(m.get("cvar_95", 0), 4),
+                "max_drawdown": round(m.get("max_drawdown", 0), 4),
+                "beta": round(m.get("beta", 1), 2),
+                "annualized_return": round(m.get("annualized_return", 0), 4),
+                "volatility": round(m.get("annualized_volatility", 0), 4),
+                "health_score": m.get("health_score", 50),
+                "weighted_pe": round(weighted_pe or 0, 1),
+                "weighted_ps": round(weighted_ps or 0, 1),
+            },
+            "performance": performance,
+            "rolling_sharpe": rolling_sharpe,
+            "drawdown": drawdown,
+            "risk_attribution": risk_attribution,
+            "correlation": correlation,
+            "sectors": sectors,
+        }
+    except Exception as e:
+        duration_ms = (time.perf_counter() - start) * 1000.0
+        logger.error("[v2_analyze] Error occurred: %s. duration_ms=%f", str(e), duration_ms, exc_info=True)
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Failed to analyze portfolio: {str(e)}")
 
 
 # ── POST /api/v2/portfolio/optimize ───────────────────────────────────────

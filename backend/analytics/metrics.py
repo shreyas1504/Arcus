@@ -293,24 +293,79 @@ def compute_risk_contribution(returns_df: pd.DataFrame, weights: np.ndarray) -> 
     }
 
 
+import threading
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from backend.data.common_tickers import COMMON_TICKER_INFO
+
+logger = logging.getLogger("pulse.metrics")
+
+_valuation_cache = {}
+_valuation_lock = threading.Lock()
+
+# Pre-populate
+for _t, _info in COMMON_TICKER_INFO.items():
+    _valuation_cache[_t.upper()] = {
+        "pe": _info["pe"],
+        "ps": _info["ps"]
+    }
+
+
 def compute_valuation_metrics(tickers: list[str], weights: list[float]) -> dict:
-    """Weighted average P/E and P/S ratios via yfinance Ticker.info."""
+    """Weighted average P/E and P/S ratios via cache or concurrent yfinance Ticker.info."""
     pe_values: list[tuple[float, float]] = []
     ps_values: list[tuple[float, float]] = []
+    
+    missing = []
     for ticker, weight in zip(tickers, weights):
-        try:
-            info = yf.Ticker(ticker).info
-            pe = info.get("trailingPE") or info.get("forwardPE")
-            ps = info.get("priceToSalesTrailing12Months")
-            if pe:
-                pe_values.append((float(pe), float(weight)))
-            if ps:
-                ps_values.append((float(ps), float(weight)))
-        except Exception:
-            pass
+        t_upper = ticker.upper()
+        if t_upper in _valuation_cache:
+            val = _valuation_cache[t_upper]
+            pe, ps = val.get("pe"), val.get("ps")
+            if pe is not None:
+                pe_values.append((pe, weight))
+            if ps is not None:
+                ps_values.append((ps, weight))
+        else:
+            missing.append((t_upper, weight))
+            
+    if missing:
+        logger.info("compute_valuation_metrics: cache miss for tickers=%s, fetching concurrently", [m[0] for m in missing])
+        def fetch_val(t: str):
+            try:
+                import yfinance as yf
+                info = yf.Ticker(t).info or {}
+                pe = info.get("trailingPE") or info.get("forwardPE")
+                ps = info.get("priceToSalesTrailing12Months")
+                return {
+                    "pe": float(pe) if pe else None,
+                    "ps": float(ps) if ps else None
+                }
+            except Exception:
+                return {"pe": None, "ps": None}
+                
+        with ThreadPoolExecutor(max_workers=min(len(missing), 10)) as executor:
+            future_to_item = {executor.submit(fetch_val, item[0]): item for item in missing}
+            for future in as_completed(future_to_item):
+                t, weight = future_to_item[future]
+                try:
+                    val = future.result()
+                except Exception:
+                    val = {"pe": None, "ps": None}
+                
+                with _valuation_lock:
+                    _valuation_cache[t] = val
+                    
+                pe, ps = val.get("pe"), val.get("ps")
+                if pe is not None:
+                    pe_values.append((pe, weight))
+                if ps is not None:
+                    ps_values.append((ps, weight))
+                    
     total_pe_w = sum(w for _, w in pe_values)
     total_ps_w = sum(w for _, w in ps_values)
     weighted_pe = sum(pe * w for pe, w in pe_values) / total_pe_w if total_pe_w else None
     weighted_ps = sum(ps * w for ps, w in ps_values) / total_ps_w if total_ps_w else None
+    
     return {"weighted_pe": round(weighted_pe, 2) if weighted_pe else None,
             "weighted_ps": round(weighted_ps, 2) if weighted_ps else None}

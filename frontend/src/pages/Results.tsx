@@ -699,8 +699,10 @@ const Results = () => {
           <div className="glass rounded-xl p-5">
             <span className="label-mono mb-4 block" style={{ color: 'hsl(214 10% 57%)' }}>OPTIMAL WEIGHTS</span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {Object.values(optWeights as Record<string, OptimalStrategy>).map((strat) => (
-                <div key={strat.label} className="glass-elevated rounded-lg p-3 relative">
+              {Object.values(optWeights as Record<string, OptimalStrategy>)
+                .filter((strat) => strat && typeof strat === 'object' && !Array.isArray(strat) && strat.label)
+                .map((strat) => (
+                  <div key={strat.label} className="glass-elevated rounded-lg p-3 relative">
                   {strat.recommended && (
                     <span className="absolute -top-2 right-2 bg-primary text-primary-foreground font-mono text-[8px] uppercase px-2 py-0.5 rounded-full">RECOMMENDED</span>
                   )}
