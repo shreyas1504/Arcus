@@ -1,6 +1,6 @@
-# Arcus — Portfolio Analytics Platform
+# Arcus — AI-Powered Portfolio Analytics Platform
 
-**Institutional-grade portfolio analytics.** Sharpe ratios. VaR. Monte Carlo. In seconds.
+**Conversational AI meets institutional-grade risk analytics.** Ask your portfolio anything. Get Sharpe ratios, VaR, Monte Carlo simulations, and stress tests — explained in plain English.
 
 🌐 **Live Demo:** [shreyas1504.github.io/Arcus](https://shreyas1504.github.io/Arcus/)
 
@@ -26,6 +26,20 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 
 ---
 
+## Product Philosophy
+
+Arcus was built on one observation: retail investors have access to the same raw data as hedge funds, but not the analytical infrastructure to interpret it.
+
+**Key product decisions:**
+- **Health Score (0–100) as the primary UX anchor** — Sharpe ratios and VaR percentages are meaningless to most users. A single score reduces cognitive load and gives immediate feedback without requiring financial literacy.
+- **AI grounded in live portfolio data, not general knowledge** — Arcus AI is explicitly constrained to only reference data injected from the user's actual portfolio. The system prompt enforces: "Use only the provided portfolio data; do not invent missing values." Hallucinated figures destroy trust in a financial product.
+- **MVP scope: 5 core risk metrics before advanced features** — Sharpe, Beta, VaR, Max Drawdown, and Health Score shipped first. Monte Carlo, Efficient Frontier, and Stress Testing came after validating users understood the core output.
+- **Conversational interface over raw dashboards** — the AI Chat layer exists because numbers without interpretation don't drive decisions. Users need to ask "is my portfolio too risky?" not just see a Beta of 1.4.
+
+**Success metric:** A retail investor with no finance background can understand their portfolio risk posture and get one actionable recommendation in under 60 seconds.
+
+---
+
 ## Tech Stack
 
 ### Backend
@@ -37,6 +51,7 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 | **SciPy** | Portfolio optimisation (SLSQP constrained minimiser) |
 | **yfinance** | Historical price data from Yahoo Finance |
 | **Recharts / Framer** | Dynamic, interactive simulation charting |
+| **Anthropic Claude Sonnet** | Conversational AI layer — grounded in live portfolio context with multi-turn memory |
 
 ### Frontend
 | Tool | Purpose |
@@ -135,6 +150,18 @@ Arcus/
 ## Disclaimer
 
 This tool is for educational and demonstration purposes only. It does not constitute financial advice. Always do your own research before making investment decisions.
+
+---
+
+## AI Integration Details
+
+The AI layer (backend/routers/chat.py) is built around three explicit design principles:
+
+**Grounding:** Every conversation turn dynamically injects the user's live portfolio — tickers, weights, prices, and all computed metrics (Sharpe, Sortino, VaR, CVaR, Beta, Max Drawdown, Alpha, Annualized Return, Volatility, Health Score) — into the system prompt. The model only sees what the user's portfolio actually contains.
+
+**Safety / Hallucination Prevention:** The system prompt explicitly instructs the model not to invent missing values, and to clearly state when data is unavailable. This prevents confidently stated incorrect financial figures.
+
+**Multi-Turn Context:** Full conversation history is passed on every request, enabling coherent follow-up questions across a session. Investor risk tolerance and target return are also injected per turn for personalized responses.
 
 ---
 
