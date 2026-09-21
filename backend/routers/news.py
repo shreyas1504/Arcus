@@ -23,7 +23,6 @@ RSS_FEEDS = [
     {"url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US", "source": "Yahoo Finance"},
     {"url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "source": "CNBC"},
     {"url": "https://feeds.marketwatch.com/marketwatch/topstories/", "source": "MarketWatch"},
-    {"url": "https://feeds.reuters.com/reuters/businessNews", "source": "Reuters"},
 ]
 
 TICKER_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
