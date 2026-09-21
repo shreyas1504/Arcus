@@ -256,7 +256,8 @@ def run_event_study(tickers: list[str], quarters: int = QUARTERS) -> dict:
     # ~8 quarters of events plus the 20-day pre-window: 3 calendar years is
     # comfortably enough, and yfinance is cheap on daily bars.
     end = datetime.now().date()
-    start = end.replace(year=end.year - 3)
+    # DateOffset rather than replace(year=...), which raises on 29 February.
+    start = (pd.Timestamp(end) - pd.DateOffset(years=3)).date()
 
     earnings, earnings_errors = get_earnings_dates(clean, limit=quarters * 3)
     frames, price_errors = download_ohlcv(clean + [BENCHMARK], start, end)
