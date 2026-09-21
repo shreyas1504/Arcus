@@ -2,7 +2,7 @@
 
 **Conversational AI meets institutional-grade risk analytics.** Ask your portfolio anything. Get Sharpe ratios, VaR, Monte Carlo simulations, and stress tests — explained in plain English.
 
-🌐 **Live Demo:** [shreyas1504.github.io/Arcus](https://shreyas1504.github.io/Arcus/)
+🌐 **Live Demo:** [arcus-insights.com](https://arcus-insights.com)
 
 ---
 
@@ -23,6 +23,7 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 | **AI Chat (Arcus AI)** | Ask questions about your portfolio in natural language. |
 | **Sector Analysis** | GICS sector breakdown with concentration warnings. |
 | **Correlation Heatmap** | Pairwise stock correlations — are your holdings truly diversified? |
+| **News Impact** | How your holdings have actually reacted to their last 8 earnings reports. |
 
 ---
 
@@ -109,7 +110,8 @@ Arcus/
 │   ├── main.py                 # FastAPI app entry point
 │   ├── config.py               # Constants and demo portfolios
 │   ├── analytics/
-│   │   └── metrics.py          # All risk calculations + interpretations
+│   │   ├── metrics.py          # All risk calculations + interpretations
+│   │   └── event_study.py      # Earnings event study + headline classification
 │   ├── data/
 │   │   └── fetcher.py          # yfinance data fetching + caching
 │   ├── models/
@@ -144,6 +146,41 @@ Arcus/
 | `POST` | `/api/portfolio/stress-test` | Historical stress test scenarios |
 | `POST` | `/api/v2/chat` | AI chatbot conversation |
 | `GET` | `/api/news/market` | Live RSS market news feed |
+| `GET` | `/api/news/sentiment/{ticker}` | VADER sentiment across a ticker's recent headlines |
+| `POST` | `/api/news/event-impact` | Earnings event study for a list of tickers |
+
+---
+
+## News Impact
+
+Headlines tell you what happened. The News Impact panel tells you what it has
+historically been worth to your holdings.
+
+**Headline classification.** Every live headline is bucketed into `EARNINGS`,
+`POLICY`, `GEOPOLITICAL` or `OTHER` by a literal, whole-word keyword list — no
+model, no scoring, and the rules are readable in
+`backend/analytics/event_study.py`. Anything that matches nothing is `OTHER`
+rather than a guess.
+
+**Earnings event study.** For each ticker, Arcus takes the last 8 reported
+earnings dates from Yahoo Finance and measures the market's reaction over the
+day **-1 to +3** window. Day 0 is the session that carries the reaction: an
+announcement at or after the 16:00 close is measured from the next trading day.
+
+| Measure | How it is computed |
+|---|---|
+| **Abnormal return** | The ticker's cumulative return across the window minus SPY's over the same window. |
+| **Volatility change** | Standard deviation of daily returns over the 5 sessions after the event vs the 20 sessions before. |
+| **Volume spike** | Event-day volume divided by the prior 20-session average volume. |
+
+Results are aggregated per ticker and overall as a mean, a median, and the
+share of reactions that were positive. Results are cached for 6 hours.
+
+**On missing data.** Any event whose window runs off the end of the available
+price history — a report from last week, a recent listing — is skipped, counted,
+and reported in the response. Skipped events contribute nothing to the averages,
+and a study with no usable events renders an empty state. No figure shown in
+this panel is estimated, interpolated or sampled.
 
 ---
 
