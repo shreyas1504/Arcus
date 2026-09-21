@@ -154,6 +154,9 @@ export const getDemoPortfolios = () => get('/api/v2/portfolio/demo-portfolios');
 
 export const getSentiment = (ticker: string) => get(`/api/news/sentiment/${ticker}`);
 
+export const getEventImpact = (tickers: string[], quarters = 8) =>
+  post('/api/news/event-impact', { tickers, quarters });
+
 // ── Stock price endpoint ─────────────────────────────────────────────────
 export async function getStockPrice(ticker: string) {
   const res = await fetch(`${BASE}/api/portfolio/stock/${ticker}`);

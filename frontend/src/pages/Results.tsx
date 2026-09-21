@@ -27,6 +27,7 @@ import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
 import { useSettings, type AppSettings } from '@/hooks/use-settings';
 import Disclaimer from '@/components/legal/Disclaimer';
 import SentimentBadge from '@/components/SentimentBadge';
+import NewsImpact from '@/components/NewsImpact';
 
 const askAI = (question: string) => {
   openArcusChat(question);
@@ -683,6 +684,9 @@ const Results = () => {
 
         {/* Past vs Future */}
         <PastVsFuture />
+
+        {/* News Impact — historical earnings reaction + today's headlines */}
+        <NewsImpact tickers={tickers} />
 
         {/* Risk Intelligence */}
         <SectionHeader label="RISK INTELLIGENCE" chatQuestion="Give me an overview of my portfolio's risk intelligence — risk attribution, correlation, and sector concentration." />
