@@ -6,3 +6,4 @@ yfinance>=0.2.31
 scipy>=1.11.0
 pydantic>=2.0.0
 vaderSentiment>=3.3.2
+lxml>=5.0.0
