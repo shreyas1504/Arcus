@@ -26,6 +26,8 @@ import { openArcusChat } from '@/lib/chat-launcher';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
 import { useSettings, type AppSettings } from '@/hooks/use-settings';
 import Disclaimer from '@/components/legal/Disclaimer';
+import SentimentBadge from '@/components/SentimentBadge';
+import NewsImpact from '@/components/NewsImpact';
 
 const askAI = (question: string) => {
   openArcusChat(question);
@@ -626,7 +628,7 @@ const Results = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                {['Ticker', 'Qty', 'Cost', 'Price', 'P&L $', 'P&L %'].map((h) => (
+                {['Ticker', 'Sentiment', 'Qty', 'Cost', 'Price', 'P&L $', 'P&L %'].map((h) => (
                   <th key={h} className="text-left py-2 pr-2 label-mono whitespace-nowrap" style={{ color: 'hsl(214 10% 57%)' }}>{h}</th>
                 ))}
               </tr>
@@ -640,6 +642,7 @@ const Results = () => {
                 return (
                   <tr key={row.ticker} className="border-b border-border/30 hover:bg-card-elevated/50 transition-colors">
                     <td className="py-2.5 pr-3 font-mono text-xs font-medium text-foreground whitespace-nowrap">{row.ticker}</td>
+                    <td className="py-2.5 pr-3 whitespace-nowrap"><SentimentBadge ticker={row.ticker} /></td>
                     <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.shares}</td>
                     <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.cost_basis != null ? (settings.vaultMode ? '$***.**' : `$${row.cost_basis.toFixed(2)}`) : '—'}</td>
                     <td className="py-2.5 pr-3 font-mono text-xs text-foreground whitespace-nowrap">{row.current_price != null ? (settings.vaultMode ? '$***.**' : `$${row.current_price.toFixed(2)}`) : '—'}</td>
@@ -654,7 +657,7 @@ const Results = () => {
               })}
               <tr className="border-t-2 border-border">
                 <td className="py-2.5 pr-3 font-mono text-xs font-bold text-foreground">TOTAL</td>
-                <td colSpan={3} />
+                <td colSpan={4} />
                 <td className="py-2.5 pr-2 font-mono text-xs font-bold text-signal-green whitespace-nowrap">
                   {(() => {
                     const total = pnlRows.reduce((a, r) => r.current_price != null && r.cost_basis != null ? a + (r.current_price - r.cost_basis) * r.shares : a, 0);
@@ -681,6 +684,9 @@ const Results = () => {
 
         {/* Past vs Future */}
         <PastVsFuture />
+
+        {/* News Impact — historical earnings reaction + today's headlines */}
+        <NewsImpact tickers={tickers} />
 
         {/* Risk Intelligence */}
         <SectionHeader label="RISK INTELLIGENCE" chatQuestion="Give me an overview of my portfolio's risk intelligence — risk attribution, correlation, and sector concentration." />

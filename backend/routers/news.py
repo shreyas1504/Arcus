@@ -9,6 +9,13 @@ from email.utils import parsedate_to_datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+from backend.analytics.event_study import (
+    classify_headline,
+    group_headlines_by_category,
+    run_event_study,
+)
 
 logger = logging.getLogger("pulse.news")
 
@@ -23,7 +30,6 @@ RSS_FEEDS = [
     {"url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=&region=US&lang=en-US", "source": "Yahoo Finance"},
     {"url": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "source": "CNBC"},
     {"url": "https://feeds.marketwatch.com/marketwatch/topstories/", "source": "MarketWatch"},
-    {"url": "https://feeds.reuters.com/reuters/businessNews", "source": "Reuters"},
 ]
 
 TICKER_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={ticker}&region=US&lang=en-US"
@@ -111,7 +117,7 @@ def _fetch_all_feeds() -> list[dict]:
         if h not in seen:
             seen.add(h)
             article["id"] = str(hash(h))[:12]
-            article["category"] = "general"
+            article["category"] = classify_headline(article["headline"])
             unique.append(article)
 
     return unique[:20]
@@ -124,6 +130,7 @@ def _fetch_ticker_feed(ticker: str) -> list[dict]:
     for a in articles:
         a["related"] = ticker
         a["id"] = str(hash(a["headline"].lower()[:60]))[:12]
+        a["category"] = classify_headline(a["headline"])
     return articles
 
 
@@ -166,7 +173,7 @@ def _mock_fallback() -> list[dict]:
     now = int(time.time())
     return [
         {"id": "1", "headline": "Markets update — checking live feeds...", "source": "Pulse", "url": "#",
-         "summary": "Live RSS feeds are temporarily unavailable. News will refresh automatically.", "datetime": now, "category": "general"},
+         "summary": "Live RSS feeds are temporarily unavailable. News will refresh automatically.", "datetime": now, "category": "OTHER"},
     ]
 
 
@@ -218,3 +225,27 @@ def get_ticker_sentiment(ticker: str):
     }
     _news_cache[cache_key] = (time.time(), result)
     return result
+
+
+# ── Event impact ────────────────────────────────────────────────────────────
+
+class EventImpactRequest(BaseModel):
+    tickers: list[str] = Field(default_factory=list)
+    quarters: int = 8
+
+
+@router.post("/event-impact")
+def get_event_impact(req: EventImpactRequest):
+    """Earnings event study for the requested tickers, plus today's headlines
+    grouped by event category.
+
+    Results are cached for 6 hours. Tickers whose price or earnings history is
+    unavailable are reported in `skipped` and left out of the averages — the
+    response never contains a substituted or estimated figure.
+    """
+    quarters = max(1, min(req.quarters, 20))
+    study = run_event_study(req.tickers, quarters=quarters)
+
+    headlines = _fetch_all_feeds()
+    study["headlines_by_category"] = group_headlines_by_category(headlines)
+    return study

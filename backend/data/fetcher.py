@@ -372,3 +372,165 @@ def sector_weights(tickers: list[str], weights, sector_map: dict) -> dict:
         sector = sector_map.get(ticker, "Unknown")
         aggregated[sector] = aggregated.get(sector, 0.0) + w
     return aggregated
+
+
+# ── OHLCV + earnings dates (event study) ─────────────────────────────────────
+# Same subprocess isolation as download_prices, but keeps Volume as well as
+# Close, and exposes the reported earnings dates behind the same cache.
+
+_ohlcv_cache: dict[str, tuple[datetime, dict, dict]] = {}
+_OHLCV_CACHE_TTL = 21600  # 6 hours — matches the event-study cache
+
+_earnings_cache: dict[str, tuple[datetime, dict, dict]] = {}
+_EARNINGS_CACHE_TTL = 21600  # 6 hours
+
+_OHLCV_SCRIPT = '''
+import sys, json
+import yfinance as yf
+
+tickers = json.loads(sys.argv[1])
+start = sys.argv[2]
+end = sys.argv[3]
+
+result = {"frames": {}, "errors": {}}
+for ticker in tickers:
+    try:
+        hist = yf.Ticker(ticker).history(start=start, end=end)
+        if hist.empty or "Close" not in hist.columns or "Volume" not in hist.columns:
+            result["errors"][ticker] = "empty response"
+            continue
+        rows = []
+        for idx, row in hist.iterrows():
+            ts = int(idx.timestamp() * 1000)
+            rows.append([ts, float(row["Close"]), float(row["Volume"])])
+        result["frames"][ticker] = rows
+    except Exception as exc:
+        result["errors"][ticker] = str(exc)
+
+print(json.dumps(result))
+'''
+
+_EARNINGS_SCRIPT = '''
+import sys, json
+import yfinance as yf
+
+tickers = json.loads(sys.argv[1])
+limit = int(sys.argv[2])
+
+result = {"dates": {}, "errors": {}}
+for ticker in tickers:
+    try:
+        df = yf.Ticker(ticker).get_earnings_dates(limit=limit)
+        if df is None or df.empty:
+            result["errors"][ticker] = "no earnings dates"
+            continue
+        result["dates"][ticker] = [idx.isoformat() for idx in df.index]
+    except Exception as exc:
+        result["errors"][ticker] = str(exc)
+
+print(json.dumps(result))
+'''
+
+
+def download_ohlcv(tickers: list[str], start, end) -> tuple[dict[str, pd.DataFrame], dict]:
+    """Download daily Close + Volume per ticker.
+
+    Returns ({ticker: DataFrame[close, volume]}, {ticker: error}). Tickers that
+    fail are absent from the first dict and present in the second — callers are
+    expected to skip them rather than substitute anything.
+    """
+    key = _cache_key(tickers, start, end)
+    if key in _ohlcv_cache:
+        cached_time, cached_frames, cached_errors = _ohlcv_cache[key]
+        if (datetime.now() - cached_time).total_seconds() < _OHLCV_CACHE_TTL:
+            logger.info("download_ohlcv: cache hit")
+            return {t: df.copy() for t, df in cached_frames.items()}, dict(cached_errors)
+
+    lock = _get_price_lock(f"ohlcv-{key}")
+    with lock:
+        if key in _ohlcv_cache:
+            cached_time, cached_frames, cached_errors = _ohlcv_cache[key]
+            if (datetime.now() - cached_time).total_seconds() < _OHLCV_CACHE_TTL:
+                return {t: df.copy() for t, df in cached_frames.items()}, dict(cached_errors)
+            del _ohlcv_cache[key]
+
+        logger.info(f"download_ohlcv: downloading {tickers} {start}..{end}")
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", _OHLCV_SCRIPT, json.dumps(tickers), str(start), str(end)],
+                capture_output=True, text=True, timeout=180,
+            )
+            if proc.returncode != 0:
+                logger.error(f"  OHLCV subprocess failed: {proc.stderr[:300]}")
+                return {}, {t: "subprocess error" for t in tickers}
+
+            payload = json.loads(proc.stdout)
+            errors = payload.get("errors", {})
+            frames: dict[str, pd.DataFrame] = {}
+            for ticker, rows in payload.get("frames", {}).items():
+                index = pd.DatetimeIndex([pd.Timestamp(ts, unit="ms") for ts, _, _ in rows])
+                if index.tz is not None:
+                    index = index.tz_convert(None)
+                frames[ticker] = pd.DataFrame(
+                    {"close": [c for _, c, _ in rows], "volume": [v for _, _, v in rows]},
+                    index=index.normalize(),
+                )
+
+            _ohlcv_cache[key] = (datetime.now(), {t: df.copy() for t, df in frames.items()}, dict(errors))
+            return frames, errors
+
+        except subprocess.TimeoutExpired:
+            logger.error("  OHLCV subprocess timed out")
+            return {}, {t: "timeout" for t in tickers}
+        except Exception as exc:
+            logger.error(f"  OHLCV unexpected error: {exc}")
+            return {}, {t: str(exc) for t in tickers}
+
+
+def get_earnings_dates(tickers: list[str], limit: int = 12) -> tuple[dict[str, list], dict]:
+    """Reported earnings announcement timestamps per ticker, newest first.
+
+    Returns ({ticker: [pd.Timestamp, ...]}, {ticker: error}). Timestamps keep
+    their exchange timezone so callers can tell a pre-open announcement from an
+    after-close one.
+    """
+    key = f"earnings-{'-'.join(sorted(tickers))}-{limit}"
+    if key in _earnings_cache:
+        cached_time, cached_dates, cached_errors = _earnings_cache[key]
+        if (datetime.now() - cached_time).total_seconds() < _EARNINGS_CACHE_TTL:
+            logger.info("get_earnings_dates: cache hit")
+            return {t: list(v) for t, v in cached_dates.items()}, dict(cached_errors)
+
+    lock = _get_price_lock(key)
+    with lock:
+        if key in _earnings_cache:
+            cached_time, cached_dates, cached_errors = _earnings_cache[key]
+            if (datetime.now() - cached_time).total_seconds() < _EARNINGS_CACHE_TTL:
+                return {t: list(v) for t, v in cached_dates.items()}, dict(cached_errors)
+            del _earnings_cache[key]
+
+        logger.info(f"get_earnings_dates: downloading {tickers} (limit={limit})")
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", _EARNINGS_SCRIPT, json.dumps(tickers), str(limit)],
+                capture_output=True, text=True, timeout=180,
+            )
+            if proc.returncode != 0:
+                logger.error(f"  Earnings subprocess failed: {proc.stderr[:300]}")
+                return {}, {t: "subprocess error" for t in tickers}
+
+            payload = json.loads(proc.stdout)
+            errors = payload.get("errors", {})
+            dates = {
+                ticker: [pd.Timestamp(v) for v in values]
+                for ticker, values in payload.get("dates", {}).items()
+            }
+            _earnings_cache[key] = (datetime.now(), {t: list(v) for t, v in dates.items()}, dict(errors))
+            return dates, errors
+
+        except subprocess.TimeoutExpired:
+            logger.error("  Earnings subprocess timed out")
+            return {}, {t: "timeout" for t in tickers}
+        except Exception as exc:
+            logger.error(f"  Earnings unexpected error: {exc}")
+            return {}, {t: str(exc) for t in tickers}
