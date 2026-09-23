@@ -1,9 +1,23 @@
 import { TICKER_SECTOR_MAP } from '@/lib/mock-data';
 
-// In production (Vercel / GitHub Pages), use Render backend; locally, use localhost
-const BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8000'
-  : 'https://arcus-backend.onrender.com';
+// Backend URL, in precedence order:
+//   1. VITE_API_URL, baked in at build time (Vercel, the Pages workflow, or a
+//      local .env) — moving the backend to another host is a build variable,
+//      not a code change.
+//   2. localhost, for local development.
+//   3. the Render deployment.
+export const DEFAULT_BACKEND_URL = 'https://arcus-backend.onrender.com';
+export const LOCAL_BACKEND_URL = 'http://localhost:8000';
+
+/** Pure so the precedence is covered by tests rather than by deploying. */
+export const resolveApiBase = (configured: string | undefined, hostname: string): string => {
+  const explicit = (configured ?? '').trim().replace(/\/+$/, '');
+  if (explicit) return explicit;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return LOCAL_BACKEND_URL;
+  return DEFAULT_BACKEND_URL;
+};
+
+const BASE = resolveApiBase(import.meta.env.VITE_API_URL, window.location.hostname);
 
 // ── Types ────────────────────────────────────────────────────────────────
 export interface PortfolioRequest {

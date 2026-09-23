@@ -142,6 +142,16 @@ export const symmetricDomain = (values: number[]): [number, number] => {
 export const symmetricTicks = ([low, high]: [number, number]): number[] =>
   [low, low / 2, 0, high / 2, high];
 
+const ErrorState = ({ methodology }: { methodology: string }) => (
+  <div className="py-8 text-center">
+    <div className="font-mono text-xs text-muted-foreground">News Impact is unavailable right now</div>
+    <div className="font-mono text-[10px] text-muted-foreground mt-2">
+      The analytics service could not be reached. Try again in a few minutes.
+    </div>
+    <div className="font-mono text-[10px] text-muted-foreground/70 mt-3">{methodology}</div>
+  </div>
+);
+
 const EmptyState = ({ methodology, skipped }: { methodology: string; skipped: number }) => (
   <div className="py-8 text-center">
     <div className="font-mono text-xs text-muted-foreground">No earnings events could be measured</div>
@@ -183,8 +193,17 @@ export const NewsImpactPanel = ({
     );
   }
 
-  // A failed study shows an empty state. It never falls back to sample numbers.
-  if (isError || !data || !data.overall || data.events.length === 0) {
+  // Neither state ever falls back to sample numbers.
+  if (isError) {
+    return (
+      <div className="glass rounded-xl p-4 sm:p-5 mb-8">
+        {header}
+        <ErrorState methodology={methodology} />
+      </div>
+    );
+  }
+
+  if (!data || !data.overall || data.events.length === 0) {
     return (
       <div className="glass rounded-xl p-4 sm:p-5 mb-8">
         {header}
