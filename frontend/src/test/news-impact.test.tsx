@@ -157,9 +157,10 @@ describe('NewsImpactPanel', () => {
     expect(screen.getByTestId('news-impact-loading')).toBeInTheDocument();
   });
 
-  it('shows an empty state on error — no sample numbers', () => {
+  it('shows an unavailable state on error — no sample numbers', () => {
     render(<NewsImpactPanel isError />);
-    expect(screen.getByText('No earnings events could be measured')).toBeInTheDocument();
+    expect(screen.getByText('News Impact is unavailable right now')).toBeInTheDocument();
+    expect(screen.queryByText('No earnings events could be measured')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText(METHODOLOGY_FALLBACK)).toBeInTheDocument();
   });

@@ -72,6 +72,9 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /Arcus/
+          # Backend base URL. Override in repo settings (Variables -> Actions)
+          # to point the Pages build at a different host without a code change.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Add 404.html for SPA routing
         run: cp frontend/dist/index.html frontend/dist/404.html

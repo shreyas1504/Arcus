@@ -1,8 +1,19 @@
 {
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
+  "build": {
+    "env": {
+      "VITE_API_URL": "https://arcus-backend.onrender.com"
+    }
+  },
   "rewrites": [
-    { "source": "/api/chat", "destination": "/api/chat" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/chat",
+      "destination": "/api/chat"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
