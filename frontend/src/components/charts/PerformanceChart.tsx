@@ -1,5 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from 'recharts';
-import { MOCK_PERFORMANCE_DATA } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
+
+export type PerformancePoint = { date: string; portfolio: number; benchmark: number };
 
 type TooltipPayload = { color?: string; name?: string; value?: number };
 
@@ -17,8 +19,16 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-const PerformanceChart = ({ data, benchmarkLabel = 'SPY' }: { data?: typeof MOCK_PERFORMANCE_DATA; benchmarkLabel?: string }) => {
-  const chartData = data ?? MOCK_PERFORMANCE_DATA;
+const PerformanceChart = ({ data, benchmarkLabel = 'SPY' }: { data?: PerformancePoint[]; benchmarkLabel?: string }) => {
+  if (!data?.length) {
+    return (
+      <div className="glass rounded-xl p-5">
+        <span className="label-mono">PORTFOLIO PERFORMANCE</span>
+        <DataUnavailable label="Performance history" height={240} />
+      </div>
+    );
+  }
+  const chartData = data;
   return (
     <div className="glass rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">

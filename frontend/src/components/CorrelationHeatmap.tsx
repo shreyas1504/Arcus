@@ -1,6 +1,8 @@
 import { Fragment } from 'react';
 import { motion } from 'framer-motion';
-import { MOCK_CORRELATION } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
+
+export type CorrelationData = { tickers: string[]; matrix: number[][] };
 
 const getColor = (val: number) => {
   if (val >= 0.85) return { bg: 'rgba(240,81,79,0.18)', text: '#F0514F' };
@@ -10,8 +12,16 @@ const getColor = (val: number) => {
   return { bg: 'rgba(72,79,88,0.18)', text: '#8B949E' };
 };
 
-const CorrelationHeatmap = ({ data }: { data?: typeof MOCK_CORRELATION }) => {
-  const { tickers, matrix } = data ?? MOCK_CORRELATION;
+const CorrelationHeatmap = ({ data }: { data?: CorrelationData }) => {
+  if (!data?.tickers?.length || !data?.matrix?.length) {
+    return (
+      <div className="glass rounded-xl p-4 sm:p-5">
+        <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>CORRELATION MATRIX</span>
+        <DataUnavailable label="Correlations" height={220} />
+      </div>
+    );
+  }
+  const { tickers, matrix } = data;
   const n = tickers.length;
 
   return (
