@@ -1,27 +1,16 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import DataUnavailable from '@/components/DataUnavailable';
-
-export type MonteCarloPoint = { month: string; p10: number; p25: number; p50: number; p75: number; p90: number };
+import { MOCK_MONTE_CARLO } from '@/lib/mock-data';
 
 interface MonteCarloChartProps {
-  data?: MonteCarloPoint[];
+  data?: typeof MOCK_MONTE_CARLO;
   targetReturn?: number;  // decimal e.g. 0.10
   initialValue?: number;  // e.g. 100000
   vaultMode?: boolean;
 }
 
 const MonteCarloChart = ({ data, targetReturn, initialValue = 100000, vaultMode = false }: MonteCarloChartProps) => {
+  const chartData = data ?? MOCK_MONTE_CARLO;
   const targetValue = targetReturn !== undefined ? initialValue * (1 + targetReturn) : undefined;
-
-  if (!data?.length) {
-    return (
-      <div className="glass rounded-xl p-5">
-        <span className="label-mono">MONTE CARLO SIMULATION</span>
-        <DataUnavailable label="Simulation" height={240} />
-      </div>
-    );
-  }
-  const chartData = data;
 
   return (
     <div className="glass rounded-xl p-5">

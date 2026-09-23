@@ -1,18 +1,8 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import DataUnavailable from '@/components/DataUnavailable';
+import { MOCK_DRAWDOWN } from '@/lib/mock-data';
 
-export type DrawdownPoint = { date: string; drawdown: number };
-
-const DrawdownChart = ({ data }: { data?: DrawdownPoint[] }) => {
-  if (!data?.length) {
-    return (
-      <div className="glass rounded-xl p-5">
-        <span className="label-mono">DRAWDOWN</span>
-        <DataUnavailable label="Drawdown" height={200} />
-      </div>
-    );
-  }
-  const chartData = data;
+const DrawdownChart = ({ data }: { data?: typeof MOCK_DRAWDOWN }) => {
+  const chartData = data ?? MOCK_DRAWDOWN;
   return (
     <div className="glass rounded-xl p-5">
       <span className="label-mono">DRAWDOWN</span>
