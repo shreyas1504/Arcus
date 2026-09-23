@@ -20,7 +20,8 @@ import CorrelationHeatmap from '@/components/CorrelationHeatmap';
 import StressTestGrid from '@/components/StressTestGrid';
 import PastVsFuture from '@/components/PastVsFuture';
 import FullReport from '@/components/FullReport';
-import { MOCK_PORTFOLIO, MOCK_SPARKLINES, MOCK_OPTIMAL_WEIGHTS, MOCK_STOCK_PRICES, TICKER_SECTOR_MAP, MOCK_SECTORS, computePortfolioMetrics } from '@/lib/mock-data';
+import { TICKER_SECTOR_MAP } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
 import { analyzePortfolio, optimizePortfolio, runMonteCarlo, runStressTest, getEfficientFrontier, getRecommendations } from '@/lib/api';
 import { openArcusChat } from '@/lib/chat-launcher';
 import { usePortfolioConfig, portfolioToRequest } from '@/hooks/use-portfolio';
@@ -103,16 +104,24 @@ const Results = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Use real metrics or fallback to mock
-  // When backend is unavailable, compute from the user's actual tickers
-  const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
-  const userShares  = config?.holdings.filter(h => h.ticker).map(h => parseFloat(h.shares) || 1) ?? [];
-  const rawMetrics = analysis?.metrics
-    ?? (userTickers.length > 0 ? computePortfolioMetrics(userTickers, userShares, settings.riskFreeRate, settings.benchmark) : MOCK_PORTFOLIO.metrics);
+  // getRecommendations was imported but never called — the Recommendations tab
+  // rendered a hardcoded list. It now shows what the API actually returned.
+  const { data: recommendations } = useQuery<string[]>({
+    queryKey: ['recommendations', req],
+    queryFn: () => getRecommendations(req!),
+    enabled: !!req,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const tickers = analysis?.tickers ?? (userTickers.length > 0 ? userTickers : MOCK_PORTFOLIO.tickers);
-  const weights = analysis?.weights ?? MOCK_PORTFOLIO.weights;
-  const optWeights = optimize ?? MOCK_OPTIMAL_WEIGHTS;
+  // Measured values only. When the backend cannot be reached these stay
+  // undefined and each block renders an unavailable state — a substituted
+  // figure would read as analysis the user never actually got.
+  const userTickers = config?.holdings.filter(h => h.ticker).map(h => h.ticker) ?? [];
+
+  // The user's own holdings are theirs to show; only the analytics are gated.
+  const tickers: string[] = analysis?.tickers ?? userTickers;
+  const weights: number[] = analysis?.weights ?? req?.weights ?? [];
+  const optWeights = optimize ?? null;
 
   const SECTOR_COLORS: Record<string, string> = {
     'Technology': '#38BDA4', 'Healthcare': '#4F9CF0', 'Energy': '#F0514F',
@@ -120,9 +129,9 @@ const Results = () => {
     'Utilities': '#FB923C', 'Communication': '#60A5FA', 'Other': '#8B949E',
   };
 
-  // Derive sector breakdown from actual tickers+weights; use MOCK_SECTORS only if no tickers
+  // Derived from the user's own tickers and weights — no sample breakdown.
   const sectorData = (() => {
-    if (!tickers.length) return MOCK_SECTORS;
+    if (!tickers.length) return undefined;
     const map: Record<string, number> = {};
     tickers.forEach((t: string, i: number) => {
       const sector = TICKER_SECTOR_MAP[t] ?? 'Other';
@@ -134,11 +143,11 @@ const Results = () => {
       .sort((a, b) => b.value - a.value);
   })();
 
-  // Use health_score directly from rawMetrics:
+  // Undefined whenever the analysis request failed or has not resolved.
   //  - backend: computed by Python portfolio_health_score() from real historical data
   //  - offline: computed by computePortfolioMetrics() with concentration penalty per ticker combo
   // Both sources already produce portfolio-specific values; no override needed.
-  const m = rawMetrics;
+  const m = analysis?.metrics;
 
   // Cache the exact metrics currently shown so Ask AI stays in sync with the visible cards,
   // including offline/fallback analysis.
@@ -150,7 +159,7 @@ const Results = () => {
       metrics: m,
       benchmark: settings.benchmark,
     };
-    localStorage.setItem('arcus-last-analysis', JSON.stringify(effectiveAnalysis));
+    if (m) localStorage.setItem('arcus-last-analysis', JSON.stringify(effectiveAnalysis));
   }, [analysis?.latest_prices, config?.livePrices, m, settings.benchmark, tickers, weights]);
 
 
@@ -159,13 +168,13 @@ const Results = () => {
   const pnlRows: PnlRow[] = (() => {
     if (analysis?.pnl) return analysis.pnl;
     const holdings = config?.holdings.filter(h => h.ticker && h.shares) ?? [];
-    if (holdings.length === 0) return MOCK_PORTFOLIO.pnl;
+    if (holdings.length === 0) return [];
     const startMs = config?.startDate ? new Date(config.startDate).getTime() : null;
     const days = startMs ? Math.round((Date.now() - startMs) / 86_400_000) : null;
     return holdings.map(h => ({
       ticker: h.ticker,
       shares: parseFloat(h.shares),
-      current_price: MOCK_STOCK_PRICES[h.ticker] ?? null,
+      current_price: config?.livePrices?.[h.ticker.toUpperCase()] ?? null,
       cost_basis: h.cost ? parseFloat(h.cost) : null,
       days,
     }));
@@ -305,6 +314,7 @@ const Results = () => {
 
         {/* Goal Alignment Analysis */}
         {(() => {
+          if (!m) return null;
           const dna = (() => { try { return JSON.parse(localStorage.getItem('arcus-investor-dna') || 'null'); } catch { return null; } })();
           if (!dna) return null;
 
@@ -534,6 +544,22 @@ const Results = () => {
           );
         })()}
 
+        {/* Everything below needs measured analytics. Without them the page
+            says so rather than substituting sample or approximated figures. */}
+        {!m ? (
+          <div className="glass rounded-xl p-5 mb-8 border-l-[3px] border-signal-amber">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle size={16} className="text-signal-amber" />
+              <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>ANALYSIS UNAVAILABLE</span>
+            </div>
+            <DataUnavailable
+              label="Portfolio analytics"
+              detail="Health score, Sharpe, VaR, Beta and drawdown could not be computed because the analytics service is unreachable. Your holdings below are unaffected."
+              height={120}
+            />
+          </div>
+        ) : (
+          <>
         {/* Plain English Summary Banner */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass rounded-xl p-5 mb-6 border-l-[3px] border-primary">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -568,10 +594,10 @@ const Results = () => {
             Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-[120px] rounded-xl shimmer" />)
           ) : (
             <>
-              <MetricCard icon={Activity} label="SHARPE RATIO" value={m.sharpe} format={(n) => n.toFixed(2)} change={0.12} sparklineData={MOCK_SPARKLINES.sharpe} delay={0.15} chatQuestion={`My Sharpe ratio is ${m.sharpe.toFixed(2)}. Explain what this means in simple terms and whether it's good or bad for my portfolio.`} />
-              <MetricCard icon={Activity} label="SORTINO RATIO" value={m.sortino} format={(n) => n.toFixed(2)} change={0.18} sparklineData={MOCK_SPARKLINES.sortino} delay={0.2} chatQuestion={`My Sortino ratio is ${m.sortino.toFixed(2)}. What does this tell me about my downside risk?`} />
-              <MetricCard icon={TrendingUp} label={`ALPHA VS ${settings.benchmark}`} value={m.alpha * 100} format={(n) => `${n.toFixed(1)}%`} change={0.5} changeLabel="+0.5%" sparklineData={MOCK_SPARKLINES.alpha} delay={0.25} chatQuestion={`My portfolio alpha versus ${settings.benchmark} (${benchmarkLabel}) is ${(m.alpha * 100).toFixed(1)}%. Explain what alpha means and whether I'm outperforming.`} />
-              <MetricCard icon={GitBranch} label={`INFO RATIO VS ${settings.benchmark}`} value={m.information_ratio} format={(n) => n.toFixed(2)} change={0.04} delay={0.3} chatQuestion={`My information ratio versus ${settings.benchmark} (${benchmarkLabel}) is ${m.information_ratio.toFixed(2)}. What does this tell me about my portfolio performance?`} />
+              <MetricCard icon={Activity} label="SHARPE RATIO" value={m.sharpe} format={(n) => n.toFixed(2)} delay={0.15} chatQuestion={`My Sharpe ratio is ${m.sharpe.toFixed(2)}. Explain what this means in simple terms and whether it's good or bad for my portfolio.`} />
+              <MetricCard icon={Activity} label="SORTINO RATIO" value={m.sortino} format={(n) => n.toFixed(2)} delay={0.2} chatQuestion={`My Sortino ratio is ${m.sortino.toFixed(2)}. What does this tell me about my downside risk?`} />
+              <MetricCard icon={TrendingUp} label={`ALPHA VS ${settings.benchmark}`} value={m.alpha * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.25} chatQuestion={`My portfolio alpha versus ${settings.benchmark} (${benchmarkLabel}) is ${(m.alpha * 100).toFixed(1)}%. Explain what alpha means and whether I'm outperforming.`} />
+              <MetricCard icon={GitBranch} label={`INFO RATIO VS ${settings.benchmark}`} value={m.information_ratio} format={(n) => n.toFixed(2)} delay={0.3} chatQuestion={`My information ratio versus ${settings.benchmark} (${benchmarkLabel}) is ${m.information_ratio.toFixed(2)}. What does this tell me about my portfolio performance?`} />
             </>
           )}
         </div>
@@ -581,10 +607,10 @@ const Results = () => {
           <HealthGauge score={m.health_score} />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
             {[
-              { label: 'Diversification', value: '72%', color: 'text-primary' },
-              { label: 'Concentration', value: '34%', color: 'text-signal-amber' },
               { label: 'Volatility', value: `${(m.volatility * 100).toFixed(1)}%`, color: 'text-foreground' },
-              { label: 'Liquidity', value: 'High', color: 'text-signal-green' },
+              { label: `Beta vs ${settings.benchmark}`, value: m.beta.toFixed(2), color: 'text-foreground' },
+              { label: 'Max Drawdown', value: `${(m.max_drawdown * 100).toFixed(1)}%`, color: 'text-signal-red' },
+              { label: 'Sharpe', value: m.sharpe.toFixed(2), color: 'text-primary' },
             ].map((s) => (
               <div key={s.label} className="glass-elevated rounded-lg p-3 text-center">
                 <span className="label-mono" style={{ color: 'hsl(214 10% 57%)' }}>{s.label}</span>
@@ -595,7 +621,7 @@ const Results = () => {
         </motion.div>
 
         {/* Full Report Card */}
-        <FullReport metrics={rawMetrics} tickers={tickers} />
+        <FullReport metrics={m} tickers={tickers} recommendations={recommendations} />
 
         {/* Metric Cards Row 2 */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
@@ -603,21 +629,24 @@ const Results = () => {
             Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-[120px] rounded-xl shimmer" />)
           ) : (
             <>
-              <MetricCard icon={Shield} label="VAR 95%" value={m.var_95 * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.3} changeLabel="±0.3%" sparklineData={MOCK_SPARKLINES.var_95} delay={0.35} chatQuestion={`My VaR at 95% is ${(m.var_95 * 100).toFixed(1)}%. Explain Value at Risk in simple language — what could I actually lose?`} />
-              <MetricCard icon={Shield} label="CVAR 95%" value={m.cvar_95 * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.2} sparklineData={MOCK_SPARKLINES.cvar_95} delay={0.4} chatQuestion={`My CVaR is ${(m.cvar_95 * 100).toFixed(1)}%. What is Expected Shortfall and how does it differ from VaR?`} />
-              <MetricCard icon={TrendingDown} label="MAX DRAWDOWN" value={m.max_drawdown * 100} format={(n) => `${n.toFixed(1)}%`} change={-1.2} sparklineData={MOCK_SPARKLINES.max_drawdown} delay={0.45} chatQuestion={`My maximum drawdown is ${(m.max_drawdown * 100).toFixed(1)}%. What does this mean and should I be worried?`} />
-              <MetricCard icon={Activity} label={`BETA VS ${settings.benchmark}`} value={m.beta} format={(n) => n.toFixed(2)} change={-0.03} sparklineData={MOCK_SPARKLINES.beta} delay={0.5} chatQuestion={`My portfolio Beta versus ${settings.benchmark} (${benchmarkLabel}) is ${m.beta.toFixed(2)}. Explain Beta in plain English — am I taking too much market risk?`} />
+              <MetricCard icon={Shield} label="VAR 95%" value={m.var_95 * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.35} chatQuestion={`My VaR at 95% is ${(m.var_95 * 100).toFixed(1)}%. Explain Value at Risk in simple language — what could I actually lose?`} />
+              <MetricCard icon={Shield} label="CVAR 95%" value={m.cvar_95 * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.4} chatQuestion={`My CVaR is ${(m.cvar_95 * 100).toFixed(1)}%. What is Expected Shortfall and how does it differ from VaR?`} />
+              <MetricCard icon={TrendingDown} label="MAX DRAWDOWN" value={m.max_drawdown * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.45} chatQuestion={`My maximum drawdown is ${(m.max_drawdown * 100).toFixed(1)}%. What does this mean and should I be worried?`} />
+              <MetricCard icon={Activity} label={`BETA VS ${settings.benchmark}`} value={m.beta} format={(n) => n.toFixed(2)} delay={0.5} chatQuestion={`My portfolio Beta versus ${settings.benchmark} (${benchmarkLabel}) is ${m.beta.toFixed(2)}. Explain Beta in plain English — am I taking too much market risk?`} />
             </>
           )}
         </div>
 
         {/* Metric Cards Row 3 */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-          <MetricCard icon={BarChart2} label="CALMAR RATIO" value={m.calmar} format={(n) => n.toFixed(2)} change={0.08} delay={0.55} chatQuestion={`My Calmar ratio is ${m.calmar.toFixed(2)}. What does this tell me about return vs drawdown risk?`} />
-          <MetricCard icon={TrendingUp} label="ANN. RETURN" value={m.annualized_return * 100} format={(n) => `${n.toFixed(1)}%`} change={2.1} changeLabel="+2.1%" sparklineData={MOCK_SPARKLINES.annualized_return} delay={0.6} chatQuestion={`My annualized return is ${(m.annualized_return * 100).toFixed(1)}%. How does this compare to the market?`} />
-          <MetricCard icon={Activity} label="VOLATILITY" value={m.volatility * 100} format={(n) => `${n.toFixed(1)}%`} change={-0.8} changeLabel="-0.8%" delay={0.65} chatQuestion={`My portfolio volatility is ${(m.volatility * 100).toFixed(1)}%. What does this mean for my risk?`} />
+          <MetricCard icon={BarChart2} label="CALMAR RATIO" value={m.calmar} format={(n) => n.toFixed(2)} delay={0.55} chatQuestion={`My Calmar ratio is ${m.calmar.toFixed(2)}. What does this tell me about return vs drawdown risk?`} />
+          <MetricCard icon={TrendingUp} label="ANN. RETURN" value={m.annualized_return * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.6} chatQuestion={`My annualized return is ${(m.annualized_return * 100).toFixed(1)}%. How does this compare to the market?`} />
+          <MetricCard icon={Activity} label="VOLATILITY" value={m.volatility * 100} format={(n) => `${n.toFixed(1)}%`} delay={0.65} chatQuestion={`My portfolio volatility is ${(m.volatility * 100).toFixed(1)}%. What does this mean for my risk?`} />
           <MetricCard icon={BarChart2} label="WTD AVG P/E" value={m.weighted_pe} format={(n) => n.toFixed(1)} delay={0.7} chatQuestion={`My weighted average P/E is ${m.weighted_pe?.toFixed(1) ?? '—'}. Is my portfolio overvalued?`} />
         </div>
+
+          </>
+        )}
 
         {/* P&L Table */}
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass rounded-xl p-4 sm:p-5 mb-8 overflow-x-auto">
@@ -683,7 +712,12 @@ const Results = () => {
         </div>
 
         {/* Past vs Future */}
-        <PastVsFuture />
+        <PastVsFuture
+          performance={analysis?.performance}
+          monteCarlo={monteCarlo}
+          metrics={m}
+          initialValue={100000}
+        />
 
         {/* News Impact — historical earnings reaction + today's headlines */}
         <NewsImpact tickers={tickers} />
@@ -704,8 +738,9 @@ const Results = () => {
           <EfficientFrontier data={frontier} />
           <div className="glass rounded-xl p-5">
             <span className="label-mono mb-4 block" style={{ color: 'hsl(214 10% 57%)' }}>OPTIMAL WEIGHTS</span>
+            {!optWeights && <DataUnavailable label="Optimal weights" height={160} />}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {Object.values(optWeights as Record<string, OptimalStrategy>)
+              {Object.values((optWeights ?? {}) as Record<string, OptimalStrategy>)
                 .filter((strat) => strat && typeof strat === 'object' && !Array.isArray(strat) && strat.label)
                 .map((strat) => (
                   <div key={strat.label} className="glass-elevated rounded-lg p-3 relative">
@@ -739,6 +774,9 @@ const Results = () => {
               Open Full Sandbox <ChevronRight size={12} />
             </Link>
           </div>
+          {!m ? (
+            <DataUnavailable label="Comparison" height={100} />
+          ) : (
           <div className="grid grid-cols-2 gap-4">
             {['CURRENT', 'MOCK A'].map((label, i) => (
               <div key={label} className="glass-elevated rounded-lg p-4">
@@ -751,6 +789,7 @@ const Results = () => {
               </div>
             ))}
           </div>
+          )}
         </motion.div>
 
         {/* Monte Carlo + Stress Testing */}

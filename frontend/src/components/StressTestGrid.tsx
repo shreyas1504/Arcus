@@ -1,9 +1,21 @@
 import { motion } from 'framer-motion';
-import { MOCK_STRESS_TESTS } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
+
+export type StressTest = { name: string; loss: number; recoveryDays: number };
 import AnimatedNumber from './AnimatedNumber';
 
-const StressTestGrid = ({ data }: { data?: typeof MOCK_STRESS_TESTS }) => {
-  const tests = data ?? MOCK_STRESS_TESTS;
+const StressTestGrid = ({ data }: { data?: StressTest[] }) => {
+  if (!data?.length) {
+    return (
+      <div>
+        <span className="label-mono mb-4 block">STRESS TESTING</span>
+        <div className="glass rounded-xl p-5">
+          <DataUnavailable label="Stress tests" height={140} />
+        </div>
+      </div>
+    );
+  }
+  const tests = data;
   return (
     <div>
       <span className="label-mono mb-4 block">STRESS TESTING</span>

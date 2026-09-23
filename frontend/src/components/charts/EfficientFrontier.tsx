@@ -1,5 +1,5 @@
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { MOCK_EFFICIENT_FRONTIER } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
 
 interface FrontierData {
   frontier_points?: Array<{ volatility: number; return: number; type: string }>;
@@ -8,15 +8,14 @@ interface FrontierData {
 }
 
 const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
-  // Build scatter data from API response or use mock
-  let scatterData = MOCK_EFFICIENT_FRONTIER;
-  if (data?.frontier_points) {
-    scatterData = [
-      ...data.frontier_points,
-      ...(data.current_portfolio ? [data.current_portfolio] : []),
-      ...(data.optimal_portfolio ? [data.optimal_portfolio] : []),
-    ];
-  }
+  // Built only from the API response — there is no sample frontier to fall back on.
+  const scatterData = data?.frontier_points?.length
+    ? [
+        ...data.frontier_points,
+        ...(data.current_portfolio ? [data.current_portfolio] : []),
+        ...(data.optimal_portfolio ? [data.optimal_portfolio] : []),
+      ]
+    : null;
 
   const getPointStyle = (type: string) => {
     if (type === 'current') {
@@ -27,6 +26,15 @@ const EfficientFrontier = ({ data }: { data?: FrontierData }) => {
     }
     return { fill: '#7F8A98', stroke: '#B8C1CC', strokeWidth: 0.9, radius: 3.5 };
   };
+
+  if (!scatterData) {
+    return (
+      <div className="glass rounded-xl p-5">
+        <span className="label-mono">EFFICIENT FRONTIER</span>
+        <DataUnavailable label="Efficient frontier" height={240} />
+      </div>
+    );
+  }
 
   return (
     <div className="glass rounded-xl p-5">

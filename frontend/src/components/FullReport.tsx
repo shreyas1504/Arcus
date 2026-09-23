@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, Zap, SendHorizontal, MessageSquare } from 'lucide-react';
-import { MOCK_AI_RECOMMENDATIONS } from '@/lib/mock-data';
+import DataUnavailable from '@/components/DataUnavailable';
 import { useNavigate } from 'react-router-dom';
 import { openArcusChat } from '@/lib/chat-launcher';
 
@@ -30,9 +30,11 @@ export interface FullReportProps {
     healthScore?: number;
   };
   tickers?: string[];
+  /** Recommendations from the API. Omitted when it could not be reached. */
+  recommendations?: string[];
 }
 
-const FullReport = ({ metrics: m, tickers = [] }: FullReportProps) => {
+const FullReport = ({ metrics: m, tickers = [], recommendations }: FullReportProps) => {
   const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('Summary');
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -222,9 +224,16 @@ const FullReport = ({ metrics: m, tickers = [] }: FullReportProps) => {
               {/* RECOMMENDATIONS TAB */}
               {activeTab === 'Recommendations' && (
                 <div className="space-y-3">
-                  {MOCK_AI_RECOMMENDATIONS.map((rec, i) => (
+                  {!recommendations?.length && (
+                    <DataUnavailable
+                      label="Recommendations"
+                      detail="Recommendations come from the analytics service, which could not be reached."
+                      height={120}
+                    />
+                  )}
+                  {(recommendations ?? []).map((rec, i) => (
                     <div key={i} className="glass-elevated rounded-lg p-4 border-l-2 border-primary">
-                      <span className="font-mono text-[9px] uppercase tracking-wider bg-primary/15 text-primary px-2 py-0.5 rounded-full">{recCategories[i]}</span>
+                      <span className="font-mono text-[9px] uppercase tracking-wider bg-primary/15 text-primary px-2 py-0.5 rounded-full">{recCategories[i % recCategories.length]}</span>
                       <p className="text-sm text-foreground/85 leading-relaxed mt-2">{rec}</p>
                       <div className="flex gap-3 mt-3">
                         <button onClick={() => sendToChat(`Explain this recommendation: ${rec} — and tell me how to act on it.`)} className="font-mono text-[10px] text-primary flex items-center gap-1 hover:text-accent-bright transition-colors">
