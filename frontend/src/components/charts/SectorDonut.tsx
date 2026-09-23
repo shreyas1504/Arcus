@@ -1,7 +1,5 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import DataUnavailable from '@/components/DataUnavailable';
-
-export type SectorSlice = { name: string; value: number; color: string };
+import { MOCK_SECTORS } from '@/lib/mock-data';
 
 type SectorPayload = { payload: { name: string; value: number; color: string } };
 
@@ -23,16 +21,8 @@ const SectorTooltip = ({ active, payload }: { active?: boolean; payload?: Sector
   );
 };
 
-const SectorDonut = ({ data }: { data?: SectorSlice[] }) => {
-  if (!data?.length) {
-    return (
-      <div className="glass rounded-xl p-5 flex flex-col h-full">
-        <span className="label-mono">SECTOR CONCENTRATION</span>
-        <DataUnavailable label="Sector breakdown" detail="Add holdings to see your sector concentration." height={220} />
-      </div>
-    );
-  }
-  const chartData = data;
+const SectorDonut = ({ data }: { data?: typeof MOCK_SECTORS }) => {
+  const chartData = data ?? MOCK_SECTORS;
   return (
     <div className="glass rounded-xl p-5 flex flex-col h-full">
       <span className="label-mono">SECTOR CONCENTRATION</span>

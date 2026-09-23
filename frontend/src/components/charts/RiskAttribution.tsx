@@ -1,18 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import DataUnavailable from '@/components/DataUnavailable';
+import { MOCK_RISK_ATTRIBUTION } from '@/lib/mock-data';
 
-export type RiskContribution = { ticker: string; contribution: number; color: string };
-
-const RiskAttribution = ({ data }: { data?: RiskContribution[] }) => {
-  if (!data?.length) {
-    return (
-      <div className="glass rounded-xl p-5">
-        <span className="label-mono">RISK CONTRIBUTION</span>
-        <DataUnavailable label="Risk contribution" height={200} />
-      </div>
-    );
-  }
-  const chartData = data;
+const RiskAttribution = ({ data }: { data?: typeof MOCK_RISK_ATTRIBUTION }) => {
+  const chartData = data ?? MOCK_RISK_ATTRIBUTION;
   return (
     <div className="glass rounded-xl p-5">
       <span className="label-mono">RISK CONTRIBUTION</span>
