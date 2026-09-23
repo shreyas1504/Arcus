@@ -11,6 +11,12 @@ describe('resolveApiBase', () => {
     expect(resolveApiBase('https://staging.example.com', 'localhost')).toBe('https://staging.example.com');
   });
 
+  it('treats "/" as same-origin, so requests go to a relative /api path', () => {
+    // Set by the Vercel "frontend" service when the backend ships in the same
+    // deployment — fetch('/api/...') then needs no CORS at all.
+    expect(resolveApiBase('/', 'arcus-insights.com')).toBe('');
+  });
+
   it('strips trailing slashes so paths do not double up', () => {
     expect(resolveApiBase('https://arcus.example.com/', 'arcus-insights.com')).toBe('https://arcus.example.com');
     expect(resolveApiBase('https://arcus.example.com///', 'arcus-insights.com')).toBe('https://arcus.example.com');

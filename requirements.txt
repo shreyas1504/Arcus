@@ -1,1 +1,11 @@
+# Root requirements — used by the Vercel "backend" service, whose root is the
+# repo root so that `backend.*` package imports resolve.
+fastapi>=0.104.0
+pandas>=2.0.0
+numpy>=1.24.0
+yfinance>=0.2.31
+scipy>=1.11.0
+pydantic>=2.0.0
+vaderSentiment>=3.3.2
+lxml>=5.0.0
 anthropic>=0.39.0
