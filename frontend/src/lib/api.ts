@@ -11,8 +11,11 @@ export const LOCAL_BACKEND_URL = 'http://localhost:8000';
 
 /** Pure so the precedence is covered by tests rather than by deploying. */
 export const resolveApiBase = (configured: string | undefined, hostname: string): string => {
-  const explicit = (configured ?? '').trim().replace(/\/+$/, '');
-  if (explicit) return explicit;
+  const raw = (configured ?? '').trim();
+  // An explicit value wins — including "/", which means same-origin: the backend
+  // ships in this deployment, so requests go to a relative /api path and there
+  // is no cross-origin request to allow.
+  if (raw) return raw.replace(/\/+$/, '');
   if (hostname === 'localhost' || hostname === '127.0.0.1') return LOCAL_BACKEND_URL;
   return DEFAULT_BACKEND_URL;
 };
