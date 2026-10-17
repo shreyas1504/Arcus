@@ -1,5 +1,7 @@
 # Arcus — AI-Powered Portfolio Analytics Platform
 
+[![CI](https://github.com/shreyas1504/Arcus/actions/workflows/ci.yml/badge.svg)](https://github.com/shreyas1504/Arcus/actions/workflows/ci.yml)
+
 **Conversational AI meets institutional-grade risk analytics.** Ask your portfolio anything. Get Sharpe ratios, VaR, Monte Carlo simulations, and stress tests — explained in plain English.
 
 🌐 **Live Demo:** [arcus-insights.com](https://arcus-insights.com)
@@ -102,6 +104,42 @@ npm run dev
 
 ---
 
+## Testing
+
+Arcus has **280+ automated tests** across the backend and frontend. Every push and pull request to `main` runs both suites in GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)), and the frontend is only built and deployed if they pass.
+
+### Backend — pytest
+
+```bash
+pip install -r backend/requirements-dev.txt
+pytest backend/tests
+```
+
+| File | Covers |
+|---|---|
+| `test_metrics.py` | Sharpe, Sortino, Beta, VaR, CVaR, max drawdown, annualised return/volatility, Calmar, alpha, information ratio, diversification score, correlation matrix, health score |
+| `test_event_study.py` | Headline classification and the earnings event study (abnormal return, volatility change, volume spike, skipped events) |
+| `test_cors.py` | Allowed origins and the Vercel preview regex, including lookalike domains |
+
+### Frontend — Vitest + Testing Library
+
+```bash
+cd frontend
+npm test
+```
+
+| File | Covers |
+|---|---|
+| `calculations.test.ts` | Portfolio metrics: weight normalisation, Sharpe, covariance volatility, VaR/CVaR, health score, HHI concentration, edge cases |
+| `sandbox.test.ts` | What-if sandbox: metric recalculation, stress scenarios, weight updates, Sharpe recommendations |
+| `portfolio-flow.test.ts` | Settings persistence, API request formation, sector derivation, PDF metric consistency, goal alignment |
+| `chatbot.test.ts` | Portfolio context sent to the AI, chat launcher flow, chat API behaviour |
+| `news-impact.test.tsx` | News Impact panel rendering and formatting |
+| `sentiment-badge.test.tsx` | Sentiment pill and badge components |
+| `api-base.test.ts` | API base URL resolution |
+
+---
+
 ## Project Structure
 
 ```
@@ -117,21 +155,23 @@ Arcus/
 │   ├── models/
 │   │   ├── monte_carlo.py      # GBM simulation engine
 │   │   └── optimizer.py        # Sharpe maximisation solver
-│   └── routers/
-│       ├── portfolio.py        # /api/portfolio/* endpoints
-│       ├── chat.py             # AI chatbot endpoint
-│       ├── news.py             # Live market news feed
-│       └── adapter.py          # /api/v2/* adapter layer
+│   ├── routers/
+│   │   ├── portfolio.py        # /api/portfolio/* endpoints
+│   │   ├── chat.py             # AI chatbot endpoint
+│   │   ├── news.py             # Live market news feed
+│   │   └── adapter.py          # /api/v2/* adapter layer
+│   └── tests/                  # pytest suite
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/              # Index, Onboarding, Dashboard, Results, Chat
 │   │   ├── components/         # Reusable UI components + charts
-│   │   └── lib/                # API client, utilities
+│   │   ├── lib/                # API client, utilities
+│   │   └── test/               # Vitest suite
 │   ├── vite.config.ts
 │   └── package.json
 └── .github/
     └── workflows/
-        └── deploy.yml          # Auto-deploy to GitHub Pages
+        └── ci.yml              # Tests, build, and deploy to GitHub Pages
 ```
 
 ---

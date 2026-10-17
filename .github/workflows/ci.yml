@@ -1,4 +1,4 @@
-name: Deploy Arcus to GitHub Pages
+name: CI
 
 on:
   push:
@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   test-backend:
+    name: Backend tests (pytest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,17 +27,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: backend/requirements*.txt
 
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
-          pip install pytest
+          pip install -r backend/requirements-dev.txt
 
       - name: Run backend tests
-        run: pytest backend/tests
+        run: pytest backend/tests -v
 
   test-frontend:
+    name: Frontend tests (Vitest)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,16 +46,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: Run frontend tests
         working-directory: frontend
         run: npm test
 
   build:
+    name: Build frontend
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
     steps:
@@ -62,10 +67,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: Build frontend
         working-directory: frontend
@@ -84,6 +91,7 @@ jobs:
           path: frontend/dist
 
   deploy:
+    name: Deploy to GitHub Pages
     # Only deploy on pushes to main — pull requests stop after build.
     if: github.event_name != 'pull_request'
     environment:
