@@ -53,7 +53,6 @@ Arcus was built on one observation: retail investors have access to the same raw
 | **NumPy / Pandas** | Numerical computation and data manipulation |
 | **SciPy** | Portfolio optimisation (SLSQP constrained minimiser) |
 | **yfinance** | Historical price data from Yahoo Finance |
-| **Recharts / Framer** | Dynamic, interactive simulation charting |
 | **Anthropic Claude Sonnet** | Conversational AI layer — grounded in live portfolio context with multi-turn memory |
 
 ### Frontend
