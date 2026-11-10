@@ -32,6 +32,7 @@ jobs:
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r backend/requirements-dev.txt
 
       - name: Run backend tests
@@ -82,6 +83,8 @@ jobs:
           # Backend base URL. Override in repo settings (Variables -> Actions)
           # to point the Pages build at a different host without a code change.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Keep hidden unless the backend index and RESEARCH_ENABLED are ready.
+          VITE_ENABLE_RESEARCH: ${{ vars.VITE_ENABLE_RESEARCH }}
 
       - name: Add 404.html for SPA routing
         run: cp frontend/dist/index.html frontend/dist/404.html

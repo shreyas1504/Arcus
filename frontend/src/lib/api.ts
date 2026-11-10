@@ -171,6 +171,63 @@ export const getSentiment = (ticker: string) => get(`/api/news/sentiment/${ticke
 export const getEventImpact = (tickers: string[], quarters = 8) =>
   post('/api/news/event-impact', { tickers, quarters });
 
+// ── SEC filing research ──────────────────────────────────────────────────
+export interface ResearchCitation {
+  citation: number;
+  chunk_id: string;
+  ticker: string;
+  form: string;
+  filing_date: string;
+  year: string;
+  section: string;
+  url: string;
+  excerpt: string;
+}
+
+export interface ResearchResponse {
+  answer: string;
+  citations: ResearchCitation[];
+  latency_ms: number;
+  retrieved_sections: string[];
+  remaining_today: number;
+}
+
+const RESEARCH_CLIENT_KEY = 'arcus-research-client-id';
+
+export function getResearchClientId(): string {
+  const existing = localStorage.getItem(RESEARCH_CLIENT_KEY);
+  if (existing) return existing;
+  const generated = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `arcus_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(RESEARCH_CLIENT_KEY, generated);
+  return generated;
+}
+
+export async function askResearch(question: string, tickers: string[]): Promise<ResearchResponse> {
+  const res = await fetch(`${BASE}/api/research/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      tickers,
+      client_id: getResearchClientId(),
+    }),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const detail = payload?.detail;
+    const message = typeof detail === 'string'
+      ? detail
+      : detail?.message || `Research request failed (${res.status})`;
+    const error = new Error(message) as Error & { status?: number; detail?: unknown };
+    error.status = res.status;
+    error.detail = detail;
+    throw error;
+  }
+  return payload;
+}
+
 // ── Stock price endpoint ─────────────────────────────────────────────────
 export async function getStockPrice(ticker: string) {
   const res = await fetch(`${BASE}/api/portfolio/stock/${ticker}`);

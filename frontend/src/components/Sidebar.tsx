@@ -1,12 +1,15 @@
 import { Dispatch, SetStateAction } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, FlaskConical, MessageSquare, FileText, Settings, User, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, MessageSquare, FileText, Settings, User, ChevronLeft, ChevronRight, X, BookOpen } from 'lucide-react';
 import ArcusLogo from './ArcusLogo';
+
+const researchEnabled = import.meta.env.VITE_ENABLE_RESEARCH === 'true';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: FlaskConical,    label: 'Sandbox',   path: '/dashboard/mock' },
+  ...(researchEnabled ? [{ icon: BookOpen, label: 'Research', path: '/dashboard/research' }] : []),
   { icon: MessageSquare,   label: 'AI Chat',   path: '/chat' },
   { icon: FileText,        label: 'Reports',   path: '/dashboard/results' },
 ];

@@ -1,0 +1,30 @@
+{"id":"aapl-business-1","ticker":"AAPL","question":"What products and services does Apple identify as its principal offerings?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["products","services"]}
+{"id":"msft-business-1","ticker":"MSFT","question":"How does Microsoft describe its business segments?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["segments"]}
+{"id":"nvda-business-1","ticker":"NVDA","question":"Which computing platforms does NVIDIA describe in its business overview?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["platform"]}
+{"id":"googl-business-1","ticker":"GOOGL","question":"How does Alphabet describe the main ways it generates revenue?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["revenue"]}
+{"id":"amzn-business-1","ticker":"AMZN","question":"What customer groups does Amazon say it serves?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["customers"]}
+{"id":"meta-business-1","ticker":"META","question":"How does Meta describe the products in its Family of Apps?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["Family","Apps"]}
+{"id":"tsla-business-1","ticker":"TSLA","question":"What are Tesla's reportable business segments?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["segments"]}
+{"id":"avgo-business-1","ticker":"AVGO","question":"How does Broadcom describe its semiconductor and infrastructure software businesses?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["semiconductor","software"]}
+{"id":"jpm-business-1","ticker":"JPM","question":"What business segments does JPMorgan Chase report?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["segments"]}
+{"id":"bac-business-1","ticker":"BAC","question":"What are Bank of America's principal business segments?","answerable":true,"expected_section":"Item 1 Business","expected_terms":["segments"]}
+{"id":"nvda-risk-1","ticker":"NVDA","question":"What supply or manufacturing risks does NVIDIA disclose?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["supply","manufacturing"]}
+{"id":"aapl-risk-1","ticker":"AAPL","question":"What risks does Apple disclose about dependence on third-party manufacturing?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["third-party","manufacturing"]}
+{"id":"msft-risk-1","ticker":"MSFT","question":"What cybersecurity risks does Microsoft identify?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["cybersecurity"]}
+{"id":"meta-risk-1","ticker":"META","question":"What regulatory and privacy risks does Meta identify?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["regulatory","privacy"]}
+{"id":"wfc-risk-1","ticker":"WFC","question":"What credit risk does Wells Fargo describe?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["credit risk"]}
+{"id":"jnj-risk-1","ticker":"JNJ","question":"What litigation or product liability risks does Johnson & Johnson disclose?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["litigation","product liability"]}
+{"id":"lly-risk-1","ticker":"LLY","question":"What risks does Eli Lilly disclose about patent protection and generic competition?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["patent","competition"]}
+{"id":"mu-risk-1","ticker":"MU","question":"What cyclical demand and pricing risks does Micron disclose?","answerable":true,"expected_section":"Item 1A Risk Factors","expected_terms":["demand","pricing"]}
+{"id":"gs-mda-1","ticker":"GS","question":"What factors does Goldman Sachs say affected its latest annual operating results?","answerable":true,"expected_section":"Item 7 MD&A","expected_terms":["results"]}
+{"id":"unh-mda-1","ticker":"UNH","question":"What does UnitedHealth's management say drove its annual revenue changes?","answerable":true,"expected_section":"Item 7 MD&A","expected_terms":["revenue"]}
+{"id":"pfe-mda-1","ticker":"PFE","question":"What factors does Pfizer's management identify as drivers of annual revenue?","answerable":true,"expected_section":"Item 7 MD&A","expected_terms":["revenue"]}
+{"id":"v-earnings-1","ticker":"V","question":"What net revenue did Visa report in its latest earnings release?","answerable":true,"expected_section":"Earnings Release","expected_terms":["net revenue"]}
+{"id":"ma-earnings-1","ticker":"MA","question":"What net revenue did Mastercard report in its latest earnings release?","answerable":true,"expected_section":"Earnings Release","expected_terms":["net revenue"]}
+{"id":"ms-earnings-1","ticker":"MS","question":"What net revenues did Morgan Stanley report in its latest earnings release?","answerable":true,"expected_section":"Earnings Release","expected_terms":["net revenues"]}
+{"id":"brkb-earnings-1","ticker":"BRK-B","question":"What operating earnings did Berkshire Hathaway report in its latest earnings release?","answerable":true,"expected_section":"Earnings Release","expected_terms":["operating earnings"]}
+{"id":"aapl-missing-price","ticker":"AAPL","question":"What is Apple's live stock price right now?","answerable":false,"expected_section":null,"expected_terms":[]}
+{"id":"nvda-missing-target","ticker":"NVDA","question":"What will NVIDIA's stock price be one year from today?","answerable":false,"expected_section":null,"expected_terms":[]}
+{"id":"jpm-missing-advice","ticker":"JPM","question":"Should I buy or sell JPMorgan Chase today?","answerable":false,"expected_section":null,"expected_terms":[]}
+{"id":"meta-missing-market-share","ticker":"META","question":"What is Meta's current global social media market share according to an independent industry survey?","answerable":false,"expected_section":null,"expected_terms":[]}
+{"id":"mu-missing-forecast","ticker":"MU","question":"What will Micron's exact revenue be in fiscal 2030?","answerable":false,"expected_section":null,"expected_terms":[]}

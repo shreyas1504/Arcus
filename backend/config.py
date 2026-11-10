@@ -65,6 +65,14 @@ POPULAR_TICKERS = [
     "SHEL", "BABA", "SONY", "SAP", "TM",
 ]
 
+# Fixed filing universe for Arcus Research. Keep this explicit so an unrelated
+# change to POPULAR_TICKERS cannot silently change the indexed SEC corpus.
+RESEARCH_TICKER_UNIVERSE = [
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
+    "JPM", "BAC", "GS", "MS", "WFC", "BRK-B", "V", "MA",
+    "JNJ", "UNH", "LLY", "PFE", "MU",
+]
+
 # ── Health score thresholds ───────────────────────────────────────────────────
 HEALTH_RED_MAX    = 40
 HEALTH_YELLOW_MAX = 70

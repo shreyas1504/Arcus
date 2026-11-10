@@ -7,9 +7,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from fastapi import FastAPI  # type: ignore
+from fastapi.concurrency import run_in_threadpool  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 
-from backend.routers import portfolio, chat, news, adapter  # type: ignore
+from backend.routers import portfolio, chat, news, adapter, research  # type: ignore
 
 app = FastAPI(
     title="Arcus API",
@@ -48,6 +49,18 @@ app.include_router(portfolio.router)
 app.include_router(chat.router)
 app.include_router(news.router)
 app.include_router(adapter.router)
+app.include_router(research.router)
+
+
+@app.on_event("startup")
+async def warm_research_index():
+    """Load BGE and the Chroma collection before the first enabled request."""
+    if research.research_enabled():
+        ready = await run_in_threadpool(research.get_qa_service().ready)
+        if not ready:
+            logging.getLogger(__name__).warning(
+                "Arcus Research is enabled but its Chroma index is unavailable"
+            )
 
 
 @app.get("/")

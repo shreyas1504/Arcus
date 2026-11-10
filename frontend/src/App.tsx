@@ -14,8 +14,10 @@ import ProfilePage from "./pages/Profile.tsx";
 import Pricing from "./pages/Pricing.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import SandboxView from "./pages/SandboxView.tsx";
+import Research from "./pages/Research.tsx";
 
 const queryClient = new QueryClient();
+const researchEnabled = import.meta.env.VITE_ENABLE_RESEARCH === "true";
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -34,6 +36,7 @@ const App = () => (
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          {researchEnabled && <Route path="/dashboard/research" element={<Research />} />}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
