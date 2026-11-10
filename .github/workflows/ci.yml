@@ -82,8 +82,9 @@ jobs:
           # Backend base URL. Override in repo settings (Variables -> Actions)
           # to point the Pages build at a different host without a code change.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-          # Keep hidden unless the backend index and RESEARCH_ENABLED are ready.
-          VITE_ENABLE_RESEARCH: ${{ vars.VITE_ENABLE_RESEARCH }}
+          # Research is on via frontend/.env.production; set this variable to
+          # "false" to hide the tab on Pages.
+          VITE_ENABLE_RESEARCH: ${{ vars.VITE_ENABLE_RESEARCH || 'true' }}
 
       - name: Add 404.html for SPA routing
         run: cp frontend/dist/index.html frontend/dist/404.html
