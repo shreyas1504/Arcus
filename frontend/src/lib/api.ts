@@ -6,7 +6,7 @@ import { TICKER_SECTOR_MAP } from '@/lib/mock-data';
 //      not a code change.
 //   2. localhost, for local development.
 //   3. the Render deployment.
-export const DEFAULT_BACKEND_URL = 'https://arcus-backend.onrender.com';
+export const DEFAULT_BACKEND_URL = 'https://arcus-mmap.onrender.com';
 export const LOCAL_BACKEND_URL = 'http://localhost:8000';
 
 /** Pure so the precedence is covered by tests rather than by deploying. */

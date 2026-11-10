@@ -318,6 +318,9 @@ Every request to SEC EDGAR must identify the caller with a real name and email.
 ### Local setup
 
 ```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r backend/requirements-research.txt
+
 export SEC_USER_AGENT="Your Name your@email.com"
 export NVIDIA_API_KEY="nvapi-..."
 export RESEARCH_ENABLED=true
@@ -347,8 +350,8 @@ that every answer number occurs in a retrieved excerpt, and returns
 Arcus Research ships disabled, and the Render blueprint stays on the current
 plan with no disk. The index needs persistent storage and the embedding model
 needs more memory than the free plan offers, so launching it means moving the
-backend to a paid plan and adding the disk noted in `render.yaml`
-(`/var/data/arcus-research`). Add `NVIDIA_API_KEY` and `SEC_USER_AGENT` in the
+backend to a paid plan, switching the build to `requirements-research.txt`, and
+adding the disk noted in `render.yaml` (`/var/data/arcus-research`). Add `NVIDIA_API_KEY` and `SEC_USER_AGENT` in the
 Render dashboard, then open a Render shell and initialize the disk:
 
 ```bash
