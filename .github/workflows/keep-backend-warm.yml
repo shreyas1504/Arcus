@@ -1,0 +1,18 @@
+name: Keep backend warm
+
+# Render's free plan sleeps after 15 idle minutes and the next request waits
+# ~50s for a cold start. One always-on free service fits the 750 free hours.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Ping backend
+        run: curl -fsS -o /dev/null -m 120 --retry 2 https://arcus-mmap.onrender.com/api/v2/portfolio/popular-tickers

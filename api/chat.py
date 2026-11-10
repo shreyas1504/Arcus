@@ -134,7 +134,6 @@ class handler(BaseHTTPRequestHandler):
             response = client.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=1024,
-                temperature=0.2,
                 system=system_prompt,
                 messages=messages,
             )
