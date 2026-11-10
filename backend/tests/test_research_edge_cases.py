@@ -72,7 +72,7 @@ def ask(client: TestClient, **overrides):
         {"tickers": ["ZZZZ"]},
         {"tickers": ["AAPL", "ZZZZ"]},
         {"tickers": "AAPL"},
-        {"tickers": ["AAPL"] * 22},
+        {"tickers": ["AAPL"] * (len(research_router.RESEARCH_TICKER_UNIVERSE) + 1)},
         {"client_id": "short"},
         {"client_id": "has spaces in it!!!!"},
         {"client_id": "x" * 129},
@@ -133,6 +133,55 @@ def test_twenty_first_question_is_rate_limited_per_client(api):
     other = ask(client, client_id=CLIENT_B)
     assert other.status_code == 200
     assert other.json()["remaining_today"] == 19
+
+
+AUTOMATION_KEY = "automation-test-key-0123456789"
+
+
+def exhaust(client: TestClient) -> None:
+    for _ in range(20):
+        assert ask(client).status_code == 200
+
+
+def test_automation_key_skips_the_daily_limit(api, monkeypatch):
+    client, service, _ = api
+    monkeypatch.setenv("AUTOMATION_KEY", AUTOMATION_KEY)
+    exhaust(client)
+    headers = {"X-Automation-Key": AUTOMATION_KEY}
+    for _ in range(5):
+        response = client.post(
+            "/api/research/ask",
+            json={"question": "What were net revenues?", "tickers": ["MS"], "client_id": CLIENT_A},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["remaining_today"] == research_router.DAILY_LIMIT
+    assert len(service.calls) == 25
+    assert ask(client).status_code == 429
+
+
+def test_wrong_automation_key_is_still_limited(api, monkeypatch):
+    client, _, _ = api
+    monkeypatch.setenv("AUTOMATION_KEY", AUTOMATION_KEY)
+    exhaust(client)
+    response = client.post(
+        "/api/research/ask",
+        json={"question": "What were net revenues?", "tickers": ["MS"], "client_id": CLIENT_A},
+        headers={"X-Automation-Key": AUTOMATION_KEY + "x"},
+    )
+    assert response.status_code == 429
+
+
+def test_automation_header_is_ignored_without_a_server_key(api, monkeypatch):
+    client, _, _ = api
+    monkeypatch.delenv("AUTOMATION_KEY", raising=False)
+    exhaust(client)
+    response = client.post(
+        "/api/research/ask",
+        json={"question": "What were net revenues?", "tickers": ["MS"], "client_id": CLIENT_A},
+        headers={"X-Automation-Key": ""},
+    )
+    assert response.status_code == 429
 
 
 def test_model_failure_returns_503_and_does_not_consume_quota(api, monkeypatch):

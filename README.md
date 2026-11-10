@@ -218,6 +218,7 @@ Arcus/
 │   ├── fetch_assets.py         # Build-time download of the published index
 │   ├── qa.py                   # Retrieval, Nemotron, grounding validator
 │   └── eval/                   # 30-question benchmark + live edge cases
+├── automation/n8n/             # Weekday filings-digest workflow + setup guide
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/              # Index, Onboarding, Dashboard, Results, Chat, Research
@@ -246,7 +247,7 @@ Arcus/
 | `GET` | `/api/news/sentiment/{ticker}` | VADER sentiment across a ticker's recent headlines |
 | `POST` | `/api/news/event-impact` | Earnings event study for a list of tickers |
 | `GET` | `/api/research/status` | Whether Arcus Research is enabled and its index is loaded |
-| `POST` | `/api/research/ask` | Filing-only answer with citations (`question`, `tickers`, `client_id`) |
+| `POST` | `/api/research/ask` | Filing-only answer with citations (`question`, `tickers`, `client_id`); a valid `X-Automation-Key` header skips the daily quota |
 
 ---
 
@@ -286,8 +287,9 @@ this panel is estimated, interpolated or sampled.
 ## Arcus Research
 
 Arcus Research answers questions about a user's indexed holdings using only SEC
-filings. The fixed universe contains 21 companies: the first 20 Arcus popular
-stocks plus Micron (`MU`); NVIDIA is already included.
+filings. The fixed universe contains 24 companies: the first 20 Arcus popular
+stocks plus Micron (`MU`), AMD, Intel (`INTC`) and Applied Materials (`AMAT`);
+NVIDIA is already included.
 
 ```mermaid
 flowchart LR
@@ -358,9 +360,10 @@ that every answer number occurs in a retrieved excerpt, and returns
 
 Research runs on Render's free plan. The build installs
 `requirements-research.txt` and runs `python -m research.fetch_assets`, which
-downloads the prebuilt Chroma index and ONNX embedder (125 MB) from the
-`research-index-v1` GitHub release and checks its SHA-256. With Research
-loaded the backend peaks at about 360 MB, under the plan's 512 MB.
+downloads the prebuilt Chroma index and ONNX embedder (135 MB) from the
+`research-index-v2` GitHub release and checks its SHA-256. With Research
+loaded the backend peaked at about 340 MB in local measurement, under the
+plan's 512 MB.
 
 To publish a rebuilt index, pack it with
 `python -m research.fetch_assets --pack arcus-research-assets.tar.gz`, upload
@@ -385,21 +388,33 @@ outside the corpus. `research/eval/run_eval.py` writes measured results to
 | Top-6 retrieval hit rate | **100.0% (25/25)** | ≥80% |
 | Answers with no unsupported numbers | **100% (30/30)** | 100% |
 | Exact not-found responses | **5/5** | 5/5 |
-| Median end-to-end latency | **3.00s** (p95 13.7s) | <4s |
-| Answerable questions answered | 25/25 | — |
+| Median end-to-end latency | **2.31s** (p95 14.8s) | <4s |
+| Answerable questions answered | 24/25 | — |
 
-Measured on the complete 21-company index with
+Measured on the complete 24-company index (2,609 chunks) with
 `nvidia/nemotron-3-ultra-550b-a55b` on NVIDIA's API and the ONNX query
 embedder (2026-11-10). Number
 grounding is enforced by the validator, so the cost of strictness shows up as
-answerable questions falling back to "Not found in the filings." Long
+answerable questions falling back to "Not found in the filings." The one miss
+in this run, Meta's regulatory and privacy risks, is model variance: Nemotron
+sometimes leaves a sentence of a long risk list uncited and the validator
+rejects the answer (1 of 3 reruns answered with four citations). Long
 risk-factor answers drive the p95 latency.
+
+### Automation
+
+[`automation/n8n`](automation/n8n/README.md) contains an importable n8n
+workflow that emails a weekday filings digest for a watchlist kept in Google
+Sheets and logs each run. It authenticates with an `X-Automation-Key` header;
+when it matches the server's `AUTOMATION_KEY`, the request skips the daily
+quota.
 
 Known limits: tables may lose visual relationships during HTML-to-text
 conversion; unusual SEC heading markup may require extraction fallbacks;
 filings are refreshed manually; the browser quota is not account-grade
 enforcement; NVIDIA API capacity and backend cold starts can exceed the
-four-second latency target. The number check matches values, not units, so
+four-second latency target. Foreign issuers such as TSMC (`TSM`) file 20-F and
+6-K reports, which ingestion does not parse. The number check matches values, not units, so
 "$20.3 million" would pass against a source saying "$20.3 billion". "Latest"
 questions may be answered from the older of the two earnings releases, and
 companies that renamed segments (Microsoft in 2026) can get either naming

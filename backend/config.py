@@ -70,7 +70,7 @@ POPULAR_TICKERS = [
 RESEARCH_TICKER_UNIVERSE = [
     "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
     "JPM", "BAC", "GS", "MS", "WFC", "BRK-B", "V", "MA",
-    "JNJ", "UNH", "LLY", "PFE", "MU",
+    "JNJ", "UNH", "LLY", "PFE", "MU", "AMD", "INTC", "AMAT",
 ]
 
 # ── Health score thresholds ───────────────────────────────────────────────────

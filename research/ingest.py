@@ -31,11 +31,14 @@ MANIFEST_PATH = DEFAULT_DATA_DIR / "manifest.json"
 
 ITEM_SPECS = {
     "Item 1 Business": (
-        r"(?:^item\s+1[\s.:\-—]*b\s*usiness\b|^item\s+1\.?\s*$|^b\s*usiness(?:\s+description)?\.?\s*$)",
+        r"(?:^item\s+1[\s.:\-—]*b\s*usiness\b|^item\s+1\.?\s*$|^b\s*usiness(?:\s+description)?\.?\s*$|"
+        r"^our\s+business\s*$)",
         [
             r"^item\s+1a[\s.:\-—]*ris\s*k\s+factors\b",
             r"^item\s+1a\.?\s*$",
             r"^ris\s*k\s+factors\.?\s*$",
+            # Topic-ordered 10-Ks (Intel) put MD&A directly after the business section.
+            r"^management['’]s\s+discussion\s+and\s+analysis\s*$",
         ],
     ),
     "Item 1A Risk Factors": (
@@ -46,6 +49,7 @@ ITEM_SPECS = {
             r"^item\s+2(?:[\s.:\-—]*properties)?\b",
             r"^management['’]s\s+discussion\s+and\s+analysis",
             r"^financial\s+review\.?\s*$",
+            r"^other\s+key\s+information\s*$",
         ],
     ),
     "Item 7 MD&A": (

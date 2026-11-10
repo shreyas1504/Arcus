@@ -31,10 +31,10 @@ def filing(form: str, accession: str, items: str = "") -> Filing:
     return Filing(form, accession, "2026-01-01", "2025-12-31", "filing.htm", items)
 
 
-def test_research_universe_is_fixed_to_21_companies():
-    assert len(RESEARCH_TICKER_UNIVERSE) == 21
-    assert "NVDA" in RESEARCH_TICKER_UNIVERSE
-    assert "MU" in RESEARCH_TICKER_UNIVERSE
+def test_research_universe_is_fixed_to_24_companies():
+    assert len(RESEARCH_TICKER_UNIVERSE) == 24
+    for ticker in ("NVDA", "MU", "AMD", "INTC", "AMAT"):
+        assert ticker in RESEARCH_TICKER_UNIVERSE
 
 
 def test_selects_latest_10k_and_two_item_202_8ks():
@@ -70,6 +70,27 @@ def test_extracts_required_10k_sections():
         "Item 7 MD&A",
     }
     assert warnings == []
+
+
+def test_extracts_sections_from_topic_ordered_10k():
+    text = "\n".join(
+        [
+            "Our Business",
+            "Business details " * 100,
+            "Management's Discussion and Analysis",
+            "Management discussion " * 100,
+            "Risk Factors",
+            "Risk details " * 100,
+            "Other Key Information",
+            "Executive officers " * 10,
+            "Financial Statements and Supplemental Details",
+        ]
+    )
+    sections, warnings = extract_10k_sections(text)
+    assert warnings == []
+    assert "Management discussion" not in sections["Item 1 Business"]
+    assert "Risk details" not in sections["Item 7 MD&A"]
+    assert "Executive officers" not in sections["Item 1A Risk Factors"]
 
 
 def test_extracts_exhibit_99_1_from_submission():

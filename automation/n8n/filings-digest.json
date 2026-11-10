@@ -1,0 +1,386 @@
+{
+  "name": "Arcus Filings Digest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000001",
+      "name": "Weekdays 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-arcus-url",
+              "name": "arcusUrl",
+              "value": "https://arcus-mmap.onrender.com",
+              "type": "string"
+            },
+            {
+              "id": "cfg-question",
+              "name": "defaultQuestion",
+              "value": "What did management say about demand and the outlook for next quarter?",
+              "type": "string"
+            },
+            {
+              "id": "cfg-email",
+              "name": "digestEmail",
+              "value": "you@example.com",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000002",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "watchlist"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000003",
+      "name": "Read Watchlist",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [440, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000004",
+      "name": "Loop Over Tickers",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.arcusUrl }}/api/research/ask",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ question: $json.question || $('Config').first().json.defaultQuestion, tickers: [String($json.ticker).trim().toUpperCase()] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000005",
+      "name": "Ask Arcus Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 380],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL",
+          "name": "Arcus automation key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-citations",
+              "leftValue": "={{ ($json.citations || []).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000006",
+      "name": "Has Citations?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1100, 380]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c-date",
+              "name": "date",
+              "value": "={{ $now.setZone('America/New_York').toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "c-ticker",
+              "name": "ticker",
+              "value": "={{ String($('Loop Over Tickers').item.json.ticker).trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "c-status",
+              "name": "status",
+              "value": "cited",
+              "type": "string"
+            },
+            {
+              "id": "c-latency",
+              "name": "latency_ms",
+              "value": "={{ $json.latency_ms }}",
+              "type": "number"
+            },
+            {
+              "id": "c-count",
+              "name": "citations",
+              "value": "={{ $json.citations.length }}",
+              "type": "number"
+            },
+            {
+              "id": "c-answer",
+              "name": "answer",
+              "value": "={{ $json.answer }}",
+              "type": "string"
+            },
+            {
+              "id": "c-sources",
+              "name": "sources",
+              "value": "={{ $json.citations.map(c => ({ n: c.citation, form: c.form, section: c.section, date: c.filing_date, url: c.url })) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000007",
+      "name": "Mark Cited",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n-date",
+              "name": "date",
+              "value": "={{ $now.setZone('America/New_York').toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "n-ticker",
+              "name": "ticker",
+              "value": "={{ String($('Loop Over Tickers').item.json.ticker).trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "n-status",
+              "name": "status",
+              "value": "={{ $json.error ? 'error' : 'not_found' }}",
+              "type": "string"
+            },
+            {
+              "id": "n-latency",
+              "name": "latency_ms",
+              "value": "={{ $json.latency_ms ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "n-count",
+              "name": "citations",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "n-answer",
+              "name": "answer",
+              "value": "={{ $json.error ? ((String($json.error.message || '').match(/Unsupported research tickers: [A-Z0-9, .-]+|Daily research limit reached|Arcus Research is disabled|Research service temporarily unavailable/) || [String($json.error.message || 'Request failed').slice(0, 200)])[0].trim()) : ($json.answer || 'Not found in the filings.') }}",
+              "type": "string"
+            },
+            {
+              "id": "n-sources",
+              "name": "sources",
+              "value": "={{ [] }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000008",
+      "name": "Mark Not Found",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1320, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(item => item.json);\nconst escape = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst flagged = rows.filter(r => r.status !== 'cited');\nconst cited = rows.filter(r => r.status === 'cited');\nconst date = rows[0]?.date ?? $now.toFormat('yyyy-MM-dd');\n\nconst section = (r) => {\n  const sources = (r.sources || []).map(s =>\n    `<li>[${s.n}] <a href=\"${escape(s.url)}\">${escape(s.form)} ${escape(s.section)}</a> (${escape(s.date)})</li>`\n  ).join('');\n  const badge = r.status === 'cited' ? '' : ` <span style=\"color:#b45309\">[${r.status === 'error' ? 'ERROR' : 'NOT FOUND'}]</span>`;\n  return `<h3>${escape(r.ticker)}${badge}</h3><p>${escape(r.answer)}</p>${sources ? `<ul>${sources}</ul>` : ''}`;\n};\n\nconst summary = `${cited.length} cited, ${flagged.length} flagged`;\nconst flaggedList = flagged.length\n  ? `<p style=\"color:#b45309\"><b>Flagged:</b> ${flagged.map(r => `${escape(r.ticker)} (${r.status === 'error' ? 'error' : 'not found'})`).join(', ')}</p>`\n  : '';\nconst html = `<h2>Arcus filings digest, ${escape(date)}</h2><p>${summary}. Answers come only from SEC filings; each cites its source.</p>${flaggedList}${[...flagged, ...cited].map(section).join('<hr>')}`;\n\nreturn [{ json: { subject: `Arcus filings digest ${date}: ${summary}`, html } }];"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000009",
+      "name": "Build Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 120]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.digestEmail }}",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000010",
+      "name": "Email Digest",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1100, 120],
+      "webhookId": "a1f0c001-0000-4000-8000-0000000000aa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "runs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.date }}",
+            "ticker": "={{ $json.ticker }}",
+            "status": "={{ $json.status }}",
+            "latency_ms": "={{ $json.latency_ms }}",
+            "citations": "={{ $json.citations }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "date", "displayName": "date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "ticker", "displayName": "ticker", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "status", "displayName": "status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "latency_ms", "displayName": "latency_ms", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "citations", "displayName": "citations", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000011",
+      "name": "Log Run",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [880, -60],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekdays 8am": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Read Watchlist", "type": "main", "index": 0 }]]
+    },
+    "Read Watchlist": {
+      "main": [[{ "node": "Loop Over Tickers", "type": "main", "index": 0 }]]
+    },
+    "Loop Over Tickers": {
+      "main": [
+        [
+          { "node": "Build Digest", "type": "main", "index": 0 },
+          { "node": "Log Run", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Ask Arcus Research", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ask Arcus Research": {
+      "main": [[{ "node": "Has Citations?", "type": "main", "index": 0 }]]
+    },
+    "Has Citations?": {
+      "main": [
+        [{ "node": "Mark Cited", "type": "main", "index": 0 }],
+        [{ "node": "Mark Not Found", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Cited": {
+      "main": [[{ "node": "Loop Over Tickers", "type": "main", "index": 0 }]]
+    },
+    "Mark Not Found": {
+      "main": [[{ "node": "Loop Over Tickers", "type": "main", "index": 0 }]]
+    },
+    "Build Digest": {
+      "main": [[{ "node": "Email Digest", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

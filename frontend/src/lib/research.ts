@@ -1,7 +1,7 @@
 export const RESEARCH_UNIVERSE = new Set([
   'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO',
   'JPM', 'BAC', 'GS', 'MS', 'WFC', 'BRK-B', 'V', 'MA', 'JNJ', 'UNH',
-  'LLY', 'PFE', 'MU',
+  'LLY', 'PFE', 'MU', 'AMD', 'INTC', 'AMAT',
 ]);
 
 export function supportedPortfolioTickers(

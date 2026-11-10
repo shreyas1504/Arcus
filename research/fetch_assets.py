@@ -22,11 +22,11 @@ import requests
 DATA_DIR = Path(os.getenv("RESEARCH_DATA_DIR", "research/data"))
 ASSET_URL = os.getenv(
     "RESEARCH_ASSET_URL",
-    "https://github.com/shreyas1504/Arcus/releases/download/research-index-v1/arcus-research-assets.tar.gz",
+    "https://github.com/shreyas1504/Arcus/releases/download/research-index-v2/arcus-research-assets-v2.tar.gz",
 )
 ASSET_SHA256 = os.getenv(
     "RESEARCH_ASSET_SHA256",
-    "49760881c69f2bdd62b88be88613ed9ea9aae1809a9a97a024c356b7d74be21c",
+    "fd8fd6da223fedcb05db97b171ef7f0742b0e2ba96926fe6b8d8d59dcebcd60c",
 )
 MEMBERS = ("chroma", "bge-small-en-v1.5-onnx")
 MARKER = ".assets.json"

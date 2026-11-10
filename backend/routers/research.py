@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import re
@@ -162,6 +163,12 @@ def _identity(req: ResearchAskRequest, request: Request) -> str:
     return hashlib.sha256(f"{salt}:{raw}".encode("utf-8")).hexdigest()
 
 
+def _is_automation(request: Request) -> bool:
+    expected = os.getenv("AUTOMATION_KEY", "")
+    supplied = request.headers.get("X-Automation-Key", "")
+    return bool(expected) and hmac.compare_digest(supplied.encode(), expected.encode())
+
+
 def _today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
@@ -197,10 +204,11 @@ async def ask_research(req: ResearchAskRequest, request: Request):
     if not research_enabled():
         raise HTTPException(status_code=404, detail="Arcus Research is disabled")
 
+    automation = _is_automation(request)
     identity = _identity(req, request)
     day = _today()
     quota = get_quota()
-    used = await run_in_threadpool(quota.used, identity, day)
+    used = 0 if automation else await run_in_threadpool(quota.used, identity, day)
     if used >= quota.limit:
         raise HTTPException(
             status_code=429,
@@ -216,7 +224,7 @@ async def ask_research(req: ResearchAskRequest, request: Request):
         raise HTTPException(status_code=503, detail="Research service temporarily unavailable") from exc
 
     try:
-        remaining = await run_in_threadpool(quota.consume, identity, day)
+        remaining = quota.limit if automation else await run_in_threadpool(quota.consume, identity, day)
     except ValueError as exc:
         raise HTTPException(
             status_code=429,
