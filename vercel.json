@@ -3,7 +3,8 @@
   "outputDirectory": "frontend/dist",
   "build": {
     "env": {
-      "VITE_API_URL": "https://arcus-mmap.onrender.com"
+      "VITE_API_URL": "https://arcus-mmap.onrender.com",
+      "VITE_ENABLE_RESEARCH": "true"
     }
   },
   "rewrites": [

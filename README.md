@@ -214,6 +214,8 @@ Arcus/
 │   ├── ingest.py               # SEC EDGAR download + section extraction
 │   ├── chunk.py                # 800-token chunks, 100-token overlap
 │   ├── store.py                # BGE embeddings → Chroma "filings"
+│   ├── embedder.py             # ONNX BGE query embeddings (no torch)
+│   ├── fetch_assets.py         # Build-time download of the published index
 │   ├── qa.py                   # Retrieval, Nemotron, grounding validator
 │   └── eval/                   # 30-question benchmark + live edge cases
 ├── frontend/
@@ -316,9 +318,12 @@ Every request to SEC EDGAR must identify the caller with a real name and email.
 
 ### Local setup
 
+Serving needs only `requirements-research.txt` (Chroma plus an ONNX copy of the
+embedding model). Rebuilding the index also needs torch and sentence-transformers:
+
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install -r backend/requirements-research.txt
+pip install -r backend/requirements-research-index.txt
 
 export SEC_USER_AGENT="Your Name your@email.com"
 export NVIDIA_API_KEY="nvapi-..."
@@ -334,7 +339,12 @@ python -m research.eval.run_eval
 python -m research.eval.edge_cases
 ```
 
-`BAAI/bge-small-en-v1.5` creates local normalized embeddings. Chroma persists
+To serve from the published index instead of rebuilding it, run
+`python -m research.fetch_assets`.
+
+`BAAI/bge-small-en-v1.5` creates local normalized embeddings: sentence-transformers
+when building the index, and the same model's ONNX export through onnxruntime
+when answering queries (identical vectors, no torch on the server). Chroma persists
 the `filings` collection under `research/data/chroma` by default. Answer
 generation calls NVIDIA's hosted API (`integrate.api.nvidia.com`, free keys from
 [build.nvidia.com](https://build.nvidia.com)) with
@@ -346,24 +356,22 @@ that every answer number occurs in a retrieved excerpt, and returns
 
 ### Deployment
 
-Arcus Research ships disabled, and the Render blueprint stays on the current
-plan with no disk. The index needs persistent storage and the embedding model
-needs more memory than the free plan offers, so launching it means moving the
-backend to a paid plan, switching the build to `requirements-research.txt`, and
-adding the disk noted in `render.yaml` (`/var/data/arcus-research`). Add `NVIDIA_API_KEY` and `SEC_USER_AGENT` in the
-Render dashboard, then open a Render shell and initialize the disk:
+Research runs on Render's free plan. The build installs
+`requirements-research.txt` and runs `python -m research.fetch_assets`, which
+downloads the prebuilt Chroma index and ONNX embedder (125 MB) from the
+`research-index-v1` GitHub release and checks its SHA-256. With Research
+loaded the backend peaks at about 360 MB, under the plan's 512 MB.
 
-```bash
-python -m research.ingest \
-  && python -m research.chunk \
-  && python -m research.store
-```
+To publish a rebuilt index, pack it with
+`python -m research.fetch_assets --pack arcus-research-assets.tar.gz`, upload
+it to a new release, and update `ASSET_URL` and `ASSET_SHA256` in
+`research/fetch_assets.py`.
 
-Confirm `GET /api/research/status` reports `ready: true`, then set backend
-`RESEARCH_ENABLED=true` and frontend `VITE_ENABLE_RESEARCH=true` and redeploy.
-The tab remains hidden and the endpoint returns 404 until those flags are set.
-A persistent SQLite counter allows 20 successful questions per anonymous
-browser per UTC day.
+The flags are backend `RESEARCH_ENABLED=true` and frontend
+`VITE_ENABLE_RESEARCH=true`; without them the tab is hidden and the endpoint
+returns 404. `GET /api/research/status` reports `ready: true` once the index
+loads. A SQLite counter allows 20 successful questions per anonymous browser
+per UTC day; on the free plan's ephemeral disk it resets on each deploy.
 
 ### Evaluation
 
@@ -377,11 +385,12 @@ outside the corpus. `research/eval/run_eval.py` writes measured results to
 | Top-6 retrieval hit rate | **100.0% (25/25)** | ≥80% |
 | Answers with no unsupported numbers | **100% (30/30)** | 100% |
 | Exact not-found responses | **5/5** | 5/5 |
-| Median end-to-end latency | **3.20s** (p95 16.2s) | <4s |
+| Median end-to-end latency | **3.00s** (p95 13.7s) | <4s |
 | Answerable questions answered | 25/25 | — |
 
 Measured on the complete 21-company index with
-`nvidia/nemotron-3-ultra-550b-a55b` on NVIDIA's API (2026-11-10). Number
+`nvidia/nemotron-3-ultra-550b-a55b` on NVIDIA's API and the ONNX query
+embedder (2026-11-10). Number
 grounding is enforced by the validator, so the cost of strictness shows up as
 answerable questions falling back to "Not found in the filings." Long
 risk-factor answers drive the p95 latency.

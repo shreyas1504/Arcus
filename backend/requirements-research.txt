@@ -1,6 +1,5 @@
-# Arcus Research index + embeddings. Install CPU-only torch first:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+# Arcus Research serving: Chroma plus the ONNX query embedder (no torch).
 -r requirements.txt
 chromadb>=1.5.9,<2.0.0
-sentence-transformers>=6.2.0,<7.0.0
-transformers>=4.50.0,<6.0.0
+onnxruntime>=1.17.0
+tokenizers>=0.15.0

@@ -2,29 +2,19 @@ services:
   - type: web
     name: arcus-backend
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt
+    # Research serves from a prebuilt index and an ONNX embedder downloaded at
+    # build time (research/fetch_assets.py), so it fits the free plan's 512 MB.
+    buildCommand: pip install -r backend/requirements-research.txt && python -m research.fetch_assets
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
-    # Arcus Research ships disabled. To launch it, move to a paid plan, set
-    #   buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu
-    #                 && pip install -r backend/requirements-research.txt
-    # and add:
-    #   plan: starter
-    #   disk: {name: arcus-research-data, mountPath: /var/data/arcus-research, sizeGB: 1}
     envVars:
       - key: NVIDIA_API_KEY
         sync: false
       - key: RESEARCH_MODEL
         value: nvidia/nemotron-3-ultra-550b-a55b
-      - key: SEC_USER_AGENT
-        sync: false
       - key: RESEARCH_ENABLED
-        value: "false"
+        value: "true"
       - key: RESEARCH_DATA_DIR
-        value: /var/data/arcus-research
-      - key: RESEARCH_CHROMA_DIR
-        value: /var/data/arcus-research/chroma
-      - key: RESEARCH_RATE_DB
-        value: /var/data/arcus-research/research_rate_limits.sqlite3
+        value: research/data
       - key: RATE_LIMIT_SALT
         generateValue: true
       - key: PYTHON_VERSION

@@ -195,9 +195,9 @@ class ResearchQA:
 
                 self._collection = chroma_client(self.chroma_dir).get_collection(COLLECTION_NAME)
             if self._embedder is None:
-                from sentence_transformers import SentenceTransformer
+                from research.embedder import OnnxEmbedder
 
-                self._embedder = SentenceTransformer(self.embedding_model_name)
+                self._embedder = OnnxEmbedder()
 
     def ready(self) -> bool:
         try:

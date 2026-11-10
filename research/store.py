@@ -11,12 +11,10 @@ from typing import Any
 import chromadb
 import numpy as np
 from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
 
 from backend.config import RESEARCH_TICKER_UNIVERSE
 from research import COLLECTION_NAME, EMBEDDING_MODEL
 from research.chunk import DEFAULT_OUTPUT, load_jsonl, write_chunks
-from research.ingest import run_ingestion
 
 DEFAULT_DATA_DIR = Path(os.getenv("RESEARCH_DATA_DIR", "research/data"))
 DEFAULT_CHROMA_DIR = Path(os.getenv("RESEARCH_CHROMA_DIR", str(DEFAULT_DATA_DIR / "chroma")))
@@ -68,7 +66,7 @@ def verify_chunks(chunks: list[dict[str, Any]], tickers: list[str] | None = None
 
 
 def embed_long_texts(
-    model: SentenceTransformer,
+    model: Any,
     texts: list[str],
     *,
     batch_size: int = 64,
@@ -138,6 +136,8 @@ def build_index(
             "schema_version": 1,
         },
     )
+    from sentence_transformers import SentenceTransformer
+
     model = SentenceTransformer(model_name)
     for start in range(0, len(chunks), batch_size):
         batch = chunks[start : start + batch_size]
@@ -183,6 +183,8 @@ def ensure_index(data_dir: Path = DEFAULT_DATA_DIR, chroma_dir: Path = DEFAULT_C
     documents_path = data_dir / "documents.jsonl"
     chunks_path = data_dir / "chunks.jsonl"
     if not documents_path.exists():
+        from research.ingest import run_ingestion
+
         run_ingestion(data_dir=data_dir)
     if not chunks_path.exists():
         write_chunks(documents_path, chunks_path)
