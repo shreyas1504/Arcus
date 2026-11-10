@@ -26,6 +26,7 @@ Arcus gives retail investors the same risk analytics that hedge funds use — wi
 | **Sector Analysis** | GICS sector breakdown with concentration warnings. |
 | **Correlation Heatmap** | Pairwise stock correlations — are your holdings truly diversified? |
 | **News Impact** | How your holdings have actually reacted to their last 8 earnings reports. |
+| **Arcus Research** | Answers questions about your holdings using only their SEC filings, with a citation on every sentence. |
 
 ---
 
@@ -54,6 +55,10 @@ Arcus was built on one observation: retail investors have access to the same raw
 | **SciPy** | Portfolio optimisation (SLSQP constrained minimiser) |
 | **yfinance** | Historical price data from Yahoo Finance |
 | **Anthropic Claude Sonnet** | Conversational AI layer — grounded in live portfolio context with multi-turn memory |
+| **VADER** | Headline sentiment for News Impact |
+| **SEC EDGAR + BeautifulSoup** | 10-K and earnings-release ingestion for Arcus Research |
+| **BGE small + Chroma** | Local embeddings (`BAAI/bge-small-en-v1.5`) and the persistent vector index for filings |
+| **NVIDIA Nemotron 3 Ultra** | Filing-only answer generation for Arcus Research, via NVIDIA's API |
 
 ### Frontend
 | Tool | Purpose |
@@ -64,6 +69,48 @@ Arcus was built on one observation: retail investors have access to the same raw
 | **Framer Motion** | Smooth animations and transitions |
 | **Recharts** | Interactive financial charts |
 | **Shadcn/ui** | Accessible component library |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Frontend["Frontend: React + Vite (GitHub Pages / Vercel)"]
+        Pages["Dashboard · Results · Chat · Research"]
+    end
+
+    subgraph Backend["Backend: FastAPI (Render)"]
+        PortfolioAPI["/api/portfolio/*"]
+        ChatAPI["/api/v2/chat"]
+        NewsAPI["/api/news/*"]
+        ResearchAPI["/api/research/*"]
+    end
+
+    Pages --> PortfolioAPI
+    Pages --> ChatAPI
+    Pages --> NewsAPI
+    Pages --> ResearchAPI
+
+    PortfolioAPI --> Analytics["Risk metrics · Monte Carlo · optimizer"]
+    Analytics --> Yahoo[("Yahoo Finance")]
+    NewsAPI --> EventStudy["Earnings event study · headline classifier · VADER"]
+    EventStudy --> Yahoo
+    NewsAPI --> RSS[("RSS news feeds")]
+    ChatAPI --> Claude["Anthropic Claude"]
+
+    ResearchAPI --> Retrieve["Per-ticker retrieval (top 6)"]
+    Retrieve --> Chroma[("Chroma: SEC filing chunks")]
+    Retrieve --> Nemotron["NVIDIA Nemotron 3 Ultra"]
+    Nemotron --> Validator["Citation + number validator"]
+    ResearchAPI --> Quota[("SQLite: 20 questions/day")]
+    SEC[("SEC EDGAR")] -. "offline: ingest → chunk → embed" .-> Chroma
+```
+
+Portfolio analytics, News Impact and Arcus AI work from live market data and
+the user's portfolio. Arcus Research works from a prebuilt index of SEC filings
+and sits behind feature flags (`RESEARCH_ENABLED` on the backend,
+`VITE_ENABLE_RESEARCH` on the frontend).
 
 ---
 
@@ -105,7 +152,7 @@ npm run dev
 
 ## Testing
 
-Arcus has **280+ automated tests** across the backend and frontend. Every push and pull request to `main` runs both suites in GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)), and the frontend is only built and deployed if they pass.
+Arcus has **340+ automated tests** across the backend and frontend. Every push and pull request to `main` runs both suites in GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)), and the frontend is only built and deployed if they pass.
 
 ### Backend — pytest
 
@@ -119,6 +166,8 @@ pytest backend/tests
 | `test_metrics.py` | Sharpe, Sortino, Beta, VaR, CVaR, max drawdown, annualised return/volatility, Calmar, alpha, information ratio, diversification score, correlation matrix, health score |
 | `test_event_study.py` | Headline classification and the earnings event study (abnormal return, volatility change, volume spike, skipped events) |
 | `test_cors.py` | Allowed origins and the Vercel preview regex, including lookalike domains |
+| `test_research.py` | Research universe, SEC filing selection and section extraction, chunking, citation/number validation, quota, feature flag |
+| `test_research_edge_cases.py` | Research request validation, ticker normalization, rate limiting, model failures, repair-then-fallback, number formats, multi-ticker retrieval |
 
 ### Frontend — Vitest + Testing Library
 
@@ -136,6 +185,7 @@ npm test
 | `news-impact.test.tsx` | News Impact panel rendering and formatting |
 | `sentiment-badge.test.tsx` | Sentiment pill and badge components |
 | `api-base.test.ts` | API base URL resolution |
+| `research.test.tsx` | Research tab: supported tickers, citation rendering, error and empty states |
 
 ---
 
@@ -157,12 +207,19 @@ Arcus/
 │   ├── routers/
 │   │   ├── portfolio.py        # /api/portfolio/* endpoints
 │   │   ├── chat.py             # AI chatbot endpoint
-│   │   ├── news.py             # Live market news feed
+│   │   ├── news.py             # Live market news feed + News Impact
+│   │   ├── research.py         # /api/research/* (flag, quota, citations)
 │   │   └── adapter.py          # /api/v2/* adapter layer
 │   └── tests/                  # pytest suite
+├── research/
+│   ├── ingest.py               # SEC EDGAR download + section extraction
+│   ├── chunk.py                # 800-token chunks, 100-token overlap
+│   ├── store.py                # BGE embeddings → Chroma "filings"
+│   ├── qa.py                   # Retrieval, Nemotron, grounding validator
+│   └── eval/                   # 30-question benchmark + live edge cases
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/              # Index, Onboarding, Dashboard, Results, Chat
+│   │   ├── pages/              # Index, Onboarding, Dashboard, Results, Chat, Research
 │   │   ├── components/         # Reusable UI components + charts
 │   │   ├── lib/                # API client, utilities
 │   │   └── test/               # Vitest suite
@@ -187,6 +244,8 @@ Arcus/
 | `GET` | `/api/news/market` | Live RSS market news feed |
 | `GET` | `/api/news/sentiment/{ticker}` | VADER sentiment across a ticker's recent headlines |
 | `POST` | `/api/news/event-impact` | Earnings event study for a list of tickers |
+| `GET` | `/api/research/status` | Whether Arcus Research is enabled and its index is loaded |
+| `POST` | `/api/research/ask` | Filing-only answer with citations (`question`, `tickers`, `client_id`) |
 
 ---
 
@@ -220,6 +279,120 @@ price history — a report from last week, a recent listing — is skipped, coun
 and reported in the response. Skipped events contribute nothing to the averages,
 and a study with no usable events renders an empty state. No figure shown in
 this panel is estimated, interpolated or sampled.
+
+---
+
+## Arcus Research
+
+Arcus Research answers questions about a user's indexed holdings using only SEC
+filings. The fixed universe contains 21 companies: the first 20 Arcus popular
+stocks plus Micron (`MU`); NVIDIA is already included.
+
+```mermaid
+flowchart LR
+    SEC[SEC EDGAR] --> Ingest[10-K and 8-K ingestion]
+    Ingest --> Chunk[800-token chunks]
+    Chunk --> BGE[BGE embeddings]
+    BGE --> Chroma[Chroma filings collection]
+    Question[Portfolio question] --> Retrieve[Top-6 per-ticker retrieval]
+    Chroma --> Retrieve
+    Retrieve --> Nemotron[NVIDIA Nemotron 3 Ultra]
+    Nemotron --> Guard[Citation and number validator]
+    Guard --> API[FastAPI research endpoint]
+    API --> UI[Research tab]
+```
+
+### Corpus
+
+For each company, ingestion downloads the latest non-amended 10-K and the two
+latest 8-K filings reporting Item 2.02 results. It extracts:
+
+- 10-K Item 1 — Business
+- 10-K Item 1A — Risk Factors
+- 10-K Item 7 — Management's Discussion and Analysis
+- Each 8-K's Exhibit 99.1 earnings release
+
+The expected clean corpus is 63 source filings and 105 logical documents.
+Every request to SEC EDGAR must identify the caller with a real name and email.
+
+### Local setup
+
+```bash
+export SEC_USER_AGENT="Your Name your@email.com"
+export NVIDIA_API_KEY="nvapi-..."
+export RESEARCH_ENABLED=true
+export VITE_ENABLE_RESEARCH=true
+
+python -m research.ingest
+python -m research.chunk
+python -m research.store
+python -m research.eval.run_eval
+
+# with the backend running on :8000
+python -m research.eval.edge_cases
+```
+
+`BAAI/bge-small-en-v1.5` creates local normalized embeddings. Chroma persists
+the `filings` collection under `research/data/chroma` by default. Answer
+generation calls NVIDIA's hosted API (`integrate.api.nvidia.com`, free keys from
+[build.nvidia.com](https://build.nvidia.com)) with
+`nvidia/nemotron-3-ultra-550b-a55b`; override it with `RESEARCH_MODEL`.
+
+The backend rejects unsupported tickers, validates every citation, verifies
+that every answer number occurs in a retrieved excerpt, and returns
+`Not found in the filings.` when evidence or grounding is insufficient.
+
+### Deployment
+
+Arcus Research ships disabled, and the Render blueprint stays on the current
+plan with no disk. The index needs persistent storage and the embedding model
+needs more memory than the free plan offers, so launching it means moving the
+backend to a paid plan and adding the disk noted in `render.yaml`
+(`/var/data/arcus-research`). Add `NVIDIA_API_KEY` and `SEC_USER_AGENT` in the
+Render dashboard, then open a Render shell and initialize the disk:
+
+```bash
+python -m research.ingest \
+  && python -m research.chunk \
+  && python -m research.store
+```
+
+Confirm `GET /api/research/status` reports `ready: true`, then set backend
+`RESEARCH_ENABLED=true` and frontend `VITE_ENABLE_RESEARCH=true` and redeploy.
+The tab remains hidden and the endpoint returns 404 until those flags are set.
+A persistent SQLite counter allows 20 successful questions per anonymous
+browser per UTC day.
+
+### Evaluation
+
+The 30-question benchmark is in `research/eval/questions.jsonl`: 25 answerable
+questions with expected source sections and five questions whose answers are
+outside the corpus. `research/eval/run_eval.py` writes measured results to
+`research/eval/results.md`.
+
+| Metric | Measured | Target |
+|---|---:|---:|
+| Top-6 retrieval hit rate | **100.0% (25/25)** | ≥80% |
+| Answers with no unsupported numbers | **100% (30/30)** | 100% |
+| Exact not-found responses | **5/5** | 5/5 |
+| Median end-to-end latency | **3.20s** (p95 16.2s) | <4s |
+| Answerable questions answered | 25/25 | — |
+
+Measured on the complete 21-company index with
+`nvidia/nemotron-3-ultra-550b-a55b` on NVIDIA's API (2026-11-10). Number
+grounding is enforced by the validator, so the cost of strictness shows up as
+answerable questions falling back to "Not found in the filings." Long
+risk-factor answers drive the p95 latency.
+
+Known limits: tables may lose visual relationships during HTML-to-text
+conversion; unusual SEC heading markup may require extraction fallbacks;
+filings are refreshed manually; the browser quota is not account-grade
+enforcement; NVIDIA API capacity and backend cold starts can exceed the
+four-second latency target. The number check matches values, not units, so
+"$20.3 million" would pass against a source saying "$20.3 billion". "Latest"
+questions may be answered from the older of the two earnings releases, and
+companies that renamed segments (Microsoft in 2026) can get either naming
+depending on which filing is retrieved.
 
 ---
 
