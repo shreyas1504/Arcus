@@ -11,8 +11,6 @@ services:
     #   plan: starter
     #   disk: {name: arcus-research-data, mountPath: /var/data/arcus-research, sizeGB: 1}
     envVars:
-      - key: ANTHROPIC_API_KEY
-        sync: false
       - key: NVIDIA_API_KEY
         sync: false
       - key: RESEARCH_MODEL

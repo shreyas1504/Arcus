@@ -3,12 +3,18 @@
 # Accepts live portfolio context and conversation history.
 
 import os
+import re
 import logging
 from fastapi import APIRouter, HTTPException  # type: ignore
+from fastapi.concurrency import run_in_threadpool  # type: ignore
 from pydantic import BaseModel  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
+
+NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
+DEFAULT_CHAT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+THINK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 
 
 # ── Request / Response models ─────────────────────────────────────────────
@@ -188,14 +194,14 @@ def _dict_to_portfolio_context(raw: dict) -> PortfolioContext:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("NVIDIA_API_KEY")
 
     # Build context
     ctx = req.portfolio_context
     system_prompt = _build_system_prompt(ctx)
 
     # Build messages list from conversation history + new message
-    messages: list[dict[str, str]] = []
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
     for msg in req.conversation_history:
         role = "assistant" if msg.role == "assistant" else "user"
         messages.append({"role": role, "content": msg.content})
@@ -206,20 +212,23 @@ async def chat(req: ChatRequest):
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail={"error": "AI unavailable — ANTHROPIC_API_KEY not set", "fallback": True},
+            detail={"error": "AI unavailable — NVIDIA_API_KEY not set", "fallback": True},
         )
 
     try:
-        import anthropic
+        from openai import OpenAI
 
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            system=system_prompt,
+        client = OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key, timeout=60, max_retries=2)
+        response = await run_in_threadpool(
+            client.chat.completions.create,
+            model=os.getenv("CHAT_MODEL", DEFAULT_CHAT_MODEL),
             messages=messages,
+            temperature=0.2,
+            top_p=0.95,
+            max_tokens=1024,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
-        reply = response.content[0].text
+        reply = THINK_RE.sub("", response.choices[0].message.content or "").strip()
 
         return ChatResponse(reply=reply, fallback=False)
     except Exception as e:

@@ -54,11 +54,10 @@ Arcus was built on one observation: retail investors have access to the same raw
 | **NumPy / Pandas** | Numerical computation and data manipulation |
 | **SciPy** | Portfolio optimisation (SLSQP constrained minimiser) |
 | **yfinance** | Historical price data from Yahoo Finance |
-| **Anthropic Claude Sonnet** | Conversational AI layer — grounded in live portfolio context with multi-turn memory |
+| **NVIDIA Nemotron 3 Ultra** | Arcus AI chat (grounded in live portfolio context with multi-turn memory) and filing-only answers for Arcus Research, via NVIDIA's API |
 | **VADER** | Headline sentiment for News Impact |
 | **SEC EDGAR + BeautifulSoup** | 10-K and earnings-release ingestion for Arcus Research |
 | **BGE small + Chroma** | Local embeddings (`BAAI/bge-small-en-v1.5`) and the persistent vector index for filings |
-| **NVIDIA Nemotron 3 Ultra** | Filing-only answer generation for Arcus Research, via NVIDIA's API |
 
 ### Frontend
 | Tool | Purpose |
@@ -97,7 +96,7 @@ flowchart LR
     NewsAPI --> EventStudy["Earnings event study · headline classifier · VADER"]
     EventStudy --> Yahoo
     NewsAPI --> RSS[("RSS news feeds")]
-    ChatAPI --> Claude["Anthropic Claude"]
+    ChatAPI --> ChatLLM["NVIDIA Nemotron 3 Ultra"]
 
     ResearchAPI --> Retrieve["Per-ticker retrieval (top 6)"]
     Retrieve --> Chroma[("Chroma: SEC filing chunks")]
@@ -411,7 +410,7 @@ The AI layer (backend/routers/chat.py) is built around three explicit design pri
 
 **Grounding:** Every conversation turn dynamically injects the user's live portfolio — tickers, weights, prices, and all computed metrics (Sharpe, Sortino, VaR, CVaR, Beta, Max Drawdown, Alpha, Annualized Return, Volatility, Health Score) — into the system prompt. The model only sees what the user's portfolio actually contains.
 
-**Safety / Hallucination Prevention:** The system prompt explicitly instructs the model not to invent missing values, and to clearly state when data is unavailable. This prevents confidently stated incorrect financial figures.
+**Safety / Hallucination Prevention:** The system prompt explicitly instructs the model not to invent missing values, and to clearly state when data is unavailable. This prevents confidently stated incorrect financial figures. On a 41-question grounding test (`backend/evals/grounding_eval.py`, Nemotron 3 Ultra as both assistant and judge, 2026-11-10), replies containing an invented figure fell from 23/41 without the rule to 4/41 with it; the remaining cases were suggested target weights and clearly labelled assumptions. Missing data was acknowledged in 18/18 cases and 0/4 false premises were accepted.
 
 **Multi-Turn Context:** Full conversation history is passed on every request, enabling coherent follow-up questions across a session. Investor risk tolerance and target return are also injected per turn for personalized responses.
 

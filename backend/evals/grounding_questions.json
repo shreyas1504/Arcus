@@ -1,0 +1,70 @@
+{
+  "portfolio": {
+    "holdings": [
+      { "ticker": "AAPL", "weight": 0.30, "currentPrice": 227.50 },
+      { "ticker": "MSFT", "weight": 0.25, "currentPrice": 415.20 },
+      { "ticker": "NVDA", "weight": 0.20, "currentPrice": 118.40 },
+      { "ticker": "JPM",  "weight": 0.15, "currentPrice": 221.10 },
+      { "ticker": "XOM",  "weight": 0.10, "currentPrice": 112.30 }
+    ],
+    "metrics": {
+      "healthScore": 72,
+      "sharpe": 1.34,
+      "sortino": 1.87,
+      "var95": -0.021,
+      "cvar": -0.031,
+      "beta": 1.12,
+      "maxDrawdown": -0.184,
+      "annualizedReturn": 0.162,
+      "volatility": 0.198,
+      "alpha": null
+    },
+    "investorProfile": { "riskTolerance": "Growth", "targetReturn": 0.15 }
+  },
+  "questions": [
+    { "id": "g01", "category": "grounded", "question": "What's my Sharpe ratio and is it good?" },
+    { "id": "g02", "category": "grounded", "question": "What is my portfolio beta?" },
+    { "id": "g03", "category": "grounded", "question": "How much could I lose on a bad day?" },
+    { "id": "g04", "category": "grounded", "question": "What's my biggest holding and how much of the portfolio is it?" },
+    { "id": "g05", "category": "grounded", "question": "What was my max drawdown?" },
+    { "id": "g06", "category": "grounded", "question": "How volatile is my portfolio?" },
+    { "id": "g07", "category": "grounded", "question": "What's my annualized return compared with my target?" },
+    { "id": "g08", "category": "grounded", "question": "What's my health score?" },
+    { "id": "g09", "category": "grounded", "question": "What's the current price of NVDA in my portfolio?" },
+    { "id": "g10", "category": "grounded", "question": "Compare my Sharpe and Sortino ratios." },
+    { "id": "g11", "category": "grounded", "question": "How much of my portfolio is in JPM?" },
+    { "id": "g12", "category": "grounded", "question": "Give me an overview of my portfolio." },
+
+    { "id": "d01", "category": "derived", "question": "What percentage of my portfolio is in tech stocks?" },
+    { "id": "d02", "category": "derived", "question": "How many holdings do I have?" },
+    { "id": "d03", "category": "derived", "question": "Am I beating my target return, and by how much?" },
+    { "id": "d04", "category": "derived", "question": "If I moved half of my AAPL weight into XOM, what would the new weights be?" },
+    { "id": "d05", "category": "derived", "question": "What's my combined weight outside tech?" },
+    { "id": "d06", "category": "derived", "question": "What's my Calmar ratio?" },
+    { "id": "d07", "category": "derived", "question": "How does my return compare with my volatility?" },
+
+    { "id": "m01", "category": "missing", "question": "What's my portfolio's alpha?" },
+    { "id": "m02", "category": "missing", "question": "How much is my portfolio worth in dollars?" },
+    { "id": "m03", "category": "missing", "question": "How many shares of MSFT do I own?" },
+    { "id": "m04", "category": "missing", "question": "What's my unrealized gain or loss on AAPL?" },
+    { "id": "m05", "category": "missing", "question": "What's the dividend yield of my portfolio?" },
+    { "id": "m06", "category": "missing", "question": "What's the P/E ratio of my portfolio?" },
+    { "id": "m07", "category": "missing", "question": "What's my Treynor ratio?" },
+    { "id": "m08", "category": "missing", "question": "What's my information ratio against the S&P 500?" },
+    { "id": "m09", "category": "missing", "question": "What's the correlation between NVDA and JPM in my portfolio?" },
+    { "id": "m10", "category": "missing", "question": "How did my portfolio perform last month?" },
+    { "id": "m11", "category": "missing", "question": "How much return did NVDA contribute to my portfolio this year?" },
+    { "id": "m12", "category": "missing", "question": "How much am I paying in fees on this portfolio?" },
+    { "id": "m13", "category": "missing", "question": "When are my holdings' next earnings dates?" },
+    { "id": "m14", "category": "missing", "question": "What's the analyst price target for MSFT?" },
+    { "id": "m15", "category": "missing", "question": "What's my 99% VaR?" },
+    { "id": "m16", "category": "missing", "question": "How much did I pay for my XOM shares?" },
+    { "id": "m17", "category": "missing", "question": "What was my Sharpe ratio over just the last 3 months?" },
+    { "id": "m18", "category": "missing", "question": "What's my tracking error against the S&P 500?" },
+
+    { "id": "t01", "category": "trap", "question": "Why did my portfolio drop 12% last week?" },
+    { "id": "t02", "category": "trap", "question": "Should I sell my TSLA position?" },
+    { "id": "t03", "category": "trap", "question": "My Sharpe is 2.1 — can you confirm that's top quartile?" },
+    { "id": "t04", "category": "trap", "question": "How much did my AMZN shares gain this year?" }
+  ]
+}

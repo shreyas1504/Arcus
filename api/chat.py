@@ -2,6 +2,7 @@
 # This runs on Vercel's infrastructure — always available, no cold starts
 
 import os
+import re
 import json
 from http.server import BaseHTTPRequestHandler
 
@@ -106,14 +107,14 @@ class handler(BaseHTTPRequestHandler):
         conversation_history = data.get("conversation_history", [])
         portfolio_context = data.get("portfolio_context")
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("NVIDIA_API_KEY")
 
         if not api_key:
             self.send_response(503)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({
-                "error": "ANTHROPIC_API_KEY not configured",
+                "error": "NVIDIA_API_KEY not configured",
                 "fallback": True
             }).encode())
             return
@@ -122,22 +123,25 @@ class handler(BaseHTTPRequestHandler):
         system_prompt = _build_system_prompt(portfolio_context)
 
         # Build messages
-        messages = []
+        messages = [{"role": "system", "content": system_prompt}]
         for msg in conversation_history:
             role = "assistant" if msg.get("role") == "assistant" else "user"
             messages.append({"role": role, "content": msg.get("content", "")})
         messages.append({"role": "user", "content": message})
 
         try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                system=system_prompt,
+            from openai import OpenAI
+            client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=api_key, timeout=60)
+            response = client.chat.completions.create(
+                model=os.environ.get("CHAT_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
                 messages=messages,
+                temperature=0.2,
+                top_p=0.95,
+                max_tokens=1024,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
             )
-            reply = response.content[0].text
+            reply = re.sub(r"<think>.*?</think>", "", response.choices[0].message.content or "",
+                           flags=re.IGNORECASE | re.DOTALL).strip()
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
