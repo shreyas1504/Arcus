@@ -5,8 +5,7 @@ question per watchlist ticker and emails a single digest of cited answers.
 Every answer comes only from SEC filings and links to its source; tickers
 whose filings do not answer the question are flagged instead of guessed.
 
-<!-- After the first successful run, save the n8n canvas as workflow.png and
-uncomment: ![Workflow](workflow.png) -->
+![Arcus Filings Digest in n8n after a run: 5 tickers, 4 cited, 1 flagged](workflow.png)
 
 ## Flow
 
@@ -93,7 +92,12 @@ HTTP node: n8n leaves credential secrets out of exported workflow files, so
 
 ## Verification
 
-The workflow was imported into n8n 2.47 and executed against a local Arcus
+First live run (2026-11-10, n8n 2.47 against the Render backend): the
+screenshot above. Five watchlist tickers were queried; NVDA, AMD, INTC and AMAT
+returned cited answers, MU came back "Not found in the filings." and was
+flagged, and the digest email was delivered.
+
+Before that, the workflow was imported into n8n 2.47 and executed against a local Arcus
 backend, with the Sheets and Gmail nodes replaced by stubs. All tickers were
 processed, a mixed-case ` nvda ` row was normalized, a per-row question was
 used, TSM was logged as `error` ("Unsupported research tickers: TSM"), and
