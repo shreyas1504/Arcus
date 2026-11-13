@@ -10,7 +10,7 @@ from fastapi import FastAPI  # type: ignore
 from fastapi.concurrency import run_in_threadpool  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 
-from backend.routers import portfolio, chat, news, adapter, research  # type: ignore
+from backend.routers import portfolio, chat, news, adapter, research, scenario  # type: ignore
 
 app = FastAPI(
     title="Arcus API",
@@ -50,6 +50,7 @@ app.include_router(chat.router)
 app.include_router(news.router)
 app.include_router(adapter.router)
 app.include_router(research.router)
+app.include_router(scenario.router)
 
 
 @app.on_event("startup")
