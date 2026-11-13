@@ -14,8 +14,8 @@ PYTHON="${PYTHON:-$ROOT/.venv-render/bin/python}"
 
 step() { printf '\n== %s\n' "$1"; }
 
-step "Backend tests ($("$PYTHON" -V 2>&1))"
-"$PYTHON" -m pytest backend/tests -q
+step "Backend tests ($("$PYTHON" -V 2>&1), every event must be cross-verified)"
+SCENARIO_REQUIRE_VERIFIED=1 "$PYTHON" -m pytest backend/tests -q
 
 if [ ! -d frontend/node_modules ]; then
   echo "frontend/node_modules is missing; run 'npm ci' in frontend/ first" >&2

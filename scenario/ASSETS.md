@@ -6,14 +6,15 @@
 - **Event order:** row `i` of every array is `library.json["events"][i]`, in date order.
 - **Factor order:** `FACTOR_NAMES` from `scenario/enums.py`, and `F = len(FACTOR_NAMES)`, which is 13.
 - **Path index:** `t = 0` is the close on day -1, with value `0.0`. `t = k` is the close of the k-th trading day starting with day 0. The 21-day move is `[:, 21, :]`.
-- **Missing values:** `NaN`, never filled. That covers days not yet observed, factors not yet listed (for example SOXX before 2001-07, which is flagged as `semis_proxy`), and closures.
+- **Missing values:** `NaN`, never filled or interpolated. That covers days not yet observed and factors not yet listed (for example SOXX before 2001-07, flagged as `semis_proxy`).
+- **Calendar:** SPY's own bar dates. Brent, the 10-year yield, VIX, the credit spread and GPR come from their own calendars; each SPY date takes the latest observation at most 5 calendar days old (a foreign or bond-market holiday print), otherwise `NaN`.
 - **Units:** cumulative simple returns, as fractions. The exception is `DGS10_CHG`, which is a cumulative change in percentage points.
 - **Data types:** all arrays are float32 unless stated.
 
 ## `library.npz`
 | Key | Shape | Meaning |
 |---|---|---|
-| `embeddings` | (n, 384) | BGE-small embedding of `trigger + " " + name + " " + category`, L2-normalized |
+| `embeddings` | (n, 384) | BGE-small embedding of `trigger + " " + name + " " + category` (underscores in the category become spaces), L2-normalized |
 | `factor_paths` | (n, 505, F) | Cumulative factor paths, t = 0..504 |
 | `context` | (n, 4) | At the day -1 close: `vix`, `baa10y`, `gpr`, `gpr_rise_5d` |
 
@@ -32,7 +33,7 @@
   "context_names": ["vix", "baa10y", "gpr", "gpr_rise_5d"],
   "embedding_model": "BAAI/bge-small-en-v1.5",
   "events": ["<Event objects, as in scenario/schemas.py>"],
-  "flags": {"<event id>": ["date_check_quiet", "semis_proxy"]}
+  "flags": {"<event id>": ["date_check_quiet", "date_check_earlier", "date_check_unmeasurable", "semis_proxy"]}
 }
 ```
 
