@@ -101,7 +101,12 @@ from scenario.enums import (
 from scenario.factors import BetaFit, estimate_return, fit_betas
 from scenario.schemas import (
     BacktestSummary,
+    BacktestSummaryV2,
     Event,
+    ExposureRank,
+    Resilience,
+    ScenarioReplay,
+    WhatIfResponseV2,
     HoldingImpact,
     ParsedScenario,
     PathSeries,
@@ -125,6 +130,16 @@ FIXTURE_PATH = Path(
     )
 )
 ASSETS_DIR = Path(os.getenv("SCENARIO_ASSETS_DIR", str(ROOT / "assets")))
+FIXTURE_V2_PATH = Path(
+    os.getenv(
+        "SCENARIO_FIXTURE_V2",
+        str(ROOT.parent / "frontend/src/lib/__fixtures__/whatif-response-v2.json"),
+    )
+)
+CRISIS_DRAWDOWN = -0.10  # PLAN v2 crisis set rule
+RECOVERY_BUCKETS: tuple[str, ...] = (
+    "never_fell", "1-21", "22-63", "64-126", "127-252", "253-504", "not_within_504", "unknown",
+)
 
 
 class EngineUnavailable(RuntimeError):
@@ -281,6 +296,58 @@ def _drawdown(path: Sequence[float | None]) -> float:
     return float(min(0.0, np.min(wealth / peaks - 1.0)))
 
 
+
+# --------------------------------------------------------------------------- v2 (stress test) contract
+# PLAN.md section "v2". Stubs written in C4b-contract; implemented in C4b-engine. Cursor's
+# blind tests (test_scenario_engine_v2.py) are written against these docstrings.
+
+
+def crisis_events(library: Library, as_of: date) -> list[int]:
+    """Library rows that form the crisis replay set as of `as_of`, sorted by date.
+
+    An event qualifies if (1) it is eligible (eligible_precedents: its 63-day window closed
+    before as_of) and (2) the S&P's worst fall within its window is CRISIS_DRAWDOWN or worse,
+    where worst fall = min over t <= PATH_DAYS of (1 + p_t) / max_{s<=t}(1 + p_s) - 1 on the
+    library's cumulative FACTOR_SPY path. Only the earliest qualifying event per cluster_id is
+    kept; an event without a cluster_id is its own cluster. Ties on date go by event id.
+    """
+    raise NotImplementedError
+
+
+def recovery_bucket(days: int | None, known: bool) -> str:
+    """The H4 bucket (one of RECOVERY_BUCKETS) for a recovery time in trading days.
+
+    days == 0 -> "never_fell"; 1-21 -> "1-21"; 22-63 -> "22-63"; 64-126 -> "64-126";
+    127-252 -> "127-252"; 253-504 -> "253-504"; days is None and known -> "not_within_504";
+    days is None and not known -> "unknown". Raises ValueError for negative days, for days
+    above RECOVERY_DAYS, or for days given with known=False.
+    """
+    raise NotImplementedError
+
+
+def exposure_ranking(replays: Sequence[ScenarioReplay]) -> list[ExposureRank]:
+    """Which holdings drove the damage across `replays`.
+
+    For each ticker held in the replays: mean_contribution = mean of its contribution over
+    the replays that hold it; scenarios = that number of replays; most_exposed_count = the
+    number of replays in which it had the lowest contribution AND that contribution was
+    below 0 (ties: the alphabetically first ticker). Sorted by mean_contribution ascending
+    (most damage first), then ticker. Empty input -> [].
+    """
+    raise NotImplementedError
+
+
+def resilience_summary(crises: Sequence[ScenarioReplay]) -> Resilience:
+    """How the portfolio held up across the crisis replays.
+
+    crises_total = crises with a sp500_worst_drawdown_63d; worse_than_sp500 = those where
+    worst_drawdown_63d < sp500_worst_drawdown_63d (a deeper fall); top_drivers = up to 2
+    tickers from exposure_ranking(crises) with most_exposed_count > 0, ordered by
+    most_exposed_count descending, then mean_contribution ascending, then ticker.
+    """
+    raise NotImplementedError
+
+
 # --------------------------------------------------------------------------- engine
 
 
@@ -382,6 +449,41 @@ class WhatIfEngine:
         ]
         out[0] = 0.0
         return out
+
+    def run_v2(
+        self,
+        request: WhatIfRequest,
+        *,
+        as_of: date | None = None,
+        parsed: ParsedScenario | None = None,
+    ) -> WhatIfResponseV2:
+        """Stress-test answer (PLAN v2): replays of the closest past shocks and the crises.
+
+        - as_of defaults to today; `parsed` skips the model call; precedent search, scoring,
+          threshold and top_k are exactly as in run() (score_precedents + selection).
+        - confidence LOW (no cosine >= similarity_threshold): `scenarios` is empty, the span
+          is None, and only the crisis replay is returned.
+        - Each replay (scenarios and crises alike), per holding: the actual 21-day return
+          when settings.use_actual and the stock has closes at t = 0 and t = HORIZON_DAYS,
+          else the factor estimate (as in run()); contribution = weight x return_21d;
+          portfolio_return_21d = the sum of contributions. path = the portfolio path for
+          t = 0..PATH_DAYS. worst_drawdown_63d from that path (as in run()).
+          sp500_return_21d and sp500_worst_drawdown_63d come from the library SPY path.
+        - Recovery: recovery_days(long path, t = 0..RECOVERY_DAYS) as in run();
+          recovery_known = recovered, or the path is observed for all RECOVERY_DAYS days.
+          recovery_source = "actual" if every holding used actual prices for the long path,
+          "estimated" if none did, else "mixed". Per holding, recovery_days uses that
+          holding's own path. If calibration backtest.recovery_shown_from == "actual_only"
+          (the pre-registered H4 fallback), recovery fields that do not come only from
+          actual prices are None and recovery_known is False.
+        - crises = crisis_events(library, as_of) replayed (similarity None); exposure =
+          exposure_ranking(scenarios); resilience = resilience_summary(crises) (None if no
+          crises); span_low/high = min/max of scenario portfolio_return_21d.
+        - Holdings with no actual price and no factor fit for every replayed event are
+          listed in `skipped` and the rest are renormalized (as in run()).
+        - narrative = narrative.render_v2(response).
+        """
+        raise NotImplementedError
 
     @staticmethod
     def _clean_prices(prices: pd.DataFrame | None, tickers: list[str], as_of: date) -> pd.DataFrame:
@@ -687,6 +789,10 @@ class FakeEngine:
         return self._fixture.model_copy(
             update={"scenario": request.scenario, "severity": request.severity}, deep=True
         )
+
+    def run_v2(self, request: WhatIfRequest, **_: object) -> WhatIfResponseV2:
+        fixture = WhatIfResponseV2.model_validate(json.loads(FIXTURE_V2_PATH.read_text()))
+        return fixture.model_copy(update={"scenario": request.scenario}, deep=True)
 
 
 _engine: FakeEngine | WhatIfEngine | None = None

@@ -12,7 +12,7 @@ drawdown window is "the following three months" and the 504-day recovery horizon
 from __future__ import annotations
 
 from scenario.enums import Confidence, Severity
-from scenario.schemas import PortfolioOutcome, WhatIfResponse
+from scenario.schemas import PortfolioOutcome, WhatIfResponse, WhatIfResponseV2
 
 LOW_CONFIDENCE = (
     "There is no close precedent for this scenario, so these figures use every past "
@@ -71,3 +71,17 @@ def render(response: WhatIfResponse) -> str:
         sentences.extend(_outcome(response.portfolio))
     sentences.append("Past shocks are a guide to exposure, not a forecast.")
     return " ".join(sentences)
+
+
+def render_v2(response: WhatIfResponseV2) -> str:
+    """Narrative for a v2 (stress-test) response whose `narrative` is still empty (PLAN v2).
+
+    Contract stub from C4b-contract; Cursor implements it in U4b. Must contain: one sentence
+    per scenario replay ("If it plays out like <name> (<year>), this portfolio moved X%;
+    <top tickers> drove most of it"), the span sentence when there are scenarios, the
+    resilience sentence when there are crises, the low-confidence sentence when confidence
+    is LOW, and the limits sentence (past shocks applied to today's holdings, not a
+    forecast). Every number must be one of the response's own values, formatted; no advice
+    words.
+    """
+    raise NotImplementedError

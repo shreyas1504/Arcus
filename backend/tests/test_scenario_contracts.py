@@ -309,3 +309,136 @@ def test_library_dataclass_shape():
         factor_history=pd.DataFrame(),
     )
     assert lib.factor_paths.shape[2] == len(lib.factor_names)
+
+
+# =========================================================================== v2 contract (C4b-contract)
+
+from scenario.schemas import (  # noqa: E402
+    ExposureRank,
+    Resilience,
+    ScenarioHolding,
+    ScenarioReplay,
+    WhatIfResponseV2,
+)
+
+FIXTURE_V2 = ROOT / "frontend/src/lib/__fixtures__/whatif-response-v2.json"
+
+
+def _gen_fixture_module():
+    spec = importlib.util.spec_from_file_location("gen_fixture", ROOT / "scripts/gen_fixture.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _v2() -> dict:
+    return json.loads(FIXTURE_V2.read_text())
+
+
+def test_v2_fixture_validates_and_is_reproducible():
+    WhatIfResponseV2.model_validate(_v2())
+    assert _gen_fixture_module().build_v2() == _v2()
+
+
+def test_v2_fixture_is_clearly_synthetic():
+    data = _v2()
+    rows = data["scenarios"] + data["crises"]
+    assert all(h["ticker"].startswith("DEMO") for r in rows for h in r["holdings"])
+    assert all(r["name"].startswith("Example") and r["source_url"].startswith("https://example.com/") for r in rows)
+    assert data["backtest"]["available"] is False
+
+
+def test_v2_fixture_follows_the_documented_rules():
+    gen, data = _gen_fixture_module(), _v2()
+    assert data["exposure"] == gen.exposure_rule(data["scenarios"])
+    assert data["resilience"] == gen.resilience_rule(data["crises"])
+
+
+def _replay(**overrides) -> dict:
+    replay = _v2()["scenarios"][0]
+    return replay | overrides
+
+
+def test_replay_contributions_must_sum():
+    ScenarioReplay.model_validate(_replay())
+    with pytest.raises(ValidationError, match="sum"):
+        ScenarioReplay.model_validate(_replay(portfolio_return_21d=0.5))
+
+
+def test_replay_recovery_days_need_known_recovery():
+    ScenarioReplay.model_validate(_replay(recovery_days=None, recovery_known=False))
+    with pytest.raises(ValidationError, match="recovery"):
+        ScenarioReplay.model_validate(_replay(recovery_days=12, recovery_known=False))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"path": [0.01, 0.0]},
+        {"worst_drawdown_63d": 0.02},
+        {"recovery_source": "guessed"},
+        {"holdings": []},
+        {"similarity": 1.5},
+        {"extra": 1},
+    ],
+)
+def test_replay_rejects(overrides):
+    with pytest.raises(ValidationError):
+        ScenarioReplay.model_validate(_replay(**overrides))
+
+
+def test_response_v2_span_and_similarity_rules():
+    data = _v2()
+    with pytest.raises(ValidationError, match="span"):
+        WhatIfResponseV2.model_validate(data | {"span_low": -0.5})
+    with pytest.raises(ValidationError, match="crisis"):
+        WhatIfResponseV2.model_validate(data | {"crises": [data["crises"][0] | {"similarity": 0.4}]})
+    with pytest.raises(ValidationError, match="similarity"):
+        WhatIfResponseV2.model_validate(data | {"scenarios": [data["scenarios"][0] | {"similarity": None}],
+                                                "span_low": data["scenarios"][0]["portfolio_return_21d"],
+                                                "span_high": data["scenarios"][0]["portfolio_return_21d"]})
+    low = data | {"confidence": "low", "scenarios": [], "exposure": []}
+    with pytest.raises(ValidationError, match="span"):
+        WhatIfResponseV2.model_validate(low)
+    WhatIfResponseV2.model_validate(low | {"span_low": None, "span_high": None})
+
+
+def test_exposure_and_resilience_bounds():
+    with pytest.raises(ValidationError):
+        ExposureRank(ticker="A", mean_contribution=-0.1, most_exposed_count=4, scenarios=3)
+    with pytest.raises(ValidationError):
+        Resilience(worse_than_sp500=3, crises_total=2)
+    with pytest.raises(ValidationError):
+        Resilience(worse_than_sp500=0, crises_total=2, top_drivers=["A", "B", "C"])
+    with pytest.raises(ValidationError):
+        ScenarioHolding(ticker="A", weight=1.2, sector="broad", return_21d=0.0, contribution=0.0, source="actual")
+
+
+V2_SIGNATURES = {
+    engine.WhatIfEngine.run_v2: ["self", "request", "as_of", "parsed"],
+    engine.crisis_events: ["library", "as_of"],
+    engine.recovery_bucket: ["days", "known"],
+    engine.exposure_ranking: ["replays"],
+    engine.resilience_summary: ["crises"],
+    narrative.render_v2: ["response"],
+}
+
+
+@pytest.mark.parametrize("func", list(V2_SIGNATURES), ids=lambda f: f.__qualname__)
+def test_v2_contract_signatures(func):
+    assert list(inspect.signature(func).parameters) == V2_SIGNATURES[func]
+
+
+def test_v2_constants():
+    assert engine.CRISIS_DRAWDOWN == -0.10
+    assert engine.RECOVERY_BUCKETS == (
+        "never_fell", "1-21", "22-63", "64-126", "127-252", "253-504", "not_within_504", "unknown",
+    )
+
+
+def test_fake_engine_run_v2_echoes_request(clean_engine):
+    clean_engine.setenv("SCENARIO_FAKE", "1")
+    req = WhatIfRequest.model_validate({"scenario": "What if oil spikes?", "holdings": [{"ticker": "AAPL", "weight": 1}]})
+    response = engine.get_engine().run_v2(req)
+    assert isinstance(response, WhatIfResponseV2)
+    assert response.scenario == "What if oil spikes?"

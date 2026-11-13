@@ -15,6 +15,7 @@ from pathlib import Path
 
 from scenario.enums import Category, Confidence, ImpactSource, Nature, Sector, Severity
 from scenario.schemas import (
+    WhatIfResponseV2,
     BacktestSummary,
     HoldingImpact,
     ParsedScenario,
@@ -25,6 +26,7 @@ from scenario.schemas import (
 )
 
 OUT = Path(__file__).resolve().parent.parent / "frontend/src/lib/__fixtures__/whatif-response.json"
+OUT_V2 = OUT.with_name("whatif-response-v2.json")
 Q_HAT = 1.6  # synthetic
 
 HOLDINGS = {"DEMO1": (0.6, Sector.SEMICONDUCTORS), "DEMO2": (0.4, Sector.UTILITIES)}
@@ -145,10 +147,122 @@ def build() -> dict:
     return json.loads(response.model_dump_json())
 
 
+# --------------------------------------------------------------------------- v2 (stress test)
+
+V2_HOLDINGS = {"DEMO1": (0.5, Sector.SEMICONDUCTORS), "DEMO2": (0.3, Sector.UTILITIES), "DEMO3": (0.2, Sector.FINANCIALS)}
+# (id, name, date, category, nature, similarity or None, spx 21d, spx dd63,
+#  {ticker: (21d return, source, recovery_days)}, portfolio recovery, known, recovery_source)
+V2_SCENARIOS = [
+    ("example-strait-closure", "Example: strait closure", date(2019, 5, 13), Category.TRADE_TARIFFS, Nature.ADVERSE,
+     0.71, -0.048, -0.066,
+     {"DEMO1": (-0.142, ImpactSource.ACTUAL, 41), "DEMO2": (0.012, ImpactSource.ACTUAL, 0), "DEMO3": (-0.031, ImpactSource.ACTUAL, 18)},
+     41, True, "actual"),
+    ("example-border-clash", "Example: border clash", date(2010, 11, 23), Category.GEOPOLITICAL_CONFLICT, Nature.ADVERSE,
+     0.64, -0.021, -0.034,
+     {"DEMO1": (-0.051, ImpactSource.ESTIMATED, 22), "DEMO2": (0.004, ImpactSource.ACTUAL, 0), "DEMO3": (-0.018, ImpactSource.ACTUAL, 9)},
+     22, True, "mixed"),
+    ("example-port-quake", "Example: port earthquake", date(2024, 4, 3), Category.DISASTER_SUPPLY, Nature.ADVERSE,
+     0.58, -0.036, -0.055,
+     {"DEMO1": (-0.071, ImpactSource.ACTUAL, 15), "DEMO2": (-0.006, ImpactSource.ACTUAL, 7), "DEMO3": (-0.012, ImpactSource.ACTUAL, 6)},
+     15, True, "actual"),
+]
+V2_CRISES = [
+    ("example-bank-collapse", "Example: bank collapse", date(2008, 9, 15), Category.FINANCIAL_CREDIT, Nature.ADVERSE,
+     None, -0.192, -0.281,
+     {"DEMO1": (-0.262, ImpactSource.ESTIMATED, None), "DEMO2": (-0.084, ImpactSource.ACTUAL, 120), "DEMO3": (-0.301, ImpactSource.ACTUAL, None)},
+     None, True, "mixed"),
+    ("example-pandemic-crash", "Example: pandemic crash", date(2020, 3, 11), Category.PANDEMIC_HEALTH, Nature.ADVERSE,
+     None, -0.044, -0.262,
+     {"DEMO1": (-0.031, ImpactSource.ACTUAL, 58), "DEMO2": (-0.075, ImpactSource.ACTUAL, 190), "DEMO3": (-0.112, ImpactSource.ACTUAL, 240)},
+     96, True, "actual"),
+]
+
+
+def _replay(row) -> dict:
+    (event_id, name, day, category, nature, similarity, spx, spx_dd, per, recovery, known, source) = row
+    holdings = []
+    for ticker, (weight, sector) in V2_HOLDINGS.items():
+        ret, src, rec = per[ticker]
+        holdings.append({
+            "ticker": ticker, "weight": weight, "sector": sector.value, "return_21d": ret,
+            "contribution": round(weight * ret, 6), "source": src.value, "recovery_days": rec,
+        })
+    total = round(sum(h["contribution"] for h in holdings), 6)
+    trough = round(min(total * 1.35, total), 6)
+    path = [0.0] + [round(trough * t / 12, 6) for t in range(1, 13)]
+    path += [round(trough + (total - trough) * (t - 12) / 9, 6) for t in range(13, 22)]
+    path += [round(total + (0.01 - total) * (t - 21) / 42, 6) for t in range(22, 64)]
+    return {
+        "event_id": event_id, "name": name, "date": day.isoformat(), "category": category.value,
+        "nature": nature.value, "trigger": f"{name.removeprefix('Example: ').capitalize()} is announced (synthetic example).",
+        "similarity": similarity, "source_url": f"https://example.com/{event_id}",
+        "portfolio_return_21d": total, "sp500_return_21d": spx,
+        "worst_drawdown_63d": round(min(0.0, trough * 1.05), 6), "sp500_worst_drawdown_63d": spx_dd,
+        "recovery_days": recovery, "recovery_known": known, "recovery_source": source,
+        "path": path, "holdings": holdings,
+    }
+
+
+def exposure_rule(replays: list[dict]) -> list[dict]:
+    """engine.exposure_ranking's documented rule, on plain dicts (fixture only)."""
+    contrib: dict[str, list[float]] = {}
+    counts: dict[str, int] = {}
+    for replay in replays:
+        rows = sorted(replay["holdings"], key=lambda h: (h["contribution"], h["ticker"]))
+        if rows[0]["contribution"] < 0:
+            counts[rows[0]["ticker"]] = counts.get(rows[0]["ticker"], 0) + 1
+        for h in replay["holdings"]:
+            contrib.setdefault(h["ticker"], []).append(h["contribution"])
+    out = [
+        {"ticker": t, "mean_contribution": round(sum(v) / len(v), 6), "most_exposed_count": counts.get(t, 0), "scenarios": len(v)}
+        for t, v in contrib.items()
+    ]
+    return sorted(out, key=lambda r: (r["mean_contribution"], r["ticker"]))
+
+
+def resilience_rule(crises: list[dict]) -> dict:
+    """engine.resilience_summary's documented rule, on plain dicts (fixture only)."""
+    with_spx = [c for c in crises if c["sp500_worst_drawdown_63d"] is not None]
+    worse = sum(c["worst_drawdown_63d"] < c["sp500_worst_drawdown_63d"] for c in with_spx)
+    ranked = sorted((r for r in exposure_rule(crises) if r["most_exposed_count"] > 0),
+                    key=lambda r: (-r["most_exposed_count"], r["mean_contribution"], r["ticker"]))
+    return {"worse_than_sp500": worse, "crises_total": len(with_spx), "top_drivers": [r["ticker"] for r in ranked[:2]]}
+
+
+def build_v2() -> dict:
+    scenarios = [_replay(r) for r in V2_SCENARIOS]
+    crises = [_replay(r) for r in V2_CRISES]
+    returns = [s["portfolio_return_21d"] for s in scenarios]
+    response = {
+        "scenario": "What if China blockades Taiwan?",
+        "parsed": {"category": "geopolitical_conflict", "nature": "adverse", "regions": ["china", "taiwan"],
+                   "sectors": ["semiconductors"], "companies": [],
+                   "search_text": "China naval blockade of Taiwan disrupts shipping and chip supply", "fallback": False},
+        "as_of": "2026-11-13",
+        "confidence": "normal",
+        "scenarios": scenarios,
+        "span_low": min(returns),
+        "span_high": max(returns),
+        "exposure": exposure_rule(scenarios),
+        "crises": crises,
+        "resilience": resilience_rule(crises),
+        "skipped": [],
+        "narrative": (
+            f"Example only. If it plays out like the strait closure, this portfolio moved {returns[0]:.1%}. "
+            f"Across these 3 past shocks it moved between {min(returns):.1%} and {max(returns):.1%}. "
+            "Past shocks applied to today's holdings, not a forecast."
+        ),
+        "backtest": {"available": False},
+        "remaining_today": 19,
+    }
+    return json.loads(WhatIfResponseV2.model_validate(response).model_dump_json())
+
+
 def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(build(), indent=2) + "\n")
-    print(f"wrote {OUT}")
+    OUT_V2.write_text(json.dumps(build_v2(), indent=2) + "\n")
+    print(f"wrote {OUT} and {OUT_V2}")
 
 
 if __name__ == "__main__":
