@@ -259,6 +259,23 @@ def test_h5_agreement():
     assert not bt.h5_agree(dev, dev | {"h3_improvement": {"value": -0.01}})
 
 
+def test_final_calibration_is_built_from_the_record_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(bt, "EVAL_DIR", tmp_path)
+    metric = {"value": 0.2, "ci_low": 0.1, "ci_high": 0.3}
+    summary = {k: metric for k in ("h1_mae", "h1_base", "h2_rank", "h3_mae", "h3_base", "h4_within1", "h4_exact", "h4_exact_base")}
+    summary["events"] = 3
+    dev = {"settings_sha256": "s", "holdout_ids_sha256": "h", "settings": {}}
+    marker = {"holdout_v2": summary, "gate": {"H1": True}, "outcome": "actual_only", "run_at": "t",
+              "settings_sha256": "s", "holdout_ids_sha256": "h"}
+    calibration = bt.write_final_calibration(dev, marker)
+    assert calibration["backtest_v2"]["recovery_shown_from"] == "actual_only"
+    assert calibration["backtest_v2"]["available"] is True
+    with pytest.raises(bt.BacktestError, match="stop"):
+        bt.write_final_calibration(dev, marker | {"outcome": "stop"})
+    with pytest.raises(bt.BacktestError, match="frozen"):
+        bt.write_final_calibration(dev, marker | {"settings_sha256": "other"})
+
+
 def test_holdout_refuses_second_run(monkeypatch, tmp_path):
     monkeypatch.setenv("SCENARIO_RUN_HOLDOUT", "1")
     marker = tmp_path / "holdout_run.json"
@@ -285,7 +302,7 @@ def test_dev_run_never_makes_the_engine_available():
     writes_final = 'EVAL_DIR / "calibration.json").write_text'
     assert writes_final not in inspect.getsource(bt.run_dev)
     assert writes_final not in inspect.getsource(bt.run_dev_v2)
-    assert writes_final in inspect.getsource(bt.run_holdout_v2)  # only the one-time holdout may
+    assert writes_final in inspect.getsource(bt.write_final_calibration)  # only the holdout result may
 
 
 # ------------------------------------------------------------------ v2 conditional stress test

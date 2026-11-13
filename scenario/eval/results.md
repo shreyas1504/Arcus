@@ -145,3 +145,52 @@ Threshold = max(0.5, 95th percentile of the controls' best cosine) = **0.523**. 
 - library.npz: `142e4265564564350be078c53ae880de2df1d16a079124dcb1204a7d1105db0f`
 - library.json: `8ed9d1d0a28d08e137c32e6a2fcb4bfd68ce40016a1857f35b386cb1321944d7`
 - universe manifest: `0a2723a13bd4518bc767379d612973886bff57df390971f8be3e04fea572a2c4`
+
+## Holdout (2023+): run once on 2026-11-13T20:52:46+00:00
+
+Frozen dev settings (alpha 0.1, stress betas False); settings and holdout-event hashes verified before the run. Events scored: **32** (0 skipped: none). Recovery cases with a known real recovery: 6561 across 32 events.
+
+| Gate v2 | Pass mark | Holdout [90% CI] | |
+|---|---|---|---|
+| H1 · 21-day MAE vs beta × S&P | ≥ 10% lower | 1.6% [1.5%, 1.7%] vs 2.2% [1.9%, 2.4%]: 24.4% [19.6%, 28.9%] lower | pass |
+| H2 · holding ranking | ≥ 0.30 | 0.47 [0.42, 0.51] | pass |
+| H3 · 63-day worst fall MAE | ≥ 10% lower | 1.5% [1.4%, 1.6%] vs 2.0% [1.8%, 2.2%]: 23.2% [19.1%, 26.9%] lower | pass |
+| H4 · recovery within one bucket | ≥ 75% and exact ≥ baseline | 93.1% [90.5%, 95.3%]; exact 70.5% [66.0%, 74.8%] vs 59.4% [51.4%, 66.7%] | pass |
+| H5 · H1–H3 agree with dev | must match | | pass |
+
+**Passed.** The engine may serve answers; recovery is shown for all holdings.
+
+| Event | H1 MAE | baseline | H2 rank | H3 MAE | baseline | H4 within one | H4 exact | baseline exact |
+|---|---|---|---|---|---|---|---|---|
+| svb-closure-2023 | 1.7% | 2.3% | 0.60 | 2.3% | 3.2% | 91.7% | 80.1% | 79.6% |
+| svb-depositor-backstop-2023 | 1.1% | 1.9% | 0.59 | 2.0% | 2.9% | 94.2% | 74.3% | 71.8% |
+| ubs-credit-suisse-rescue-2023 | 1.1% | 1.6% | 0.47 | 1.9% | 3.1% | 79.6% | 58.3% | 50.5% |
+| fed-hike-amid-bank-stress-2023 | 1.0% | 1.3% | 0.39 | 1.8% | 2.8% | 98.1% | 77.2% | 76.7% |
+| opec-plus-surprise-cut-2023 | 1.3% | 1.7% | 0.47 | 1.9% | 3.1% | 98.1% | 71.4% | 14.6% |
+| first-republic-failure-2023 | 2.1% | 4.1% | 0.58 | 1.7% | 2.5% | 98.5% | 74.8% | 21.4% |
+| who-ends-covid-emergency-2023 | 1.9% | 3.1% | 0.65 | 1.3% | 1.6% | 95.1% | 54.9% | 35.9% |
+| nvidia-ai-guidance-2023 | 1.4% | 1.7% | 0.63 | 1.4% | 1.7% | 97.1% | 67.0% | 34.0% |
+| us-debt-ceiling-deal-2023 | 1.3% | 1.5% | 0.46 | 1.4% | 1.6% | 96.1% | 90.3% | 90.3% |
+| fitch-us-downgrade-2023 | 1.3% | 1.7% | 0.40 | 1.5% | 2.0% | 100.0% | 91.3% | 91.3% |
+| hamas-attack-israel-2023 | 1.8% | 1.9% | 0.24 | 0.9% | 1.0% | 100.0% | 85.4% | 85.4% |
+| taiwan-earthquake-2024 | 1.5% | 1.5% | 0.41 | 1.4% | 1.4% | 97.6% | 60.7% | 60.7% |
+| iran-strikes-israel-2024-04 | 1.3% | 1.8% | 0.49 | 1.5% | 1.5% | 97.1% | 80.6% | 80.6% |
+| macron-snap-election-2024 | 1.5% | 2.7% | 0.42 | 1.4% | 2.0% | 95.1% | 60.2% | 61.2% |
+| crowdstrike-outage-2024 | 2.0% | 2.2% | 0.47 | 1.2% | 1.4% | 94.7% | 56.3% | 54.9% |
+| boj-rate-hike-2024 | 1.6% | 1.9% | 0.22 | 0.9% | 1.2% | 98.5% | 87.9% | 87.4% |
+| mpox-global-emergency-2024 | 1.3% | 1.7% | 0.31 | 1.1% | 1.5% | 93.2% | 67.0% | 29.1% |
+| fed-50bp-cut-2024 | 1.3% | 1.4% | 0.32 | 2.0% | 3.3% | 82.5% | 42.7% | 38.3% |
+| south-korea-martial-law-2024 | 2.1% | 3.6% | 0.08 | 2.1% | 2.4% | 60.2% | 52.9% | 34.5% |
+| canada-mexico-china-tariffs-2025 | 1.7% | 2.3% | 0.47 | 2.1% | 2.1% | 99.0% | 83.0% | 82.0% |
+| liberation-day-tariffs-2025 | 2.1% | 3.7% | 0.31 | 1.4% | 2.6% | 98.1% | 73.8% | 8.7% |
+| reciprocal-tariff-pause-2025 | 1.8% | 2.0% | 0.79 | 0.8% | 1.3% | 99.0% | 99.0% | 99.0% |
+| nvidia-h20-export-license-2025 | 2.1% | 2.6% | 0.83 | 0.7% | 0.8% | 99.5% | 98.1% | 97.1% |
+| us-china-geneva-truce-2025 | 1.4% | 1.3% | 0.67 | 1.5% | 1.9% | 95.1% | 71.4% | 67.0% |
+| moodys-us-downgrade-2025 | 1.6% | 1.8% | 0.46 | 1.5% | 1.9% | 98.1% | 85.4% | 85.4% |
+| israel-strikes-iran-2025-06 | 1.3% | 1.6% | 0.55 | 1.6% | 2.1% | 98.5% | 81.1% | 81.1% |
+| us-strikes-iran-2025-06 | 1.5% | 1.8% | 0.53 | 1.6% | 2.0% | 85.0% | 73.8% | 67.5% |
+| israel-iran-ceasefire-2025 | 1.6% | 1.7% | 0.37 | 1.7% | 2.1% | 78.6% | 62.1% | 51.5% |
+| fed-resumes-cuts-2025-09 | 2.1% | 2.7% | 0.48 | 1.6% | 1.5% | 82.9% | 49.3% | 45.9% |
+| us-shutdown-2025 | 2.1% | 2.5% | 0.37 | 1.4% | 1.3% | 90.8% | 47.1% | 43.2% |
+| fed-third-cut-2025-12 | 1.9% | 3.3% | 0.51 | 1.8% | 2.4% | 90.3% | 53.4% | 8.7% |
+| fed-hike-reversal-2026-09 | 2.2% | 2.4% | 0.41 | — | — | 96.0% | 44.3% | 64.8% |

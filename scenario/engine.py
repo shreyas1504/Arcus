@@ -964,11 +964,12 @@ def yahoo_sectors(tickers: list[str]) -> dict[str, Sector]:
     return out
 
 
-def build_default_engine(assets_dir: Path = ASSETS_DIR) -> WhatIfEngine:
+def build_default_engine(assets_dir: Path | None = None) -> WhatIfEngine:
     from research.embedder import shared_embedder
     from scenario.build_library import load_library
     from scenario.parse import parse_scenario
 
+    assets_dir = assets_dir if assets_dir is not None else ASSETS_DIR  # resolved at call time (tests patch it)
     if not (assets_dir / "library.npz").exists():
         raise EngineUnavailable(f"Scenario Lab assets are not loaded ({assets_dir})")
     calibration_path = _calibration_path(assets_dir)

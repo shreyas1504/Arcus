@@ -1,0 +1,204 @@
+{
+ "backtest": {
+  "available": false,
+  "coverage_80": null,
+  "gate_passed": null,
+  "holdout_events": null,
+  "mae": null,
+  "mae_best_baseline": null,
+  "rank_corr": null,
+  "results_url": null,
+  "width_ratio": null
+ },
+ "backtest_v2": {
+  "available": true,
+  "gate_passed": true,
+  "h1_mae": {
+   "ci_high": 0.017263663781046105,
+   "ci_low": 0.015296671898142624,
+   "value": 0.01626509407443097
+  },
+  "h1_mae_baseline": {
+   "ci_high": 0.023665707334590357,
+   "ci_low": 0.019487536114508257,
+   "value": 0.021504593426732124
+  },
+  "h2_rank": {
+   "ci_high": 0.5116161002304147,
+   "ci_low": 0.42278938172043,
+   "value": 0.4671013824884792
+  },
+  "h3_drawdown_mae": {
+   "ci_high": 0.01646532238145047,
+   "ci_low": 0.01417251756919076,
+   "value": 0.015351071919261489
+  },
+  "h3_drawdown_mae_baseline": {
+   "ci_high": 0.021949077213044826,
+   "ci_low": 0.0180477370576412,
+   "value": 0.019985881277920104
+  },
+  "h4_exact_bucket": {
+   "ci_high": 0.747974823847491,
+   "ci_low": 0.660121677084903,
+   "value": 0.7046098509514993
+  },
+  "h4_exact_bucket_baseline": {
+   "ci_high": 0.6668564059371838,
+   "ci_low": 0.5136390957325145,
+   "value": 0.5937333669246335
+  },
+  "h4_within_one_bucket": {
+   "ci_high": 0.9529439954766108,
+   "ci_low": 0.905032352508853,
+   "value": 0.9307700373899426
+  },
+  "holdout_events": 32,
+  "recovery_shown_from": "all",
+  "results_url": null
+ },
+ "data_sha256": {
+  "library.json": "8ed9d1d0a28d08e137c32e6a2fcb4bfd68ce40016a1857f35b386cb1321944d7",
+  "library.npz": "142e4265564564350be078c53ae880de2df1d16a079124dcb1204a7d1105db0f",
+  "universe manifest": "0a2723a13bd4518bc767379d612973886bff57df390971f8be3e04fea572a2c4"
+ },
+ "dev_gate_v2": {
+  "H1_factor_10pct_better_than_beta": true,
+  "H2_rank_ge_0.30": true,
+  "H3_drawdown_10pct_better_than_beta": true,
+  "H4_within_one_bucket_ge_75pct_and_exact_ge_baseline": true
+ },
+ "dev_v2": {
+  "events": 96,
+  "h1_base": {
+   "ci_high": 0.022026028017226838,
+   "ci_low": 0.018844086124524994,
+   "value": 0.020386401599381074
+  },
+  "h1_improvement": {
+   "ci_high": 0.22010650091747203,
+   "ci_low": 0.15930858451456606,
+   "value": 0.18994916154883557
+  },
+  "h1_mae": {
+   "ci_high": 0.017513771211774342,
+   "ci_low": 0.0155398442794036,
+   "value": 0.0165140217085808
+  },
+  "h2_rank": {
+   "ci_high": 0.4925106790918121,
+   "ci_low": 0.4357414844377593,
+   "value": 0.4644720146314507
+  },
+  "h3_base": {
+   "ci_high": 0.02215849097311429,
+   "ci_low": 0.017685194444026667,
+   "value": 0.01981193437822839
+  },
+  "h3_improvement": {
+   "ci_high": 0.26665626244793184,
+   "ci_low": 0.16999164540940223,
+   "value": 0.21996795082304998
+  },
+  "h3_mae": {
+   "ci_high": 0.016889279471149734,
+   "ci_low": 0.014133633851531645,
+   "value": 0.015453943771208753
+  },
+  "h4_cases": 19776,
+  "h4_events": 96,
+  "h4_exact": {
+   "ci_high": 0.7417576860841423,
+   "ci_low": 0.6943770226537217,
+   "value": 0.7179915048543689
+  },
+  "h4_exact_base": {
+   "ci_high": 0.6852978357605177,
+   "ci_low": 0.610988066343042,
+   "value": 0.6480582524271844
+  },
+  "h4_within1": {
+   "ci_high": 0.962987965210356,
+   "ci_low": 0.9343573017799353,
+   "value": 0.9490291262135923
+  }
+ },
+ "holdout_gate": {
+  "H1_factor_10pct_better_than_beta": true,
+  "H2_rank_ge_0.30": true,
+  "H3_drawdown_10pct_better_than_beta": true,
+  "H4_within_one_bucket_ge_75pct_and_exact_ge_baseline": true,
+  "H5_dev_and_holdout_agree": true
+ },
+ "holdout_ids_sha256": "4914822ab62e9cd8b377c8f26f277b977f902a9f7c899b67baa6f76c3e1e326a",
+ "holdout_run_at": "2026-11-13T20:52:46+00:00",
+ "holdout_v2": {
+  "events": 32,
+  "h1_base": {
+   "ci_high": 0.023665707334590357,
+   "ci_low": 0.019487536114508257,
+   "value": 0.021504593426732124
+  },
+  "h1_improvement": {
+   "ci_high": 0.28938734579890113,
+   "ci_low": 0.19560132336755548,
+   "value": 0.2436455899597707
+  },
+  "h1_mae": {
+   "ci_high": 0.017263663781046105,
+   "ci_low": 0.015296671898142624,
+   "value": 0.01626509407443097
+  },
+  "h2_rank": {
+   "ci_high": 0.5116161002304147,
+   "ci_low": 0.42278938172043,
+   "value": 0.4671013824884792
+  },
+  "h3_base": {
+   "ci_high": 0.021949077213044826,
+   "ci_low": 0.0180477370576412,
+   "value": 0.019985881277920104
+  },
+  "h3_improvement": {
+   "ci_high": 0.2688849421938353,
+   "ci_low": 0.19081931702928875,
+   "value": 0.23190417746447012
+  },
+  "h3_mae": {
+   "ci_high": 0.01646532238145047,
+   "ci_low": 0.01417251756919076,
+   "value": 0.015351071919261489
+  },
+  "h4_cases": 6561,
+  "h4_events": 32,
+  "h4_exact": {
+   "ci_high": 0.747974823847491,
+   "ci_low": 0.660121677084903,
+   "value": 0.7046098509514993
+  },
+  "h4_exact_base": {
+   "ci_high": 0.6668564059371838,
+   "ci_low": 0.5136390957325145,
+   "value": 0.5937333669246335
+  },
+  "h4_within1": {
+   "ci_high": 0.9529439954766108,
+   "ci_low": 0.905032352508853,
+   "value": 0.9307700373899426
+  }
+ },
+ "q_hat": 0.0,
+ "settings": {
+  "alpha": 0.1,
+  "category_bonus": 0.0,
+  "context_weight": 0.0,
+  "nature_penalty": 0.3,
+  "similarity_threshold": 0.5226724866629816,
+  "stress_only": false,
+  "top_k": 5,
+  "use_actual": true
+ },
+ "settings_sha256": "c18c4f7f43470d89bb36f5782880b39e63b934d9bce88ddf02976f5e9b9d1b57",
+ "stage": "holdout",
+ "version": 2
+}

@@ -61,7 +61,7 @@ from scenario.enums import (
     sector_from_yfinance,
 )
 from scenario.factors import fit_betas
-from scenario.schemas import BacktestSummary, Event, MetricCI
+from scenario.schemas import BacktestSummary, BacktestSummaryV2, Event, MetricCI
 
 ROOT = Path(__file__).resolve().parent
 UNIVERSE_DIR = Path(os.getenv("SCENARIO_UNIVERSE_DIR", str(ROOT / "raw" / "universe")))
@@ -1136,6 +1136,28 @@ def holdout_outcome(gate: dict[str, bool]) -> str:
     return "all" if gate[H4_GATE] else "actual_only"
 
 
+def write_final_calibration(dev: dict, marker: dict) -> dict:
+    """calibration.json from the recorded holdout result (holdout_run.json); no scoring.
+    Only called when the pre-registered outcome is not "stop"."""
+    summary, gate, outcome = marker["holdout_v2"], marker["gate"], marker["outcome"]
+    if outcome == "stop":
+        raise BacktestError("the holdout outcome is 'stop'; no calibration.json may be written")
+    if marker["settings_sha256"] != dev["settings_sha256"] or marker["holdout_ids_sha256"] != dev["holdout_ids_sha256"]:
+        raise BacktestError("holdout_run.json does not match the frozen dev calibration")
+    backtest_v2 = BacktestSummaryV2(
+        available=True, holdout_events=summary["events"],
+        h1_mae=_ci(summary, "h1_mae"), h1_mae_baseline=_ci(summary, "h1_base"), h2_rank=_ci(summary, "h2_rank"),
+        h3_drawdown_mae=_ci(summary, "h3_mae"), h3_drawdown_mae_baseline=_ci(summary, "h3_base"),
+        h4_within_one_bucket=_ci(summary, "h4_within1"), h4_exact_bucket=_ci(summary, "h4_exact"),
+        h4_exact_bucket_baseline=_ci(summary, "h4_exact_base"),
+        gate_passed=all(gate.values()), recovery_shown_from=outcome,
+    )
+    calibration = {**dev, "stage": "holdout", "holdout_run_at": marker["run_at"], "holdout_v2": summary,
+                   "holdout_gate": gate, "backtest_v2": json.loads(backtest_v2.model_dump_json())}
+    (EVAL_DIR / "calibration.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
+    return calibration
+
+
 def run_holdout_v2() -> dict:
     if os.getenv("SCENARIO_RUN_HOLDOUT") != "1":
         raise BacktestError("the holdout runs once, after the user writes 'run holdout'; set SCENARIO_RUN_HOLDOUT=1")
@@ -1163,17 +1185,7 @@ def run_holdout_v2() -> dict:
     _append_holdout_report(summary, gate, outcome, scores, skipped, run_at, combo)
 
     if outcome != "stop":
-        backtest_v2 = BacktestSummaryV2(
-            available=True, holdout_events=summary["events"],
-            h1_mae=_ci(summary, "h1_mae"), h1_mae_baseline=_ci(summary, "h1_base"), h2_rank=_ci(summary, "h2_rank"),
-            h3_drawdown_mae=_ci(summary, "h3_mae"), h3_drawdown_mae_baseline=_ci(summary, "h3_base"),
-            h4_within_one_bucket=_ci(summary, "h4_within1"), h4_exact_bucket=_ci(summary, "h4_exact"),
-            h4_exact_bucket_baseline=_ci(summary, "h4_exact_base"),
-            gate_passed=all(gate.values()), recovery_shown_from=outcome,
-        )
-        calibration = {**dev, "stage": "holdout", "holdout_run_at": run_at, "holdout_v2": summary,
-                       "holdout_gate": gate, "backtest_v2": json.loads(backtest_v2.model_dump_json())}
-        (EVAL_DIR / "calibration.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
+        write_final_calibration(dev, marker)
     print(f"holdout done in {time.time() - t0:.0f}s: {len(scores)} events, outcome {outcome}")
     print(json.dumps(gate, indent=1))
     return marker
@@ -1294,7 +1306,8 @@ def run_dev() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["download-universe", "dev", "dev-v2", "crises", "diagnostics", "holdout"])
+    parser.add_argument("command", choices=["download-universe", "dev", "dev-v2", "crises", "diagnostics", "holdout",
+                                            "holdout-finalize"])
     args = parser.parse_args(argv)
     if args.command == "download-universe":
         manifest = download_universe()
@@ -1302,6 +1315,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "dev":
         run_dev()
+        return 0
+    if args.command == "holdout-finalize":
+        # Writes calibration.json from the recorded holdout_run.json; never re-scores.
+        dev = json.loads((EVAL_DIR / "calibration_dev.json").read_text())
+        write_final_calibration(dev, json.loads(HOLDOUT_MARKER.read_text()))
+        print("calibration.json written from holdout_run.json")
         return 0
     if args.command == "crises":
         from scenario.build_library import ASSETS_DIR, load_library

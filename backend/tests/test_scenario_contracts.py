@@ -293,8 +293,9 @@ def test_fake_engine_echoes_request(clean_engine):
     assert engine.get_engine() is engine.get_engine()
 
 
-def test_get_engine_unavailable_without_assets(clean_engine):
+def test_get_engine_unavailable_without_assets(clean_engine, tmp_path):
     clean_engine.delenv("SCENARIO_FAKE", raising=False)
+    clean_engine.setattr(engine, "ASSETS_DIR", tmp_path)  # hermetic: ignore locally built assets
     with pytest.raises(engine.EngineUnavailable):
         engine.get_engine()
 
