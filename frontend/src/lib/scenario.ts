@@ -19,6 +19,7 @@ export type Nature = 'adverse' | 'favorable';
 export type Severity = 'mild' | 'typical' | 'severe';
 export type Confidence = 'normal' | 'low';
 export type ImpactSource = 'actual' | 'estimated' | 'estimated_low_history';
+export type RecoverySource = 'actual' | 'estimated' | 'mixed';
 export type Sector =
   | 'technology'
   | 'financials'
@@ -42,66 +43,64 @@ export interface ParsedScenario {
   fallback: boolean;
 }
 
-export interface ScenarioHolding {
+export interface ScenarioHoldingRequest {
   ticker: string;
   weight: number;
 }
 
 export interface WhatIfRequest {
   scenario: string;
-  holdings: ScenarioHolding[];
+  holdings: ScenarioHoldingRequest[];
   severity: Severity;
   client_id?: string;
 }
 
-export interface Precedent {
-  event_id: string;
-  name: string;
-  date: string;
-  category: Category;
-  nature: Nature;
-  trigger: string;
-  similarity: number;
-  weight: number;
-  sp500_return_21d: number | null;
-  portfolio_return_21d: number | null;
-  source_url: string;
-}
-
-export interface PortfolioOutcome {
-  horizon_days: number;
-  range_level: number;
-  severity: Severity;
-  typical_return: number;
-  median_return: number;
-  mean_return: number;
-  range_low: number;
-  range_high: number;
-  worst_drawdown_63d: number;
-  recovery_days_low: number | null;
-  recovery_days_high: number | null;
-  unrecovered_share: number;
-}
-
-export interface HoldingImpact {
+export interface ScenarioHolding {
   ticker: string;
   weight: number;
   sector: Sector;
   return_21d: number;
   contribution: number;
   source: ImpactSource;
-  actual_share: number;
+  recovery_days: number | null;
+}
+
+export interface ScenarioReplay {
+  event_id: string;
+  name: string;
+  date: string;
+  category: Category;
+  nature: Nature;
+  trigger: string;
+  similarity: number | null;
+  source_url: string;
+  portfolio_return_21d: number;
+  sp500_return_21d: number | null;
+  worst_drawdown_63d: number;
+  sp500_worst_drawdown_63d: number | null;
+  recovery_days: number | null;
+  recovery_known: boolean;
+  recovery_source: RecoverySource;
+  path: Array<number | null>;
+  holdings: ScenarioHolding[];
+}
+
+export interface ExposureRank {
+  ticker: string;
+  mean_contribution: number;
+  most_exposed_count: number;
+  scenarios: number;
+}
+
+export interface Resilience {
+  worse_than_sp500: number;
+  crises_total: number;
+  top_drivers: string[];
 }
 
 export interface SkippedTicker {
   ticker: string;
   reason: string;
-}
-
-export interface PathSeries {
-  event_id: string;
-  label: string;
-  values: Array<number | null>;
 }
 
 export interface MetricCI {
@@ -110,33 +109,41 @@ export interface MetricCI {
   ci_high: number;
 }
 
-export interface BacktestSummary {
+export interface BacktestSummaryV2 {
   available: boolean;
   holdout_events: number | null;
-  coverage_80: MetricCI | null;
-  width_ratio: MetricCI | null;
-  mae: MetricCI | null;
-  mae_best_baseline: MetricCI | null;
-  rank_corr: MetricCI | null;
+  h1_mae: MetricCI | null;
+  h1_mae_baseline: MetricCI | null;
+  h2_rank: MetricCI | null;
+  h3_drawdown_mae: MetricCI | null;
+  h3_drawdown_mae_baseline: MetricCI | null;
+  h4_within_one_bucket: MetricCI | null;
+  h4_exact_bucket: MetricCI | null;
+  h4_exact_bucket_baseline: MetricCI | null;
   gate_passed: boolean | null;
+  recovery_shown_from: 'all' | 'actual_only' | null;
   results_url: string | null;
 }
 
-export interface WhatIfResponse {
+export interface WhatIfResponseV2 {
   scenario: string;
   parsed: ParsedScenario;
   as_of: string;
-  severity: Severity;
   confidence: Confidence;
-  precedents: Precedent[];
-  portfolio: PortfolioOutcome | null;
-  holdings: HoldingImpact[];
+  scenarios: ScenarioReplay[];
+  span_low: number | null;
+  span_high: number | null;
+  exposure: ExposureRank[];
+  crises: ScenarioReplay[];
+  resilience: Resilience | null;
   skipped: SkippedTicker[];
-  paths: PathSeries[];
   narrative: string;
-  backtest: BacktestSummary;
+  backtest: BacktestSummaryV2;
   remaining_today: number | null;
 }
+
+/** @deprecated v1 response shape; kept for fixture/tooling until C6 cleanup. */
+export type WhatIfResponse = WhatIfResponseV2;
 
 export type ScenarioErrorKind = 'quota' | 'unavailable' | 'invalid' | 'disabled' | 'network' | 'unknown';
 
@@ -165,7 +172,7 @@ function detailMessage(detail: unknown): string | undefined {
   return undefined;
 }
 
-export async function askWhatIf(request: Omit<WhatIfRequest, 'client_id'>): Promise<WhatIfResponse> {
+export async function askWhatIf(request: Omit<WhatIfRequest, 'client_id'>): Promise<WhatIfResponseV2> {
   let res: Response;
   try {
     res = await fetch(`${BASE}/api/scenario/whatif`, {
@@ -178,7 +185,7 @@ export async function askWhatIf(request: Omit<WhatIfRequest, 'client_id'>): Prom
   }
 
   const payload = await res.json().catch(() => null);
-  if (res.ok) return payload as WhatIfResponse;
+  if (res.ok) return payload as WhatIfResponseV2;
 
   const message = detailMessage(payload?.detail);
   if (res.status === 429) {
@@ -197,7 +204,7 @@ export async function askWhatIf(request: Omit<WhatIfRequest, 'client_id'>): Prom
 }
 
 /** Holdings for the request: positive weights, at most MAX_SCENARIO_HOLDINGS (largest first). */
-export function scenarioHoldings(holdings: Array<{ ticker: string; weight: number }>): ScenarioHolding[] {
+export function scenarioHoldings(holdings: Array<{ ticker: string; weight: number }>): ScenarioHoldingRequest[] {
   return holdings
     .filter((holding) => holding.ticker && Number.isFinite(holding.weight) && holding.weight > 0)
     .sort((a, b) => b.weight - a.weight)

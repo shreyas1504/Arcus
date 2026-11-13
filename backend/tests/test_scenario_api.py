@@ -17,10 +17,11 @@ from scenario import engine as engine_module
 from scenario import fetch_assets as scenario_fetch
 from scenario import narrative as scenario_narrative
 from scenario.engine import EngineUnavailable, FakeEngine
-from scenario.schemas import SkippedTicker, WhatIfRequest, WhatIfResponse
+from scenario.schemas import SkippedTicker, WhatIfRequest, WhatIfResponse, WhatIfResponseV2
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "frontend/src/lib/__fixtures__/whatif-response.json"
+FIXTURE_V2 = ROOT / "frontend/src/lib/__fixtures__/whatif-response-v2.json"
 CLIENT_ID = "scenario_test_client_aaaa"
 
 app = FastAPI()
@@ -39,15 +40,15 @@ def body(**overrides) -> dict:
 
 
 class StubEngine:
-    """Records requests; returns the fixture, optionally with edits, or raises."""
+    """Records requests; returns the v2 fixture, optionally with edits, or raises."""
 
     def __init__(self, *, error: Exception | None = None, update: dict | None = None):
         self.error = error
         self.update = update or {}
         self.requests: list[WhatIfRequest] = []
-        self._fixture = WhatIfResponse.model_validate(json.loads(FIXTURE.read_text()))
+        self._fixture = WhatIfResponseV2.model_validate(json.loads(FIXTURE_V2.read_text()))
 
-    def run(self, request: WhatIfRequest, **_: object) -> WhatIfResponse:
+    def run_v2(self, request: WhatIfRequest, **_: object) -> WhatIfResponseV2:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
@@ -139,18 +140,24 @@ class _NoClientRequest:
 def test_response_matches_schema(client):
     response = client.post("/api/scenario/whatif", json=body(severity="severe"))
     assert response.status_code == 200
-    data = WhatIfResponse.model_validate(response.json())
+    data = WhatIfResponseV2.model_validate(response.json())
     assert data.scenario == "What if China blockades Taiwan?"
-    assert data.severity == "severe"
     assert data.remaining_today == scenario_router.DAILY_LIMIT - 1
+    assert data.scenarios
+    assert data.crises
+    assert data.exposure
+    assert data.resilience is not None
 
 
 def test_fake_engine_numbers_are_the_fixture_numbers(client):
-    fixture = json.loads(FIXTURE.read_text())
+    fixture = json.loads(FIXTURE_V2.read_text())
     data = client.post("/api/scenario/whatif", json=body()).json()
-    assert data["portfolio"] == fixture["portfolio"]
-    assert data["holdings"] == fixture["holdings"]
-    assert data["paths"] == fixture["paths"]
+    assert data["scenarios"] == fixture["scenarios"]
+    assert data["crises"] == fixture["crises"]
+    assert data["exposure"] == fixture["exposure"]
+    assert data["span_low"] == fixture["span_low"]
+    assert data["span_high"] == fixture["span_high"]
+    assert data["resilience"] == fixture["resilience"]
 
 
 def test_request_is_normalized_before_the_engine(client):
@@ -237,11 +244,16 @@ def test_price_source_down_returns_503_without_numbers(client):
     assert not any(char.isdigit() for char in detail["message"])
 
 
-def test_empty_state_passes_through(client):
-    use_engine(StubEngine(update={"portfolio": None, "holdings": [], "paths": []}))
+def test_empty_scenarios_passes_through(client):
+    from scenario.enums import Confidence
+
+    use_engine(StubEngine(update={
+        "scenarios": [], "span_low": None, "span_high": None, "exposure": [], "confidence": Confidence.LOW,
+    }))
     data = client.post("/api/scenario/whatif", json=body()).json()
-    assert data["portfolio"] is None
-    assert data["holdings"] == [] and data["paths"] == []
+    assert data["scenarios"] == []
+    assert data["span_low"] is None and data["span_high"] is None
+    assert data["confidence"] == "low"
 
 
 def test_engine_unavailable_during_run_returns_503(client):

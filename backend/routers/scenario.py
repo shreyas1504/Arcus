@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from backend.routers.research import DailyQuota, _identity, _is_automation, _today
 from scenario.engine import EngineUnavailable, FakeEngine, WhatIfEngine, get_engine
-from scenario.schemas import WhatIfRequest, WhatIfResponse
+from scenario.schemas import WhatIfRequest, WhatIfResponseV2
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/scenario", tags=["scenario"])
@@ -65,12 +65,12 @@ async def scenario_status() -> dict[str, Any]:
     }
 
 
-@router.post("/whatif", response_model=WhatIfResponse, dependencies=[Depends(require_enabled)])
+@router.post("/whatif", response_model=WhatIfResponseV2, dependencies=[Depends(require_enabled)])
 async def what_if(
     req: WhatIfRequest,
     request: Request,
     engine: FakeEngine | WhatIfEngine = Depends(engine_dependency),
-) -> WhatIfResponse:
+) -> WhatIfResponseV2:
     automation = _is_automation(request)
     identity = _identity(req, request)
     day = _today()
@@ -83,7 +83,7 @@ async def what_if(
         )
 
     try:
-        response: WhatIfResponse = await run_in_threadpool(engine.run, req)
+        response: WhatIfResponseV2 = await run_in_threadpool(engine.run_v2, req)
     except EngineUnavailable as exc:
         raise HTTPException(
             status_code=503,

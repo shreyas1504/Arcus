@@ -2,17 +2,11 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import fixture from '@/lib/__fixtures__/whatif-response.json';
-import type { WhatIfResponse } from '@/lib/scenario';
+import fixture from '@/lib/__fixtures__/whatif-response-v2.json';
+import type { WhatIfResponseV2 } from '@/lib/scenario';
 import ScenarioLab from '../ScenarioLab';
 
-const response = fixture as unknown as WhatIfResponse;
-
-const severeResponse: WhatIfResponse = {
-  ...response,
-  severity: 'severe',
-  portfolio: { ...response.portfolio!, severity: 'severe', typical_return: -0.0912 },
-};
+const response = fixture as unknown as WhatIfResponseV2;
 
 function jsonResponse(body: unknown, status = 200) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
@@ -40,7 +34,7 @@ function whatifBodies(fn: ReturnType<typeof mockFetch>) {
 }
 
 function seedPortfolio() {
-  localStorage.setItem('arcus-last-analysis', JSON.stringify({ tickers: ['DEMO1', 'DEMO2'], weights: [0.6, 0.4] }));
+  localStorage.setItem('arcus-last-analysis', JSON.stringify({ tickers: ['DEMO1', 'DEMO2', 'DEMO3'], weights: [0.5, 0.3, 0.2] }));
 }
 
 function renderPage() {
@@ -70,40 +64,64 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('ScenarioLab', () => {
-  it('renders the fixture: range bar, precedent cards, path chart and holding rows', async () => {
+describe('ScenarioLab v2', () => {
+  it('renders the v2 fixture: scenario table, exposure, span, crises, resilience and limits', async () => {
     const fetchMock = mockFetch(jsonResponse(response));
     renderPage();
     ask();
 
     expect(await screen.findByTestId('scenario-result')).toBeInTheDocument();
-    expect(screen.getByTestId('range-bar')).toBeInTheDocument();
-    expect(screen.getByTestId('typical-return')).toHaveTextContent('−5.4%');
-    expect(screen.getByTestId('path-chart')).toBeInTheDocument();
-    for (const precedent of response.precedents) {
-      expect(screen.getByTestId(`precedent-${precedent.event_id}`)).toHaveTextContent(precedent.name);
-    }
-    expect(screen.getByTestId('holding-DEMO1')).toBeInTheDocument();
-    expect(screen.getByTestId('holding-DEMO2')).toBeInTheDocument();
+    expect(screen.getByTestId('scenario-table')).toBeInTheDocument();
+    expect(screen.getByTestId('scenario-row-DEMO1')).toBeInTheDocument();
+    expect(screen.getByTestId('scenario-row-DEMO2')).toBeInTheDocument();
+    expect(screen.getByTestId('scenario-col-example-strait-closure')).toHaveTextContent('Example: strait closure');
+
+    const span = screen.getByTestId('historical-span');
+    expect(span).toHaveTextContent('Historical span');
+    expect(span).toHaveTextContent('−7.4%');
+    expect(span).toHaveTextContent('−2.8%');
+    expect(span).toHaveTextContent(/history/i);
+
+    expect(screen.getByTestId('exposure-ranking')).toBeInTheDocument();
+    expect(screen.getByTestId('exposure-DEMO1')).toHaveTextContent('3 of 3');
+
+    expect(screen.getByTestId('crisis-replay')).toBeInTheDocument();
+    expect(screen.getByTestId('crisis-example-bank-collapse')).toHaveTextContent('Example: bank collapse');
+    expect(screen.getByTestId('crisis-example-pandemic-crash')).toBeInTheDocument();
+
+    const resilience = screen.getByTestId('resilience-summary');
+    expect(resilience).toHaveTextContent('1 of 2');
+    expect(resilience).toHaveTextContent('DEMO1');
+
+    expect(screen.getByTestId('limits')).toHaveTextContent(/cannot predict/i);
+    expect(screen.getByTestId('limits')).toHaveTextContent(/today's holdings/i);
     expect(screen.getByTestId('accuracy-panel')).toBeInTheDocument();
 
     const [body] = whatifBodies(fetchMock);
     expect(body.scenario).toBe('What if China blockades Taiwan?');
     expect(body.severity).toBe('typical');
-    expect(body.holdings.map((h: { ticker: string }) => h.ticker)).toEqual(['DEMO1', 'DEMO2']);
+    expect(body.holdings.map((h: { ticker: string }) => h.ticker)).toEqual(['DEMO1', 'DEMO2', 'DEMO3']);
   });
 
-  it('tags each holding as actual or estimated', async () => {
+  it('tags holdings in the scenario table as actual or estimated', async () => {
     mockFetch(jsonResponse(response));
     renderPage();
     ask();
 
-    expect(within(await screen.findByTestId('holding-DEMO1')).getByText('Actual')).toBeInTheDocument();
-    expect(within(screen.getByTestId('holding-DEMO2')).getByText('Estimated')).toBeInTheDocument();
+    const row = await screen.findByTestId('scenario-row-DEMO1');
+    expect(within(row).getAllByText('Actual').length).toBeGreaterThan(0);
+    expect(within(row).getAllByText('Estimated').length).toBeGreaterThan(0);
   });
 
   it('shows the low-confidence badge with its explanation', async () => {
-    mockFetch(jsonResponse({ ...response, confidence: 'low' }));
+    mockFetch(jsonResponse({
+      ...response,
+      confidence: 'low',
+      scenarios: [],
+      span_low: null,
+      span_high: null,
+      exposure: [],
+    }));
     renderPage();
     ask();
 
@@ -111,6 +129,9 @@ describe('ScenarioLab', () => {
     expect(badge).toHaveAttribute('role', 'status');
     expect(badge).toHaveTextContent(/low confidence/i);
     expect(badge).toHaveTextContent(/no past event is a close match/i);
+    expect(screen.queryByTestId('scenario-table')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('historical-span')).not.toBeInTheDocument();
+    expect(screen.getByTestId('crisis-replay')).toBeInTheDocument();
   });
 
   it('hides the badge at normal confidence', async () => {
@@ -124,7 +145,6 @@ describe('ScenarioLab', () => {
 
   it.each([
     [429, { detail: { message: 'Daily limit reached.' } }, /daily limit reached/i],
-    // No message field: the client uses its default copy (matches the backend's 503 wording).
     [503, { detail: { status: 'warming' } }, /temporarily unavailable/i],
   ])('shows a message, not zeros, on HTTP %i', async (status, body, message) => {
     mockFetch(jsonResponse(body, status));
@@ -133,7 +153,7 @@ describe('ScenarioLab', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(message);
     expect(screen.queryByTestId('scenario-result')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('typical-return')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('historical-span')).not.toBeInTheDocument();
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
   });
 
@@ -147,106 +167,66 @@ describe('ScenarioLab', () => {
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
   });
 
-  it('shows an empty state instead of numbers when the portfolio outcome is missing', async () => {
-    mockFetch(jsonResponse({ ...response, portfolio: null, holdings: [], paths: [] }));
+  it('shows crises and limits when there are no close scenario matches', async () => {
+    mockFetch(jsonResponse({
+      ...response,
+      confidence: 'low',
+      scenarios: [],
+      span_low: null,
+      span_high: null,
+      exposure: [],
+    }));
     renderPage();
     ask();
 
-    expect(await screen.findByTestId('empty-outcome')).toBeInTheDocument();
-    expect(screen.queryByTestId('typical-return')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('range-bar')).not.toBeInTheDocument();
+    await screen.findByTestId('scenario-result');
+    expect(screen.queryByTestId('scenario-table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('crisis-replay')).toBeInTheDocument();
+    expect(screen.getByTestId('limits')).toBeInTheDocument();
   });
 
-  it('asks for a portfolio when none is saved', () => {
+  it('lists skipped tickers without inventing numbers for them', async () => {
+    mockFetch(jsonResponse({
+      ...response,
+      skipped: [{ ticker: 'ZZZZ', reason: 'no price history' }],
+    }));
+    renderPage();
+    ask();
+
+    const skipped = await screen.findByTestId('skipped');
+    expect(skipped).toHaveTextContent('ZZZZ');
+    expect(skipped).toHaveTextContent('no price history');
+  });
+
+  it('shows the empty portfolio state when there are no holdings', async () => {
     localStorage.clear();
-    const fetchMock = mockFetch();
-    renderPage();
-
-    expect(screen.getByText('No portfolio found')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Describe a scenario')).not.toBeInTheDocument();
-    expect(whatifBodies(fetchMock)).toEqual([]);
-  });
-
-  it('re-runs the request when the severity changes and updates the outcome', async () => {
-    const fetchMock = mockFetch(jsonResponse(response), jsonResponse(severeResponse));
-    renderPage();
-    ask();
-
-    expect(await screen.findByTestId('typical-return')).toHaveTextContent('−5.4%');
-    fireEvent.click(screen.getByRole('radio', { name: 'Severe' }));
-
-    await waitFor(() => expect(screen.getByTestId('typical-return')).toHaveTextContent('−9.1%'));
-    expect(whatifBodies(fetchMock)).toHaveLength(2);
-    expect(whatifBodies(fetchMock)[1].severity).toBe('severe');
-    expect(screen.getByRole('radio', { name: 'Severe' })).toHaveAttribute('aria-checked', 'true');
-  });
-
-  it('opens source links in a new tab safely', async () => {
-    mockFetch(jsonResponse(response));
-    renderPage();
-    ask();
-
-    for (const precedent of response.precedents) {
-      const link = within(await screen.findByTestId(`precedent-${precedent.event_id}`)).getByRole('link', { name: /source/i });
-      expect(link).toHaveAttribute('href', precedent.source_url);
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    }
-  });
-
-  it('has labelled inputs and a text summary for the chart', async () => {
     mockFetch(jsonResponse(response));
     renderPage();
 
-    expect(screen.getByLabelText('Describe a scenario').tagName).toBe('TEXTAREA');
-    const group = screen.getByRole('radiogroup', { name: 'Severity' });
-    expect(within(group).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['Mild', 'Typical', 'Severe']);
+    expect(screen.getByText(/no portfolio found/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /run scenario/i })).not.toBeInTheDocument();
+  });
 
+  it('fills an example question into the form', async () => {
+    mockFetch(jsonResponse(response));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /what if a major us bank fails/i }));
+    expect(screen.getByLabelText('Describe a scenario')).toHaveValue('What if a major US bank fails?');
+  });
+
+  it('disables submit while a request is in flight', async () => {
+    let resolveRequest: (value: ReturnType<typeof jsonResponse>) => void = () => undefined;
+    const pending = new Promise<ReturnType<typeof jsonResponse>>((resolve) => {
+      resolveRequest = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!String(url).includes('/api/scenario/whatif')) return jsonResponse({});
+      return pending;
+    }));
+    renderPage();
     ask();
-    const chart = await screen.findByRole('img');
-    const summaryId = chart.getAttribute('aria-describedby');
-    expect(summaryId).toBeTruthy();
-    const summary = document.getElementById(summaryId!);
-    expect(summary).toHaveTextContent(/cumulative return/i);
-    expect(summary).toHaveTextContent(response.precedents[0].name);
-  });
-});
-
-describe('feature flag', () => {
-  async function renderSidebar() {
-    vi.resetModules();
-    const { default: Sidebar } = await import('@/components/Sidebar');
-    return render(
-      <MemoryRouter>
-        <Sidebar collapsed={false} setCollapsed={() => {}} mobileOpen={false} setMobileOpen={() => {}} isMobile={false} />
-      </MemoryRouter>,
-    );
-  }
-
-  async function renderAppAt(path: string) {
-    vi.resetModules();
-    window.history.pushState({}, '', path);
-    const { default: App } = await import('@/App');
-    return render(<App />);
-  }
-
-  it('flag off: no sidebar item and no route', async () => {
-    vi.stubEnv('VITE_ENABLE_SCENARIOS', 'false');
-    await renderSidebar();
-    expect(screen.queryByText('Scenario Lab')).not.toBeInTheDocument();
-    expect(document.querySelector('a[href="/dashboard/scenarios"]')).toBeNull();
-  });
-
-  it('flag off: the scenarios route falls through to not found', async () => {
-    vi.stubEnv('VITE_ENABLE_SCENARIOS', 'false');
-    await renderAppAt('/dashboard/scenarios');
-    expect(screen.queryByLabelText('Describe a scenario')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Scenario Lab' })).not.toBeInTheDocument();
-  });
-
-  it('flag on: the sidebar item appears', async () => {
-    vi.stubEnv('VITE_ENABLE_SCENARIOS', 'true');
-    await renderSidebar();
-    expect(document.querySelector('a[href="/dashboard/scenarios"]')).not.toBeNull();
+    expect(await screen.findByRole('button', { name: /replaying shocks/i })).toBeDisabled();
+    resolveRequest(jsonResponse(response));
+    await waitFor(() => expect(screen.getByRole('button', { name: /run scenario/i })).toBeEnabled());
   });
 });

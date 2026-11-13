@@ -12,7 +12,7 @@ drawdown window is "the following three months" and the 504-day recovery horizon
 from __future__ import annotations
 
 from scenario.enums import Confidence, Severity
-from scenario.schemas import PortfolioOutcome, WhatIfResponse, WhatIfResponseV2
+from scenario.schemas import PortfolioOutcome, ScenarioReplay, WhatIfResponse, WhatIfResponseV2
 
 LOW_CONFIDENCE = (
     "There is no close precedent for this scenario, so these figures use every past "
@@ -73,6 +73,60 @@ def render(response: WhatIfResponse) -> str:
     return " ".join(sentences)
 
 
+LOW_CONFIDENCE_V2 = (
+    "There is no close precedent for this scenario, so only the crisis replay is shown."
+)
+LIMITS_V2 = (
+    "Arcus cannot predict whether or when a crisis happens; each replay shows what "
+    "happened, applied to today's holdings, not a forecast."
+)
+
+
+def _top_driver_names(replay: ScenarioReplay, *, limit: int = 2) -> list[str]:
+    """Tickers with the most negative contributions (alphabetical on ties), up to `limit`."""
+    negative = [h for h in replay.holdings if h.contribution < 0]
+    negative.sort(key=lambda h: (h.contribution, h.ticker))
+    return [h.ticker for h in negative[:limit]]
+
+
+def _scenario_sentence(replay: ScenarioReplay) -> str:
+    year = replay.date.year
+    moved = _pct(replay.portfolio_return_21d)
+    drivers = _top_driver_names(replay)
+    if drivers:
+        who = " and ".join(drivers)
+        return (
+            f"If it plays out like {replay.name} ({year}), this portfolio moved {moved}; "
+            f"{who} drove most of it."
+        )
+    return f"If it plays out like {replay.name} ({year}), this portfolio moved {moved}."
+
+
+def _span_sentence(response: WhatIfResponseV2) -> str | None:
+    if not response.scenarios or response.span_low is None or response.span_high is None:
+        return None
+    n = len(response.scenarios)
+    shocks = "shock" if n == 1 else "shocks"
+    return (
+        f"Across these {n} past {shocks} this portfolio moved between "
+        f"{_pct(response.span_low)} and {_pct(response.span_high)}."
+    )
+
+
+def _resilience_sentence(response: WhatIfResponseV2) -> str | None:
+    r = response.resilience
+    if r is None or r.crises_total == 0:
+        return None
+    sentence = (
+        f"This portfolio fell more than the S&P in {r.worse_than_sp500} of "
+        f"{r.crises_total} crises."
+    )
+    if r.top_drivers:
+        who = " and ".join(r.top_drivers)
+        sentence += f" {who} drove most of the damage."
+    return sentence
+
+
 def render_v2(response: WhatIfResponseV2) -> str:
     """Narrative for a v2 (stress-test) response whose `narrative` is still empty (PLAN v2).
 
@@ -84,4 +138,16 @@ def render_v2(response: WhatIfResponseV2) -> str:
     forecast). Every number must be one of the response's own values, formatted; no advice
     words.
     """
-    raise NotImplementedError
+    sentences: list[str] = []
+    if response.confidence == Confidence.LOW:
+        sentences.append(LOW_CONFIDENCE_V2)
+    for replay in response.scenarios:
+        sentences.append(_scenario_sentence(replay))
+    span = _span_sentence(response)
+    if span:
+        sentences.append(span)
+    resilience = _resilience_sentence(response)
+    if resilience:
+        sentences.append(resilience)
+    sentences.append(LIMITS_V2)
+    return " ".join(sentences)
