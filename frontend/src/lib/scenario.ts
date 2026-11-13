@@ -34,6 +34,7 @@ export type Sector =
 
 export interface ParsedScenario {
   category: Category | null;
+  nature?: Nature | null;
   regions: string[];
   sectors: Sector[];
   companies: string[];

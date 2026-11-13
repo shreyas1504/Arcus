@@ -41,8 +41,18 @@ def _outcome(p: PortfolioOutcome) -> list[str]:
     ]
     low, high = p.recovery_days_low, p.recovery_days_high
     if low is not None and high is not None:
-        span = f"{low} trading days" if low == high else f"between {low} and {high} trading days"
-        sentences.append(f"Regaining the starting value took {span}.")
+        if low == 0 and high == 0:
+            sentences.append("Some precedents never fell below their start.")
+        elif low == 0:
+            sentences.append(
+                f"Some precedents never fell below their start; the longest took {high} trading days."
+            )
+        elif low == high:
+            sentences.append(f"Regaining the starting value took {low} trading days.")
+        else:
+            sentences.append(
+                f"Regaining the starting value took between {low} and {high} trading days."
+            )
     if p.unrecovered_share > 0:
         sentences.append(
             f"{_pct(p.unrecovered_share)} of those precedents had not regained it within two years."
