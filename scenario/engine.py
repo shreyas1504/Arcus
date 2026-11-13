@@ -64,6 +64,8 @@ Details added in C3 (consistent with the above)
 - unrecovered_share and the recovery range use the precedent weights;
   recovery_days_low/high are the 10th and 90th weighted percentiles of the
   precedents that recovered (None when none did).
+- use_actual=False uses the factor estimate even when actual prices exist (a stock
+  with no fit still uses its actual prices). C4 tests both on the dev split.
 - context_weight must be 0 in Phase 1: the assets hold no market-context history to
   compare a live question against. A non-zero value raises ValueError.
 """
@@ -150,6 +152,7 @@ class EngineSettings:
     similarity_threshold: float = 0.5
     top_k: int = TOP_K
     nature_penalty: float = 0.0  # tuned in C4; 0 keeps the pre-approval behaviour
+    use_actual: bool = True  # False: factor estimates even when actual prices exist (C4 tests both)
 
 
 @dataclass(frozen=True)
@@ -336,7 +339,8 @@ class WhatIfEngine:
     ) -> tuple[float, ImpactSource] | None:
         dates = _path_dates(self.library.events[event_index].date, HORIZON_DAYS)
         start, end = self._close(series, dates[0]), self._close(series, dates[HORIZON_DAYS])
-        if math.isfinite(start) and math.isfinite(end) and start > 0:
+        prefer_actual = self.calibration.settings.use_actual or fit is None
+        if prefer_actual and math.isfinite(start) and math.isfinite(end) and start > 0:
             return end / start - 1.0, ImpactSource.ACTUAL
         if fit is not None:
             value = self._factor_estimate(fit, event_index, HORIZON_DAYS)
@@ -361,7 +365,8 @@ class WhatIfEngine:
         for ticker, weight in weights.items():
             series = prices[ticker] if ticker in prices.columns else None
             closes = np.array([self._close(series, d) if ok else math.nan for d, ok in zip(dates, observed)])
-            if n_obs and np.all(np.isfinite(closes[:n_obs])) and closes[0] > 0:
+            use_actual = self.calibration.settings.use_actual or ticker not in fits
+            if use_actual and n_obs and np.all(np.isfinite(closes[:n_obs])) and closes[0] > 0:
                 path = closes / closes[0] - 1.0
             elif ticker in fits:
                 path = np.array(
