@@ -1107,6 +1107,122 @@ def run_dev_v2() -> dict:
     return calibration
 
 
+# --------------------------------------------------------------------------- C5: one-time holdout (gate v2)
+
+HOLDOUT_MARKER = EVAL_DIR / "holdout_run.json"
+CORE_GATES = ("H1_factor_10pct_better_than_beta", "H2_rank_ge_0.30", "H3_drawdown_10pct_better_than_beta",
+              "H5_dev_and_holdout_agree")
+H4_GATE = "H4_within_one_bucket_ge_75pct_and_exact_ge_baseline"
+
+
+def h5_agree(dev: dict, holdout: dict) -> bool:
+    """H5: H1-H3 point the same way on dev and holdout (improvement or rank above zero)."""
+    keys = ("h1_improvement", "h2_rank", "h3_improvement")
+    return all((dev[k]["value"] > 0) == (holdout[k]["value"] > 0) for k in keys)
+
+
+def _ci(summary: dict, key: str) -> MetricCI | None:
+    m = summary.get(key)
+    if not m or any(not math.isfinite(m[x]) for x in ("value", "ci_low", "ci_high")):
+        return None
+    return MetricCI(value=m["value"], ci_low=m["ci_low"], ci_high=m["ci_high"])
+
+
+def holdout_outcome(gate: dict[str, bool]) -> str:
+    """Pre-registered (PLAN v2): any of H1-H3 or H5 failing stops; H4 alone failing
+    shows recovery from actual prices only."""
+    if not all(gate[k] for k in CORE_GATES):
+        return "stop"
+    return "all" if gate[H4_GATE] else "actual_only"
+
+
+def run_holdout_v2() -> dict:
+    if os.getenv("SCENARIO_RUN_HOLDOUT") != "1":
+        raise BacktestError("the holdout runs once, after the user writes 'run holdout'; set SCENARIO_RUN_HOLDOUT=1")
+    if HOLDOUT_MARKER.exists():
+        raise BacktestError(f"the holdout has already been run ({HOLDOUT_MARKER}); it runs once")
+    dev = json.loads((EVAL_DIR / "calibration_dev.json").read_text())
+    if _sha256(json.dumps(dev["settings"], sort_keys=True).encode()) != dev["settings_sha256"]:
+        raise BacktestError("dev settings do not match their frozen hash")
+    t0 = time.time()
+    library, prices, cases, skipped, hashes = _prepare([Split.HOLDOUT])
+    if holdout_ids_hash(library) != dev["holdout_ids_sha256"]:
+        raise BacktestError("the holdout events changed since the dev run")
+    combo = (dev["settings"]["alpha"], dev["settings"]["stress_only"])
+    scores = [conditional_score(c, *combo) for c in cases]
+    summary = summarize_v2(scores)
+    gate = gate_v2(summary)
+    gate["H5_dev_and_holdout_agree"] = h5_agree(dev["dev_v2"], summary)
+    outcome = holdout_outcome(gate)
+    run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    marker = {"run_at": run_at, "outcome": outcome, "gate": gate, "holdout_v2": summary,
+              "settings_sha256": dev["settings_sha256"], "holdout_ids_sha256": dev["holdout_ids_sha256"],
+              "events": [s.event_id for s in scores], "skipped": skipped, "data_sha256": hashes}
+    HOLDOUT_MARKER.write_text(json.dumps(marker, indent=1, sort_keys=True) + "\n")
+    _append_holdout_report(summary, gate, outcome, scores, skipped, run_at, combo)
+
+    if outcome != "stop":
+        backtest_v2 = BacktestSummaryV2(
+            available=True, holdout_events=summary["events"],
+            h1_mae=_ci(summary, "h1_mae"), h1_mae_baseline=_ci(summary, "h1_base"), h2_rank=_ci(summary, "h2_rank"),
+            h3_drawdown_mae=_ci(summary, "h3_mae"), h3_drawdown_mae_baseline=_ci(summary, "h3_base"),
+            h4_within_one_bucket=_ci(summary, "h4_within1"), h4_exact_bucket=_ci(summary, "h4_exact"),
+            h4_exact_bucket_baseline=_ci(summary, "h4_exact_base"),
+            gate_passed=all(gate.values()), recovery_shown_from=outcome,
+        )
+        calibration = {**dev, "stage": "holdout", "holdout_run_at": run_at, "holdout_v2": summary,
+                       "holdout_gate": gate, "backtest_v2": json.loads(backtest_v2.model_dump_json())}
+        (EVAL_DIR / "calibration.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
+    print(f"holdout done in {time.time() - t0:.0f}s: {len(scores)} events, outcome {outcome}")
+    print(json.dumps(gate, indent=1))
+    return marker
+
+
+def _append_holdout_report(summary, gate, outcome, scores, skipped, run_at, combo) -> None:
+    def f(key: str, pct: bool = True) -> str:
+        return "—" if not _ci(summary, key) else _fmt(summary[key], pct)
+
+    verdict = {"all": "**Passed.** The engine may serve answers; recovery is shown for all holdings.",
+               "actual_only": "**H1–H3 and H5 passed; H4 failed.** Pre-registered fallback: recovery times are "
+                              "shown only where they come from actual prices.",
+               "stop": "**Failed (H1, H2, H3 or H5).** Pre-registered: stop; no calibration.json is written; "
+                       "the user decides."}[outcome]
+    lines = [
+        "",
+        f"## Holdout (2023+): run once on {run_at}",
+        "",
+        f"Frozen dev settings (alpha {combo[0]}, stress betas {combo[1]}); settings and holdout-event hashes "
+        f"verified before the run. Events scored: **{summary['events']}** ({len(skipped)} skipped: "
+        f"{', '.join(s['id'] for s in skipped) or 'none'}). Recovery cases with a known real recovery: "
+        f"{summary['h4_cases']} across {summary['h4_events']} events.",
+        "",
+        "| Gate v2 | Pass mark | Holdout [90% CI] | |",
+        "|---|---|---|---|",
+        f"| H1 · 21-day MAE vs beta × S&P | ≥ 10% lower | {f('h1_mae')} vs {f('h1_base')}: {f('h1_improvement')} lower | "
+        f"{'pass' if gate['H1_factor_10pct_better_than_beta'] else 'FAIL'} |",
+        f"| H2 · holding ranking | ≥ 0.30 | {f('h2_rank', False)} | {'pass' if gate['H2_rank_ge_0.30'] else 'FAIL'} |",
+        f"| H3 · 63-day worst fall MAE | ≥ 10% lower | {f('h3_mae')} vs {f('h3_base')}: {f('h3_improvement')} lower | "
+        f"{'pass' if gate['H3_drawdown_10pct_better_than_beta'] else 'FAIL'} |",
+        f"| H4 · recovery within one bucket | ≥ 75% and exact ≥ baseline | {f('h4_within1')}; exact {f('h4_exact')} vs "
+        f"{f('h4_exact_base')} | {'pass' if gate[H4_GATE] else 'FAIL'} |",
+        f"| H5 · H1–H3 agree with dev | must match | | {'pass' if gate['H5_dev_and_holdout_agree'] else 'FAIL'} |",
+        "",
+        verdict,
+        "",
+        "| Event | H1 MAE | baseline | H2 rank | H3 MAE | baseline | H4 within one | H4 exact | baseline exact |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in scores:
+        def pct(v): return "—" if v != v else f"{v:.1%}"
+        def num(v): return "—" if v != v else f"{v:.2f}"
+        lines.append(f"| {r.event_id} | {pct(r.h1_mae)} | {pct(r.h1_base)} | {num(r.h2_rank)} | {pct(r.h3_mae)} | "
+                     f"{pct(r.h3_base)} | {pct(r.h4_within1)} | {pct(r.h4_exact)} | {pct(r.h4_exact_base)} |")
+    lines.append("")
+    with open(EVAL_DIR / "results.md", "a") as handle:
+        handle.write("\n".join(lines))
+
+
 # --------------------------------------------------------------------------- CLI
 
 
@@ -1209,7 +1325,8 @@ def main(argv: list[str] | None = None) -> int:
         print("The holdout runs once, in C5, after the user writes 'run holdout' in STATUS.md. "
               "Set SCENARIO_RUN_HOLDOUT=1 only then.", file=sys.stderr)
         return 2
-    raise BacktestError("holdout scoring is implemented in C5")
+    run_holdout_v2()
+    return 0
 
 
 if __name__ == "__main__":

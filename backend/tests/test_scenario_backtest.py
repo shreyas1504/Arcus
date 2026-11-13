@@ -237,9 +237,35 @@ def test_grid_contains_defaults():
 def test_ship_gate():
     path = Path(bt.EVAL_DIR) / "calibration.json"
     if not path.exists() or json.loads(path.read_text()).get("stage") != "holdout":
-        pytest.skip("the holdout has not been run (C5)")
+        pytest.skip("the holdout has not passed H1-H3/H5 (C5), so no calibration.json")
     calibration = json.loads(path.read_text())
-    assert all(calibration["holdout_gate"].values()), calibration["holdout_gate"]
+    gate = calibration["holdout_gate"]
+    assert all(gate[k] for k in bt.CORE_GATES), gate
+    shown = calibration["backtest_v2"]["recovery_shown_from"]
+    assert shown == ("all" if gate[bt.H4_GATE] else "actual_only")
+
+
+def test_holdout_outcome_follows_pre_registration():
+    passing = {k: True for k in (*bt.CORE_GATES, bt.H4_GATE)}
+    assert bt.holdout_outcome(passing) == "all"
+    assert bt.holdout_outcome(passing | {bt.H4_GATE: False}) == "actual_only"
+    for key in bt.CORE_GATES:
+        assert bt.holdout_outcome(passing | {key: False}) == "stop"
+
+
+def test_h5_agreement():
+    dev = {k: {"value": v} for k, v in {"h1_improvement": 0.19, "h2_rank": 0.46, "h3_improvement": 0.22}.items()}
+    assert bt.h5_agree(dev, dev)
+    assert not bt.h5_agree(dev, dev | {"h3_improvement": {"value": -0.01}})
+
+
+def test_holdout_refuses_second_run(monkeypatch, tmp_path):
+    monkeypatch.setenv("SCENARIO_RUN_HOLDOUT", "1")
+    marker = tmp_path / "holdout_run.json"
+    marker.write_text("{}")
+    monkeypatch.setattr(bt, "HOLDOUT_MARKER", marker)
+    with pytest.raises(bt.BacktestError, match="already been run"):
+        bt.run_holdout_v2()
 
 
 def test_diagnostics_reports_forecast_and_conditional(world, small):
@@ -254,9 +280,12 @@ def test_diagnostics_reports_forecast_and_conditional(world, small):
 
 
 def test_dev_run_never_makes_the_engine_available():
-    source = Path(bt.__file__).read_text()
-    assert '"calibration_forecast_v1_dev.json"' in source
-    assert 'EVAL_DIR / "calibration.json").write_text' not in source
+    import inspect
+
+    writes_final = 'EVAL_DIR / "calibration.json").write_text'
+    assert writes_final not in inspect.getsource(bt.run_dev)
+    assert writes_final not in inspect.getsource(bt.run_dev_v2)
+    assert writes_final in inspect.getsource(bt.run_holdout_v2)  # only the one-time holdout may
 
 
 # ------------------------------------------------------------------ v2 conditional stress test
