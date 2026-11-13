@@ -35,6 +35,9 @@ jobs:
           pip install -r backend/requirements-dev.txt
 
       - name: Run backend tests
+        env:
+          # Matches scripts/local_ci.sh: every event must be cross-verified.
+          SCENARIO_REQUIRE_VERIFIED: "1"
         run: pytest backend/tests -v
 
   test-frontend:
