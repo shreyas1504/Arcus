@@ -73,8 +73,50 @@ def test_per_scenario_and_span_sentences():
     assert "If it plays out like Example: strait closure (2019)" in text
     assert "If it plays out like Example: border clash (2010)" in text
     assert "If it plays out like Example: port earthquake (2024)" in text
+    assert "drove most of the loss" in text
     assert "Across these 3 past shocks this portfolio moved between" in text
     assert "-7.4%" in text and "-2.8%" in text
+
+
+def test_loss_names_negative_contributors_not_positive_drags_on_a_gain():
+    # Fixture scenarios are down: DEMO1 is the biggest drag; wording must say "loss".
+    text = render_v2(_base())
+    assert "DEMO1" in text and "drove most of the loss" in text
+    assert "drove most of the gain" not in text
+    assert "drove most of it." not in text
+
+
+def test_gain_names_positive_contributors():
+    # Flip one replay to a gain where NVDA lifts and XOM/JPM drag — name NVDA for the gain.
+    response = _base()
+    replay = response.scenarios[0]
+    holdings = [
+        replay.holdings[0].model_copy(update={
+            "ticker": "NVDA", "weight": 0.5, "return_21d": 0.40, "contribution": 0.20,
+        }),
+        replay.holdings[1].model_copy(update={
+            "ticker": "XOM", "weight": 0.3, "return_21d": -0.10, "contribution": -0.03,
+        }),
+        replay.holdings[2].model_copy(update={
+            "ticker": "JPM", "weight": 0.2, "return_21d": -0.05, "contribution": -0.01,
+        }),
+    ]
+    replay = replay.model_copy(update={
+        "holdings": holdings,
+        "portfolio_return_21d": 0.16,
+        "path": [0.0] + [0.16 * t / 63 for t in range(1, 63)] + [0.16],
+    })
+    response = response.model_copy(update={
+        "scenarios": [replay],
+        "span_low": 0.16,
+        "span_high": 0.16,
+        "exposure": [],
+    })
+    text = render_v2(response)
+    assert "this portfolio moved 16.0%" in text
+    assert "NVDA drove most of the gain" in text
+    assert "XOM drove" not in text and "JPM drove" not in text
+    assert "drove most of the loss" not in text
 
 
 def test_resilience_sentence():

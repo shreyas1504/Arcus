@@ -27,6 +27,7 @@ from scenario.engine import (
 from scenario.enums import (
     FACTOR_NAMES,
     FACTOR_SPY,
+    HORIZON_DAYS,
     PATH_DAYS,
     RECOVERY_DAYS,
     Category,
@@ -95,7 +96,7 @@ def event(
     event_id: str,
     day: date,
     *,
-    cluster_id: str | None = None,
+    nature: str = "adverse",
     category: Category = Category.FINANCIAL_CREDIT,
 ) -> Event:
     assert is_trading_day(day)
@@ -104,7 +105,7 @@ def event(
         name=f"Test event {event_id}",
         date=day,
         onset="sudden",
-        nature="adverse",
+        nature=nature,
         category=category,
         regions=["us"],
         sectors=["broad"],
@@ -113,29 +114,33 @@ def event(
         source_quote="A synthetic quote that is long enough to satisfy the schema rules.",
         split="dev",
         drafted_by="cursor",
-        cluster_id=cluster_id,
     )
 
 
-def spy_path(trough: float) -> np.ndarray:
-    """Cumulative SPY path: linear to `trough` by PATH_DAYS, then flat to RECOVERY_DAYS.
+def spy_path(trough: float, *, trough_day: int = HORIZON_DAYS) -> np.ndarray:
+    """Cumulative SPY path: linear to `trough` by `trough_day`, then flat.
 
-    Monotone decline from 0, so worst drawdown within PATH_DAYS equals `trough`.
+    Monotone decline from 0, so the worst fall within t <= trough_day equals `trough`.
+    Default trough_day is HORIZON_DAYS (21), matching the crisis_events docstring.
     """
     path = np.zeros(RECOVERY_DAYS + 1, dtype=np.float32)
-    for t in range(PATH_DAYS + 1):
-        path[t] = trough * (t / PATH_DAYS)
-    path[PATH_DAYS:] = trough
+    for t in range(trough_day + 1):
+        path[t] = trough * (t / trough_day)
+    path[trough_day:] = trough
     return path
 
 
-def make_library(specs: list[tuple[str, date, float, str | None]]) -> Library:
-    """specs: (id, date, spy_trough, cluster_id). Cosines are arbitrary (not used by crisis_events)."""
-    events = [event(i, d, cluster_id=c) for i, d, _, c in specs]
+def make_library(
+    specs: list[tuple[str, date, float, str]],
+    *,
+    trough_day: int = HORIZON_DAYS,
+) -> Library:
+    """specs: (id, date, spy_trough, nature). Cosines are arbitrary (not used by crisis_events)."""
+    events = [event(i, d, nature=n) for i, d, _, n in specs]
     embeddings = np.stack([with_cosine(0.5, k + 1) for k in range(len(specs))])
     paths = np.zeros((len(specs), RECOVERY_DAYS + 1, len(FACTOR_NAMES)), dtype=np.float32)
     for k, (_, _, trough, _) in enumerate(specs):
-        paths[k, :, SPY_COL] = spy_path(trough)
+        paths[k, :, SPY_COL] = spy_path(trough, trough_day=trough_day)
     rng = np.random.default_rng(0)
     history = pd.DataFrame(
         rng.normal(0.0, 0.01, (len(INDEX), len(FACTOR_NAMES))), index=INDEX, columns=list(FACTOR_NAMES)
@@ -367,31 +372,51 @@ def test_resilience_summary_top_drivers_order():
 
 
 # ------------------------------------------------------------------ crisis_events
+# Written from the crisis_events docstring at 993cb42 (21-day fall + episodes), not its body.
 
 
 def test_crisis_events_requires_drawdown_at_or_below_threshold():
-    # trough −0.10 qualifies; −0.09 does not. CRISIS_DRAWDOWN is −0.10.
+    # Fall within the first HORIZON_DAYS (21): −0.10 qualifies; −0.09 does not.
+    # A path that only reaches −0.20 after day 21 does not qualify either.
     assert CRISIS_DRAWDOWN == -0.10
     d_ok = next_trading_day(date(2010, 3, 1))
     d_mild = next_trading_day(date(2011, 3, 1))
+    d_late = next_trading_day(date(2012, 3, 1))
     library = make_library(
         [
-            ("deep", d_ok, -0.10, None),
-            ("mild", d_mild, -0.09, None),
+            ("deep-21", d_ok, -0.10, "adverse"),
+            ("mild-21", d_mild, -0.09, "adverse"),
         ]
     )
-    indices = engine.crisis_events(library, AS_OF)
-    assert [library.events[i].id for i in indices] == ["deep"]
+    # Late-deep event: trough only by PATH_DAYS, so 21-day fall is ~−0.067 > −0.10.
+    late_events = [event("late-deep", d_late)]
+    late_embeddings = np.stack([with_cosine(0.5, 3)])
+    late_paths = np.zeros((1, RECOVERY_DAYS + 1, len(FACTOR_NAMES)), dtype=np.float32)
+    late_paths[0, :, SPY_COL] = spy_path(-0.20, trough_day=PATH_DAYS)
+    late_lib = Library(
+        events=library.events + late_events,
+        embeddings=np.vstack([library.embeddings, late_embeddings]),
+        factor_names=FACTOR_NAMES,
+        factor_paths=np.concatenate([library.factor_paths, late_paths], axis=0),
+        context=pd.DataFrame(
+            0.0,
+            index=[e.id for e in library.events] + ["late-deep"],
+            columns=["vix", "baa10y", "gpr", "gpr_rise_5d"],
+        ),
+        factor_history=library.factor_history,
+    )
+    indices = engine.crisis_events(late_lib, AS_OF)
+    assert [late_lib.events[i].id for i in indices] == ["deep-21"]
 
 
 def test_crisis_events_eligibility_window_must_close_before_as_of():
-    # Event whose PATH_DAYS window has not closed before as_of is excluded even if deep.
+    # eligible_precedents: the PATH_DAYS window must have closed before as_of.
     recent = add_trading_days(AS_OF, -(PATH_DAYS // 2))
     old = next_trading_day(date(2010, 6, 1))
     library = make_library(
         [
-            ("old-deep", old, -0.20, None),
-            ("too-recent", recent, -0.20, None),
+            ("old-deep", old, -0.20, "adverse"),
+            ("too-recent", recent, -0.20, "adverse"),
         ]
     )
     assert add_trading_days(recent, PATH_DAYS - 1) >= AS_OF
@@ -401,42 +426,51 @@ def test_crisis_events_eligibility_window_must_close_before_as_of():
 
 
 def test_crisis_events_keeps_earliest_per_cluster():
+    # Episodes (not cluster_id): members within PATH_DAYS-1 of the previous member join
+    # one episode; the representative is the adverse with the deepest 21-day fall.
     d1 = next_trading_day(date(2010, 1, 4))
-    d2 = next_trading_day(date(2011, 1, 3))
-    d3 = next_trading_day(date(2012, 1, 3))
+    d2 = add_trading_days(d1, 30)  # within PATH_DAYS - 1 of d1 → same episode
+    d3 = add_trading_days(d2, PATH_DAYS)  # beyond PATH_DAYS - 1 of d2 → new episode
+    assert d2 <= add_trading_days(d1, PATH_DAYS - 1)
+    assert d3 > add_trading_days(d2, PATH_DAYS - 1)
     library = make_library(
         [
-            ("cluster-early", d1, -0.15, "gfc"),
-            ("cluster-late", d2, -0.25, "gfc"),
-            ("solo", d3, -0.12, None),
+            ("episode-shallow", d1, -0.12, "adverse"),
+            ("episode-deep", d2, -0.25, "adverse"),
+            ("solo", d3, -0.15, "adverse"),
         ]
     )
     indices = engine.crisis_events(library, AS_OF)
-    assert [library.events[i].id for i in indices] == ["cluster-early", "solo"]
+    assert [library.events[i].id for i in indices] == ["episode-deep", "solo"]
 
 
 def test_crisis_events_same_date_tie_breaks_by_event_id():
+    # Same episode, equal 21-day falls and equal dates → earlier id wins.
+    # Prefer adverse over a deeper favorable in the same episode.
     day = next_trading_day(date(2010, 5, 3))
+    d2 = add_trading_days(day, 5)
     library = make_library(
         [
-            ("z-late-id", day, -0.15, "same-day"),
-            ("a-early-id", day, -0.15, "same-day"),
+            ("z-late-id", day, -0.15, "adverse"),
+            ("a-early-id", day, -0.15, "adverse"),
+            ("fav-deeper", d2, -0.30, "favorable"),
+            ("adv-shallower", d2, -0.12, "adverse"),
         ]
     )
-    # Same cluster and date: keep the one with the alphabetically first id? Stub: "Ties on
-    # date go by event id" for the kept set ordering / earliest. Within a cluster the
-    # earliest qualifying event is kept; same date → by event id.
     indices = engine.crisis_events(library, AS_OF)
+    # One episode (all within PATH_DAYS-1): adverse members are the two at `day` (−0.15)
+    # and adv-shallower (−0.12); deepest adverse fall is −0.15, tie on date → a-early-id.
     assert [library.events[i].id for i in indices] == ["a-early-id"]
 
 
 def test_crisis_events_sorted_by_date():
+    # Separate episodes (far apart) are returned sorted by date (then id).
     d_late = next_trading_day(date(2012, 4, 2))
     d_early = next_trading_day(date(2009, 4, 1))
     library = make_library(
         [
-            ("later", d_late, -0.14, None),
-            ("earlier", d_early, -0.14, None),
+            ("later", d_late, -0.14, "adverse"),
+            ("earlier", d_early, -0.14, "adverse"),
         ]
     )
     indices = engine.crisis_events(library, AS_OF)

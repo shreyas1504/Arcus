@@ -82,22 +82,32 @@ LIMITS_V2 = (
 )
 
 
-def _top_driver_names(replay: ScenarioReplay, *, limit: int = 2) -> list[str]:
-    """Tickers with the most negative contributions (alphabetical on ties), up to `limit`."""
-    negative = [h for h in replay.holdings if h.contribution < 0]
-    negative.sort(key=lambda h: (h.contribution, h.ticker))
-    return [h.ticker for h in negative[:limit]]
+def _top_driver_names(replay: ScenarioReplay, *, limit: int = 2) -> tuple[list[str], str]:
+    """Top contributors for the portfolio move: positive when up, negative when down.
+
+    Returns (tickers, kind) where kind is "gain", "loss", or "" if there is no signed driver.
+    """
+    port = replay.portfolio_return_21d
+    if port > 0:
+        candidates = [h for h in replay.holdings if h.contribution > 0]
+        candidates.sort(key=lambda h: (-h.contribution, h.ticker))
+        return [h.ticker for h in candidates[:limit]], "gain"
+    if port < 0:
+        candidates = [h for h in replay.holdings if h.contribution < 0]
+        candidates.sort(key=lambda h: (h.contribution, h.ticker))
+        return [h.ticker for h in candidates[:limit]], "loss"
+    return [], ""
 
 
 def _scenario_sentence(replay: ScenarioReplay) -> str:
     year = replay.date.year
     moved = _pct(replay.portfolio_return_21d)
-    drivers = _top_driver_names(replay)
-    if drivers:
+    drivers, kind = _top_driver_names(replay)
+    if drivers and kind:
         who = " and ".join(drivers)
         return (
             f"If it plays out like {replay.name} ({year}), this portfolio moved {moved}; "
-            f"{who} drove most of it."
+            f"{who} drove most of the {kind}."
         )
     return f"If it plays out like {replay.name} ({year}), this portfolio moved {moved}."
 
