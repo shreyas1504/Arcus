@@ -17,9 +17,9 @@ services:
         value: "true"
       - key: RESEARCH_DATA_DIR
         value: research/data
-      # Scenario Lab stays off until the user turns it on (with VITE_ENABLE_SCENARIOS).
+      # Scenario Lab API (pair with VITE_ENABLE_SCENARIOS on the Pages build).
       - key: SCENARIO_ENABLED
-        value: "false"
+        value: "true"
       - key: SCENARIO_ASSETS_DIR
         value: scenario/assets
       - key: AUTOMATION_KEY

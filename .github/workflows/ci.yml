@@ -88,8 +88,9 @@ jobs:
           # Research is on via frontend/.env.production; set this variable to
           # "false" to hide the tab on Pages.
           VITE_ENABLE_RESEARCH: ${{ vars.VITE_ENABLE_RESEARCH || 'true' }}
-          # Scenario Lab stays hidden until its ship gate passes.
-          VITE_ENABLE_SCENARIOS: ${{ vars.VITE_ENABLE_SCENARIOS || 'false' }}
+          # Scenario Lab is on via frontend/.env.production; set this variable to
+          # "false" to hide the tab on Pages.
+          VITE_ENABLE_SCENARIOS: ${{ vars.VITE_ENABLE_SCENARIOS || 'true' }}
 
       - name: Add 404.html for SPA routing
         run: cp frontend/dist/index.html frontend/dist/404.html

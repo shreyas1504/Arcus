@@ -5,7 +5,7 @@
 #   PYTHON=/path/to/python3.11 scripts/local_ci.sh
 #
 # Backend: pytest on Python 3.11 (CI's version). Frontend: vitest, then a production
-# build with Scenario Lab hidden, checking that its route is compiled out.
+# build with Research and Scenario Lab on (same defaults as Pages).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,12 +25,12 @@ fi
 step "Frontend tests"
 (cd frontend && npm test --silent)
 
-step "Frontend build (Pages settings, Scenario Lab hidden)"
-(cd frontend && VITE_BASE_PATH=/Arcus/ VITE_ENABLE_RESEARCH=true VITE_ENABLE_SCENARIOS=false npm run build --silent)
-if grep -rq "dashboard/scenarios" frontend/dist; then
-  echo "Scenario Lab route found in a build where it should be hidden" >&2
+step "Frontend build (Pages settings, Scenario Lab on)"
+(cd frontend && VITE_BASE_PATH=/Arcus/ VITE_ENABLE_RESEARCH=true VITE_ENABLE_SCENARIOS=true npm run build --silent)
+if ! grep -rq "dashboard/scenarios" frontend/dist; then
+  echo "Scenario Lab route missing from a build where it should be on" >&2
   exit 1
 fi
-echo "Scenario Lab route compiled out: ok"
+echo "Scenario Lab route compiled in: ok"
 
 step "All local CI checks passed"

@@ -34,10 +34,10 @@ def test_release_url_is_the_pinned_release():
     )
 
 
-def test_render_build_fetches_scenario_assets_and_keeps_the_feature_off():
+def test_render_build_fetches_scenario_assets_and_keeps_the_feature_on():
     render = (ROOT / "render.yaml").read_text()
     assert "python -m scenario.fetch_assets" in render
-    assert re.search(r'key: SCENARIO_ENABLED\s+value: "false"', render)
+    assert re.search(r'key: SCENARIO_ENABLED\s+value: "true"', render)
 
 
 def test_sha256_is_pinned_and_matches_the_built_archive():
