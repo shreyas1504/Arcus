@@ -286,7 +286,18 @@ function LimitsNote() {
 const metricText = (metric: MetricCI | null, format: (value: number) => string) =>
   metric ? `${format(metric.value)} (90% CI ${format(metric.ci_low)} to ${format(metric.ci_high)})` : '—';
 
+const pts = (value: number) => `${(value * 100).toFixed(1)} pts`;
+const pct = (value: number) => `${(value * 100).toFixed(1)}%`;
+
+function improvementLabel(mae: MetricCI | null, baseline: MetricCI | null): string | null {
+  if (!mae || !baseline || baseline.value <= 0) return null;
+  return `${pct(1 - mae.value / baseline.value)} lower than beta × S&P`;
+}
+
 function AccuracyPanel({ backtest }: { backtest: BacktestSummaryV2 }) {
+  const events = backtest.holdout_events;
+  const h1Better = improvementLabel(backtest.h1_mae, backtest.h1_mae_baseline);
+  const h3Better = improvementLabel(backtest.h3_drawdown_mae, backtest.h3_drawdown_mae_baseline);
   return (
     <Card className="p-5" data-testid="accuracy-panel">
       <h2 className="font-display text-sm font-semibold text-foreground">How accurate is this?</h2>
@@ -296,23 +307,78 @@ function AccuracyPanel({ backtest }: { backtest: BacktestSummaryV2 }) {
           events that the engine was never tuned on.
         </p>
       ) : (
-        <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-          <dt className="text-muted-foreground">Holdout events</dt>
-          <dd className="font-mono">{backtest.holdout_events ?? '—'}</dd>
-          <dt className="text-muted-foreground">21-day portfolio MAE</dt>
-          <dd className="font-mono">{metricText(backtest.h1_mae, (v) => `${(v * 100).toFixed(1)} pts`)}</dd>
-          <dt className="text-muted-foreground">Holding ranking</dt>
-          <dd className="font-mono">{metricText(backtest.h2_rank, (v) => v.toFixed(2))}</dd>
-          <dt className="text-muted-foreground">Worst-fall MAE</dt>
-          <dd className="font-mono">{metricText(backtest.h3_drawdown_mae, (v) => `${(v * 100).toFixed(1)} pts`)}</dd>
-          {backtest.results_url && (
-            <dd className="sm:col-span-2">
-              <a href={backtest.results_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                Full results
-              </a>
+        <div className="mt-2 space-y-3">
+          <p className="text-sm leading-6 text-muted-foreground" data-testid="accuracy-holdout-note">
+            These figures come from a one-time test on {events ?? '—'} events from 2023 onward that the
+            engine was never tuned on. Each event is treated as the scenario; betas use only prices before
+            it; the estimate uses that event&apos;s real factor moves.
+          </p>
+          <div
+            role="status"
+            data-testid="accuracy-gate"
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              backtest.gate_passed
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
+            }`}
+          >
+            {backtest.gate_passed
+              ? 'Holdout gate passed (H1–H4).'
+              : 'Holdout gate did not pass. The figures below show where it missed.'}
+          </div>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <dt className="text-muted-foreground">Holdout events</dt>
+            <dd className="font-mono" data-testid="accuracy-holdout-events">{events ?? '—'}</dd>
+
+            <dt className="text-muted-foreground">H1 · 21-day portfolio MAE</dt>
+            <dd className="font-mono" data-testid="accuracy-h1">
+              {metricText(backtest.h1_mae, pts)}
+              {backtest.h1_mae_baseline && (
+                <div className="text-xs text-muted-foreground">
+                  vs beta × S&amp;P {metricText(backtest.h1_mae_baseline, pts)}
+                  {h1Better && <> · {h1Better}</>}
+                </div>
+              )}
             </dd>
-          )}
-        </dl>
+
+            <dt className="text-muted-foreground">H2 · Holding ranking</dt>
+            <dd className="font-mono" data-testid="accuracy-h2">
+              {metricText(backtest.h2_rank, (v) => v.toFixed(2))}
+            </dd>
+
+            <dt className="text-muted-foreground">H3 · Worst-fall MAE (63 days)</dt>
+            <dd className="font-mono" data-testid="accuracy-h3">
+              {metricText(backtest.h3_drawdown_mae, pts)}
+              {backtest.h3_drawdown_mae_baseline && (
+                <div className="text-xs text-muted-foreground">
+                  vs beta × S&amp;P {metricText(backtest.h3_drawdown_mae_baseline, pts)}
+                  {h3Better && <> · {h3Better}</>}
+                </div>
+              )}
+            </dd>
+
+            <dt className="text-muted-foreground">H4 · Recovery time</dt>
+            <dd className="font-mono" data-testid="accuracy-h4">
+              within one bucket {metricText(backtest.h4_within_one_bucket, pct)}
+              {backtest.h4_exact_bucket && (
+                <div className="text-xs text-muted-foreground">
+                  exact {metricText(backtest.h4_exact_bucket, pct)}
+                  {backtest.h4_exact_bucket_baseline && (
+                    <> vs baseline {metricText(backtest.h4_exact_bucket_baseline, pct)}</>
+                  )}
+                </div>
+              )}
+            </dd>
+
+            {backtest.results_url && (
+              <dd className="sm:col-span-2">
+                <a href={backtest.results_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                  Full results
+                </a>
+              </dd>
+            )}
+          </dl>
+        </div>
       )}
     </Card>
   );
@@ -430,10 +496,26 @@ const ScenarioLab = () => {
               </form>
             </Card>
 
+            {loading && (
+              <div
+                role="status"
+                aria-live="polite"
+                data-testid="scenario-loading"
+                className="flex gap-3 rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+              >
+                <Loader2 size={18} className="flex-shrink-0 animate-spin" />
+                <span>Replaying past shocks on your holdings. No estimate is shown until the response arrives.</span>
+              </div>
+            )}
+
             {error && (
-              <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              <div role="alert" className="flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive" data-testid="scenario-error">
                 <AlertCircle size={18} className="flex-shrink-0" />
-                <span>{error}</span>
+                <div>
+                  <div className="font-semibold text-destructive">Could not run this scenario</div>
+                  <p className="mt-1">{error}</p>
+                  <p className="mt-2 text-xs text-destructive/80">No portfolio numbers are shown rather than a guess.</p>
+                </div>
               </div>
             )}
 
@@ -444,7 +526,7 @@ const ScenarioLab = () => {
                     <AlertTriangle size={18} className="flex-shrink-0" />
                     <span>
                       <strong>Low confidence.</strong> No past event is a close match for this question, so only
-                      the crisis replay is shown.
+                      the crisis replay is shown — not a calibrated forecast range.
                     </span>
                   </div>
                 )}

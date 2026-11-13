@@ -346,7 +346,9 @@ def test_v2_fixture_is_clearly_synthetic():
     rows = data["scenarios"] + data["crises"]
     assert all(h["ticker"].startswith("DEMO") for r in rows for h in r["holdings"])
     assert all(r["name"].startswith("Example") and r["source_url"].startswith("https://example.com/") for r in rows)
-    assert data["backtest"]["available"] is False
+    assert data["backtest"]["available"] is True
+    assert data["backtest"]["holdout_events"] == 32
+    assert data["backtest"]["gate_passed"] is True
 
 
 def test_v2_fixture_follows_the_documented_rules():

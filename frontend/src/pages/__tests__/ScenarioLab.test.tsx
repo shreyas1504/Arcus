@@ -95,12 +95,33 @@ describe('ScenarioLab v2', () => {
 
     expect(screen.getByTestId('limits')).toHaveTextContent(/cannot predict/i);
     expect(screen.getByTestId('limits')).toHaveTextContent(/today's holdings/i);
-    expect(screen.getByTestId('accuracy-panel')).toBeInTheDocument();
+
+    const accuracy = screen.getByTestId('accuracy-panel');
+    expect(accuracy).toBeInTheDocument();
+    expect(screen.getByTestId('accuracy-holdout-note')).toHaveTextContent(/32 events from 2023/i);
+    expect(screen.getByTestId('accuracy-gate')).toHaveTextContent(/holdout gate passed/i);
+    expect(screen.getByTestId('accuracy-holdout-events')).toHaveTextContent('32');
+    expect(screen.getByTestId('accuracy-h1')).toHaveTextContent(/1\.6 pts/);
+    expect(screen.getByTestId('accuracy-h2')).toHaveTextContent('0.47');
+    expect(screen.getByTestId('accuracy-h3')).toHaveTextContent(/1\.5 pts/);
+    expect(screen.getByTestId('accuracy-h4')).toHaveTextContent(/93\.1%/);
 
     const [body] = whatifBodies(fetchMock);
     expect(body.scenario).toBe('What if China blockades Taiwan?');
     expect(body.severity).toBe('typical');
     expect(body.holdings.map((h: { ticker: string }) => h.ticker)).toEqual(['DEMO1', 'DEMO2', 'DEMO3']);
+  });
+
+  it('shows an honest miss when the holdout gate failed', async () => {
+    mockFetch(jsonResponse({
+      ...response,
+      backtest: { ...response.backtest, gate_passed: false },
+    }));
+    renderPage();
+    ask();
+
+    expect(await screen.findByTestId('accuracy-gate')).toHaveTextContent(/did not pass/i);
+    expect(screen.getByTestId('accuracy-gate')).toHaveTextContent(/where it missed/i);
   });
 
   it('tags holdings in the scenario table as actual or estimated', async () => {
@@ -151,7 +172,9 @@ describe('ScenarioLab v2', () => {
     renderPage();
     ask();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    const alert = await screen.findByTestId('scenario-error');
+    expect(alert).toHaveTextContent(message);
+    expect(alert).toHaveTextContent(/no portfolio numbers are shown/i);
     expect(screen.queryByTestId('scenario-result')).not.toBeInTheDocument();
     expect(screen.queryByTestId('historical-span')).not.toBeInTheDocument();
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
@@ -162,9 +185,29 @@ describe('ScenarioLab v2', () => {
     renderPage();
     ask();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach the arcus server/i);
+    expect(await screen.findByTestId('scenario-error')).toHaveTextContent(/could not reach the arcus server/i);
     expect(screen.queryByTestId('scenario-result')).not.toBeInTheDocument();
     expect(screen.queryByText(/0\.0%/)).not.toBeInTheDocument();
+  });
+
+  it('shows a loading state with no numbers while the request is in flight', async () => {
+    let resolveRequest: (value: ReturnType<typeof jsonResponse>) => void = () => undefined;
+    const pending = new Promise<ReturnType<typeof jsonResponse>>((resolve) => {
+      resolveRequest = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (!String(url).includes('/api/scenario/whatif')) return jsonResponse({});
+      return pending;
+    }));
+    renderPage();
+    ask();
+
+    expect(await screen.findByTestId('scenario-loading')).toHaveTextContent(/replaying past shocks/i);
+    expect(screen.queryByTestId('scenario-result')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('accuracy-panel')).not.toBeInTheDocument();
+    resolveRequest(jsonResponse(response));
+    expect(await screen.findByTestId('scenario-result')).toBeInTheDocument();
+    expect(screen.queryByTestId('scenario-loading')).not.toBeInTheDocument();
   });
 
   it('shows crises and limits when there are no close scenario matches', async () => {

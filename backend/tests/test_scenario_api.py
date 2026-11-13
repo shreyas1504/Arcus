@@ -266,8 +266,10 @@ def test_engine_unavailable_during_run_returns_503(client):
 # ------------------------------------------------------------------ status and warm-up
 
 
-def test_status_reports_warming(enabled, client):
+def test_status_reports_warming(enabled, client, tmp_path):
+    # Hermetic: ignore locally built assets so this stays "warming" everywhere.
     enabled.delenv("SCENARIO_FAKE")
+    enabled.setattr(engine_module, "ASSETS_DIR", tmp_path)
     engine_module.reset_engine()
     assert client.get("/api/scenario/status").json() == {
         "enabled": True, "status": "warming", "daily_limit": scenario_router.DAILY_LIMIT,

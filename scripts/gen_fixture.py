@@ -252,7 +252,22 @@ def build_v2() -> dict:
             f"Across these 3 past shocks it moved between {min(returns):.1%} and {max(returns):.1%}. "
             "Past shocks applied to today's holdings, not a forecast."
         ),
-        "backtest": {"available": False},
+        # Holdout gate v2 numbers from scenario/eval/calibration.json (C5), rounded for the fixture.
+        "backtest": {
+            "available": True,
+            "holdout_events": 32,
+            "h1_mae": {"value": 0.0163, "ci_low": 0.0153, "ci_high": 0.0173},
+            "h1_mae_baseline": {"value": 0.0215, "ci_low": 0.0195, "ci_high": 0.0237},
+            "h2_rank": {"value": 0.467, "ci_low": 0.423, "ci_high": 0.512},
+            "h3_drawdown_mae": {"value": 0.0154, "ci_low": 0.0142, "ci_high": 0.0165},
+            "h3_drawdown_mae_baseline": {"value": 0.02, "ci_low": 0.018, "ci_high": 0.0219},
+            "h4_within_one_bucket": {"value": 0.931, "ci_low": 0.905, "ci_high": 0.953},
+            "h4_exact_bucket": {"value": 0.705, "ci_low": 0.66, "ci_high": 0.748},
+            "h4_exact_bucket_baseline": {"value": 0.594, "ci_low": 0.514, "ci_high": 0.667},
+            "gate_passed": True,
+            "recovery_shown_from": "all",
+            "results_url": None,
+        },
         "remaining_today": 19,
     }
     return json.loads(WhatIfResponseV2.model_validate(response).model_dump_json())
