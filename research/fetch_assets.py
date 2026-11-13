@@ -50,7 +50,20 @@ def pack(data_dir: Path, output: Path) -> str:
     return _sha256(output)
 
 
-def fetch(data_dir: Path = DATA_DIR, url: str = ASSET_URL, sha256: str = ASSET_SHA256) -> dict:
+def _remove(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def fetch(
+    data_dir: Path = DATA_DIR,
+    url: str = ASSET_URL,
+    sha256: str = ASSET_SHA256,
+    members: tuple[str, ...] = MEMBERS,
+) -> dict:
+    """Download, verify and extract `members` (files or directories) into `data_dir`."""
     if not sha256:
         raise SystemExit("RESEARCH_ASSET_SHA256 is not set")
     marker = data_dir / MARKER
@@ -71,11 +84,11 @@ def fetch(data_dir: Path = DATA_DIR, url: str = ASSET_URL, sha256: str = ASSET_S
         extract_dir = Path(tmp) / "extract"
         with tarfile.open(archive_path) as archive:
             archive.extractall(extract_dir, filter="data")
-        for name in MEMBERS:
-            if not (extract_dir / name).is_dir():
-                raise SystemExit(f"Archive is missing {name}/")
-        for name in MEMBERS:
-            shutil.rmtree(data_dir / name, ignore_errors=True)
+        for name in members:
+            if not (extract_dir / name).exists():
+                raise SystemExit(f"Archive is missing {name}")
+        for name in members:
+            _remove(data_dir / name)
             shutil.move(str(extract_dir / name), data_dir / name)
     marker.write_text(json.dumps({"sha256": sha256, "url": url}))
     return {"status": "downloaded", "data_dir": str(data_dir)}

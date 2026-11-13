@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -11,7 +12,10 @@ from fastapi.testclient import TestClient
 
 from backend.routers import research as research_router
 from backend.routers import scenario as scenario_router
+from research import fetch_assets as research_fetch
 from scenario import engine as engine_module
+from scenario import fetch_assets as scenario_fetch
+from scenario import narrative as scenario_narrative
 from scenario.engine import EngineUnavailable, FakeEngine
 from scenario.schemas import SkippedTicker, WhatIfRequest, WhatIfResponse
 
@@ -271,3 +275,141 @@ def test_router_is_registered_in_main():
     from backend.main import app as main_app
 
     assert {"/api/scenario/status", "/api/scenario/whatif"} <= set(main_app.openapi()["paths"])
+
+
+# ------------------------------------------------------------------ asset download
+
+
+@pytest.fixture
+def asset_archive(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in scenario_fetch.MEMBERS:
+        (source / name).write_bytes(name.encode())
+    path = tmp_path / "scenario-assets.tar.gz"
+    return path, scenario_fetch.pack(source, path)
+
+
+def serve_archive(monkeypatch, path: Path) -> list[str]:
+    calls: list[str] = []
+
+    class Response:
+        def __init__(self, data: bytes):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, size):
+            yield self.data
+
+    def fake_get(url, **_):
+        calls.append(url)
+        return Response(path.read_bytes())
+
+    monkeypatch.setattr(research_fetch.requests, "get", fake_get)
+    return calls
+
+
+def test_assets_fetch_extracts_members_once(tmp_path, monkeypatch, asset_archive):
+    path, sha = asset_archive
+    calls = serve_archive(monkeypatch, path)
+    target = tmp_path / "assets"
+
+    assert scenario_fetch.fetch(target, "https://example.test/s.tgz", sha)["status"] == "downloaded"
+    for name in scenario_fetch.MEMBERS:
+        assert (target / name).read_bytes() == name.encode()
+    assert scenario_fetch.fetch(target, "https://example.test/s.tgz", sha)["status"] == "present"
+    assert len(calls) == 1
+
+
+def test_assets_sha_mismatch_refuses(tmp_path, monkeypatch, asset_archive):
+    path, _ = asset_archive
+    serve_archive(monkeypatch, path)
+    target = tmp_path / "assets"
+
+    with pytest.raises(SystemExit, match="Checksum mismatch"):
+        scenario_fetch.fetch(target, "https://example.test/s.tgz", "0" * 64)
+    assert not any((target / name).exists() for name in scenario_fetch.MEMBERS)
+
+
+def test_assets_fetch_refuses_without_pinned_sha(tmp_path):
+    with pytest.raises(SystemExit, match="SCENARIO_ASSET_SHA256"):
+        scenario_fetch.fetch(tmp_path, "https://example.test/s.tgz", "")
+
+
+def test_assets_archive_missing_member_refuses(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "library.npz").write_bytes(b"x")
+    with pytest.raises(SystemExit, match="library.json"):
+        scenario_fetch.pack(source, tmp_path / "out.tar.gz")
+
+
+# ------------------------------------------------------------------ narrative template
+
+NUMBER = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def fixture_response(**updates) -> WhatIfResponse:
+    response = WhatIfResponse.model_validate(json.loads(FIXTURE.read_text()))
+    return response.model_copy(update={"narrative": "", **updates}, deep=True)
+
+
+def allowed_numbers(response: WhatIfResponse) -> set[str]:
+    """Every response number in the formats the template may print."""
+    allowed: set[str] = set()
+    p = response.portfolio
+    if p is not None:
+        for value in (p.typical_return, p.median_return, p.range_low, p.range_high,
+                      p.worst_drawdown_63d, p.unrecovered_share):
+            allowed.add(f"{value * 100:.1f}".replace("-0.0", "0.0"))
+        allowed.add(f"{p.range_level * 100:.0f}")
+        allowed.add(str(p.horizon_days))
+        allowed.update(str(v) for v in (p.recovery_days_low, p.recovery_days_high) if v is not None)
+    return allowed
+
+
+def test_narrative_numbers_all_come_from_the_response():
+    response = fixture_response()
+    text = scenario_narrative.render(response)
+    assert "-5.4%" in text and "-9.0%" in text and "-1.7%" in text and "80%" in text
+    assert "between 34 and 118 trading days" in text
+    assert set(NUMBER.findall(text)) <= allowed_numbers(response)
+
+
+def test_narrative_has_no_advice_words():
+    for severity in ("mild", "typical", "severe"):
+        portfolio = fixture_response().portfolio.model_copy(update={"severity": severity})
+        text = scenario_narrative.render(fixture_response(severity=severity, portfolio=portfolio)).lower()
+        assert not re.search(r"\b(buy|sell|should|recommend|guarantee\w*)\b", text)
+
+
+def test_narrative_low_confidence_sentence():
+    low = scenario_narrative.render(fixture_response(confidence="low"))
+    normal = scenario_narrative.render(fixture_response())
+    assert "no close precedent" in low
+    assert "no close precedent" not in normal
+
+
+def test_narrative_without_portfolio_states_no_data_and_no_numbers():
+    text = scenario_narrative.render(fixture_response(portfolio=None, holdings=[]))
+    assert scenario_narrative.NO_DATA in text
+    assert NUMBER.findall(text) == []
+
+
+def test_narrative_unrecovered_share_and_missing_recovery():
+    portfolio = fixture_response().portfolio.model_copy(
+        update={"recovery_days_low": None, "recovery_days_high": None, "unrecovered_share": 0.4}
+    )
+    response = fixture_response(portfolio=portfolio)
+    text = scenario_narrative.render(response)
+    assert "trading days" not in text
+    assert "40.0% of those precedents had not regained it" in text
+    assert set(NUMBER.findall(text)) <= allowed_numbers(response)
