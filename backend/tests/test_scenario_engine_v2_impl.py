@@ -66,12 +66,27 @@ def test_exposure_and_resilience_match_the_fixture_rules():
 
 
 def test_crisis_events_rule():
+    # 21-day S&P falls: a -15%, b -2% (not a crisis), c -12% (favorable) and d -20% (adverse)
+    # within 63 trading days (one episode, named by its adverse deepest member), e too recent.
     events = [_event("a-crash", "2015-03-02"), _event("b-calm", "2015-09-01"),
-              _event("c-crash", "2016-03-01"), _event("d-crash-same-cluster", "2016-04-01"), _event("e-too-recent", "2018-05-01")]
-    events[2] = events[2].model_copy(update={"cluster_id": "cluster-x"})
-    events[3] = events[3].model_copy(update={"cluster_id": "cluster-x"})
+              _event("c-rescue", "2016-03-01"), _event("d-crash", "2016-04-01"), _event("e-too-recent", "2018-05-01")]
+    events[2] = events[2].model_copy(update={"nature": "favorable"})
     lib = _library(events, [-0.15, -0.02, -0.12, -0.20, -0.30])
-    assert [lib.events[i].id for i in E.crisis_events(lib, AS_OF)] == ["a-crash", "c-crash"]
+    assert [lib.events[i].id for i in E.crisis_events(lib, AS_OF)] == ["a-crash", "d-crash"]
+
+
+def test_crisis_episode_prefers_adverse_even_if_shallower():
+    events = [_event("x-rescue", "2015-03-02"), _event("y-crash", "2015-04-01")]
+    events[0] = events[0].model_copy(update={"nature": "favorable"})
+    lib = _library(events, [-0.25, -0.11])
+    assert [lib.events[i].id for i in E.crisis_events(lib, AS_OF)] == ["y-crash"]
+
+
+def test_crisis_needs_the_fall_within_21_days():
+    events = [_event("slow-burn", "2015-03-02")]
+    lib = _library(events, [-0.02])
+    lib.factor_paths[0, 30:64, :] = -0.25  # a later crash inside 63 days, not within 21
+    assert E.crisis_events(lib, AS_OF) == []
 
 
 # ------------------------------------------------------------------ run_v2

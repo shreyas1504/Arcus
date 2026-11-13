@@ -96,6 +96,7 @@ from scenario.enums import (
     TOP_K,
     Confidence,
     ImpactSource,
+    Nature,
     Sector,
 )
 from scenario.factors import BetaFit, estimate_return, fit_betas
@@ -137,7 +138,7 @@ FIXTURE_V2_PATH = Path(
         str(ROOT.parent / "frontend/src/lib/__fixtures__/whatif-response-v2.json"),
     )
 )
-CRISIS_DRAWDOWN = -0.10  # PLAN v2 crisis set rule
+CRISIS_DRAWDOWN = -0.10  # PLAN v2 crisis set rule: S&P fall within 21 trading days
 RECOVERY_BUCKETS: tuple[str, ...] = (
     "never_fell", "1-21", "22-63", "64-126", "127-252", "253-504", "not_within_504", "unknown",
 )
@@ -307,27 +308,38 @@ def _drawdown(path: Sequence[float | None]) -> float:
 def crisis_events(library: Library, as_of: date) -> list[int]:
     """Library rows that form the crisis replay set as of `as_of`, sorted by date.
 
-    An event qualifies if (1) it is eligible (eligible_precedents: its 63-day window closed
-    before as_of) and (2) the S&P's worst fall within its window is CRISIS_DRAWDOWN or worse,
-    where worst fall = min over t <= PATH_DAYS of (1 + p_t) / max_{s<=t}(1 + p_s) - 1 on the
-    library's cumulative FACTOR_SPY path. Only the earliest qualifying event per cluster_id is
-    kept; an event without a cluster_id is its own cluster. Ties on date go by event id.
+    Rule (user-approved 2026-11-13, replacing the 63-day rule that also caught events
+    which only preceded a later crash):
+    1. Qualifying: eligible events (eligible_precedents) whose S&P worst fall within the
+       first HORIZON_DAYS (t <= 21) is CRISIS_DRAWDOWN or worse, where worst fall =
+       min over t of (1 + p_t) / max_{s<=t}(1 + p_s) - 1 on the library FACTOR_SPY path.
+    2. Episodes: qualifying events sorted by (date, id); an event joins the current
+       episode when its date <= add_trading_days(previous member's date, PATH_DAYS - 1),
+       otherwise it starts a new episode.
+    3. Each episode is represented by its adverse member with the deepest 21-day fall
+       (ties: earlier date, then id); if no member is adverse, by its deepest member.
     """
     spy = library.factor_names.index(FACTOR_SPY)
-    qualifying = []
-    for i in eligible_precedents(library.events, as_of):
-        path = [float(v) for v in library.factor_paths[i, : PATH_DAYS + 1, spy]]
-        if _drawdown(path) <= CRISIS_DRAWDOWN:
-            qualifying.append(i)
-    seen: set[str] = set()
-    out = []
-    for i in sorted(qualifying, key=lambda k: (library.events[k].date, library.events[k].id)):
-        event = library.events[i]
-        cluster = event.cluster_id or f"event:{event.id}"
-        if cluster not in seen:
-            seen.add(cluster)
-            out.append(i)
-    return out
+
+    def fall(i: int) -> float:
+        return _drawdown([float(v) for v in library.factor_paths[i, : HORIZON_DAYS + 1, spy]])
+
+    qualifying = sorted(
+        (i for i in eligible_precedents(library.events, as_of) if fall(i) <= CRISIS_DRAWDOWN),
+        key=lambda k: (library.events[k].date, library.events[k].id),
+    )
+    episodes: list[list[int]] = []
+    for i in qualifying:
+        previous = library.events[episodes[-1][-1]].date if episodes else None
+        if previous is not None and library.events[i].date <= trading_calendar.add_trading_days(previous, PATH_DAYS - 1):
+            episodes[-1].append(i)
+        else:
+            episodes.append([i])
+    chosen = []
+    for members in episodes:
+        adverse = [i for i in members if library.events[i].nature is Nature.ADVERSE] or members
+        chosen.append(min(adverse, key=lambda i: (fall(i), library.events[i].date, library.events[i].id)))
+    return sorted(chosen, key=lambda k: (library.events[k].date, library.events[k].id))
 
 
 def recovery_bucket(days: int | None, known: bool) -> str:

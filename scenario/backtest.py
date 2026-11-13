@@ -965,32 +965,28 @@ def control_threshold(library: E.Library, embed, controls_path: Path = CONTROLS_
     return max(0.5, float(np.quantile(best, 0.95))), sorted(zip(questions, best.tolist()), key=lambda r: -r[1])
 
 
-def proposed_crisis_episodes(library: E.Library, as_of: date) -> list[int]:
-    """For the user's decision only (not the contract): episodes where the S&P fell 10% or
-    more within 21 trading days; events within 63 trading days of each other are one
-    episode, named by its adverse event with the deepest 21-day fall."""
-    from scenario import trading_calendar
-
+def write_crises(library: E.Library, as_of: date | None = None) -> list[int]:
+    """scenario/eval/crises.md: the crisis replay set under engine.crisis_events."""
+    as_of = as_of or date.today()
+    rows = E.crisis_events(library, as_of)
     spy = library.factor_names.index(FACTOR_SPY)
-
-    def fall(i: int) -> float:
-        return E._drawdown([float(v) for v in library.factor_paths[i, : HORIZON_DAYS + 1, spy]])
-
-    qualifying = sorted((i for i in E.eligible_precedents(library.events, as_of) if fall(i) <= -0.10),
-                        key=lambda k: (library.events[k].date, library.events[k].id))
-    episodes: list[list[int]] = []
-    for i in qualifying:
-        if episodes and library.events[i].date <= trading_calendar.add_trading_days(
-            library.events[episodes[-1][-1]].date, PATH_DAYS - 1
-        ):
-            episodes[-1].append(i)
-        else:
-            episodes.append([i])
-    named = []
-    for members in episodes:
-        adverse = [i for i in members if library.events[i].nature.value == "adverse"] or members
-        named.append(min(adverse, key=lambda i: (fall(i), library.events[i].date, library.events[i].id)))
-    return named
+    lines = [
+        "# Crisis replay set",
+        "",
+        f"As of {as_of}. Rule (user-approved 2026-11-13): the S&P fell 10% or more within 21 trading days; "
+        "events within 63 trading days of each other form one episode, named by its adverse event with the "
+        "deepest fall. (The first rule, a 10% fall anywhere in 63 days, gave 34 events, including some that "
+        "only came before a crash, such as the December 2019 US–China deal two months before COVID.)",
+        "",
+        "| Crisis | Date | S&P worst fall, 21 days | S&P worst fall, 63 days |",
+        "|---|---|---|---|",
+    ]
+    for i in rows:
+        path = [float(v) for v in library.factor_paths[i, :, spy]]
+        lines.append(f"| {library.events[i].name} (`{library.events[i].id}`) | {library.events[i].date} | "
+                     f"{E._drawdown(path[: HORIZON_DAYS + 1]):+.1%} | {E._drawdown(path[: PATH_DAYS + 1]):+.1%} |")
+    (EVAL_DIR / "crises.md").write_text("\n".join(lines) + "\n")
+    return rows
 
 
 def write_v2_reports(*, library, cases, skipped, combo, tuning, summary, threshold, controls, real_best,
@@ -1069,34 +1065,7 @@ def write_v2_reports(*, library, cases, skipped, combo, tuning, summary, thresho
     ]
     (EVAL_DIR / "results.md").write_text("\n".join(lines))
 
-    today = date.today()
-    contract = E.crisis_events(library, today)
-    proposed = proposed_crisis_episodes(library, today)
-    spy = library.factor_names.index(FACTOR_SPY)
-
-    def falls(i: int) -> str:
-        path = [float(v) for v in library.factor_paths[i, :, spy]]
-        return f"{E._drawdown(path[: HORIZON_DAYS + 1]):+.1%} / {E._drawdown(path[: PATH_DAYS + 1]):+.1%}"
-
-    crisis_lines = [
-        "# Crisis replay set",
-        "",
-        f"As of {today}. S&P worst fall within 21 / 63 trading days shown for each event.",
-        "",
-        f"## Contract rule (PLAN v2): S&P fell 10% or more within 63 days, first per cluster: {len(contract)} events",
-        "",
-        "The 63-day window also catches events that only preceded a later crash (for example the December 2019 "
-        "US–China deal, two months before COVID), and same-day events count twice.",
-        "",
-        *[f"- {library.events[i].date} {library.events[i].id} ({falls(i)})" for i in contract],
-        "",
-        f"## Proposed rule (for the user's decision): S&P fell 10% or more within 21 days, events within 63 trading "
-        f"days merged into one episode, named by its adverse event with the deepest fall: {len(proposed)} episodes",
-        "",
-        *[f"- {library.events[i].date} {library.events[i].id} ({falls(i)})" for i in proposed],
-        "",
-    ]
-    (EVAL_DIR / "crises.md").write_text("\n".join(crisis_lines))
+    write_crises(library)
 
 
 def run_dev_v2() -> dict:
@@ -1209,7 +1178,7 @@ def run_dev() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["download-universe", "dev", "dev-v2", "diagnostics", "holdout"])
+    parser.add_argument("command", choices=["download-universe", "dev", "dev-v2", "crises", "diagnostics", "holdout"])
     args = parser.parse_args(argv)
     if args.command == "download-universe":
         manifest = download_universe()
@@ -1217,6 +1186,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "dev":
         run_dev()
+        return 0
+    if args.command == "crises":
+        from scenario.build_library import ASSETS_DIR, load_library
+
+        rows = write_crises(load_library(ASSETS_DIR))
+        print((EVAL_DIR / "crises.md").read_text())
         return 0
     if args.command == "dev-v2":
         run_dev_v2()

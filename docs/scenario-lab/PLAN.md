@@ -12,6 +12,8 @@ This replaces the Cursor plan `arcus_scenario_lab_236c8e25.plan.md`. Both Claude
 ## Approved changes (newest first)
 | Date | Change | Why |
 |---|---|---|
+| 2026-11-13 | **Tighter crisis rule:** the S&P fell 10% or more within **21** trading days; events within 63 trading days of each other form one episode, named by its adverse event with the deepest fall. This gives 7 crises (`scenario/eval/crises.md`). | The 63-day rule gave 34 events, including events that only came before a crash (Dec 2019 US–China deal → COVID) and same-day duplicates (9/11 and the Fed's cut). |
+| 2026-11-13 | **The low-confidence threshold stays at 0.523** from the pre-registered rule (95th percentile of 30 off-topic controls). 96% of real dev questions clear it, and 2 of 30 controls also do. | User's choice: keep the pre-registered rule rather than tune it after seeing results. |
 | 2026-11-13 | **Phase 1 becomes a stress test, not a forecast** (section "v2" below). The forecast gate in section 2b is superseded. Adds a crisis replay and a recovery-time accuracy test. | C4 dev backtest: forecasts were no better than predicting zero (MAE 5.60% vs 5.54%, rank 0.03), while conditional replays were strong (MAE 1.65% vs 2.04% for beta × S&P, rank 0.46). |
 | 2026-11-13 | **Adverse vs favorable in the question.** `ParsedScenario.nature` (optional). The parser classifies the question; the engine subtracts `nature_penalty` from precedents of the opposite nature. Default 0; C4 tunes it on dev and keeps it only if it helps. | A real-data run matched "China blockades Taiwan" to the 2025 US–China *truce*. |
 | 2026-11-13 | **Recovery is measured from the trough within the 63-day shock window**, not over the whole 504 days. | Over 504 days a later, unrelated crash (2008 after an Aug 2006 precedent) counted as "never recovered" from a 2006 shock that recovered in 4 days. |
@@ -31,7 +33,7 @@ Arcus answers **"if something like this happens, what does it do to my portfolio
 5. **Resilience summary.** For example, "your portfolio fell more than the S&P in 3 of 5 crises; 2 holdings drove most of the damage".
 6. **Plain-words limits** on the page: Arcus can't predict whether or when a crisis happens. Each replay shows what happened, applied to today's holdings.
 
-**Crisis set rule** (fixed now, computed from the library, never hand-picked): an event is a crisis if the S&P's worst fall within its 63-day window was −10% or worse. Only the first event per `cluster_id` counts. The list is published in `scenario/eval/crises.md`.
+**Crisis set rule** (computed from the library, never hand-picked; tightened 2026-11-13, see Approved changes): the S&P fell 10% or more within **21 trading days**. Events within 63 trading days of each other are one episode, named by its adverse event with the deepest fall. The list is published in `scenario/eval/crises.md`; `engine.crisis_events` holds the exact rule.
 
 **Low confidence.** Shown when no past shock is close enough. The threshold is calibrated on dev before the holdout: it's the larger of 0.5 and the 95th percentile of the best cosine for 30 off-topic control questions (in `scenario/eval/controls.txt`, written before the threshold is measured). Low confidence then shows the crisis replay only, with "no close precedent".
 
