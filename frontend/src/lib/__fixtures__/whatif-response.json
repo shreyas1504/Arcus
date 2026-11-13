@@ -2,6 +2,7 @@
   "scenario": "What if China blockades Taiwan?",
   "parsed": {
     "category": "geopolitical_conflict",
+    "nature": null,
     "regions": [
       "china",
       "taiwan"

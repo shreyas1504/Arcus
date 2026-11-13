@@ -9,6 +9,12 @@ This replaces the Cursor plan `arcus_scenario_lab_236c8e25.plan.md`. Both Claude
 | `CURSOR_BRIEF.md` | Step-by-step instructions for Cursor |
 | `STATUS.md` | The shared board: who is doing what, gates passed, handoffs, questions for you |
 
+## Approved changes (newest first)
+| Date | Change | Why |
+|---|---|---|
+| 2026-11-13 | **Adverse vs favorable in the question.** `ParsedScenario.nature` (optional). The parser classifies the question; the engine subtracts `nature_penalty` from precedents of the opposite nature. Default 0; C4 tunes it on dev and keeps it only if it helps. | A real-data run matched "China blockades Taiwan" to the 2025 US–China *truce*. |
+| 2026-11-13 | **Recovery is measured from the trough within the 63-day shock window**, not over the whole 504 days. | Over 504 days a later, unrelated crash (2008 after an Aug 2006 precedent) counted as "never recovered" from a 2006 shock that recovered in 4 days. |
+
 ## 0. Where things stand (checked 2026-11-13)
 
 - Nothing from the plan is built yet. There is no `scenario/` folder, no tests and no assets.

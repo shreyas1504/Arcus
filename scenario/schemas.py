@@ -84,6 +84,7 @@ class ParsedScenario(_Strict):
     """What the language model may return: interpretation only, never numbers."""
 
     category: Category | None = None
+    nature: Nature | None = None  # adverse or favorable, judged from the cause (user-approved 2026-11-13)
     regions: list[Region] = Field(default_factory=list, max_length=8)
     sectors: list[Sector] = Field(default_factory=list, max_length=8)
     companies: list[str] = Field(default_factory=list, max_length=10)

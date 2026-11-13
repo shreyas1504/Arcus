@@ -18,6 +18,7 @@ and purges events whose window overlaps as_of. Paths are masked (NaN) from as_of
 Scoring: score = cosine(query, event embedding)
                + category_bonus * [parsed.category == event.category]
                + context_weight * context_similarity (0 unless enabled by calibration)
+               - nature_penalty * [parsed.nature set and != event.nature]
 Sorted by score descending, ties by event id ascending. Selection keeps up to top_k
 events whose cosine >= similarity_threshold.
 
@@ -148,6 +149,7 @@ class EngineSettings:
     context_weight: float = 0.0
     similarity_threshold: float = 0.5
     top_k: int = TOP_K
+    nature_penalty: float = 0.0  # tuned in C4; 0 keeps the pre-approval behaviour
 
 
 @dataclass(frozen=True)
@@ -222,7 +224,9 @@ def score_precedents(
         cosine = max(-1.0, min(1.0, cosine))
         match = parsed.category is not None and parsed.category == library.events[i].category
         bonus = settings.category_bonus if match else 0.0
-        scored.append(ScoredPrecedent(index=i, similarity=cosine, score=cosine + bonus))
+        mismatch = parsed.nature is not None and parsed.nature != library.events[i].nature
+        penalty = settings.nature_penalty if mismatch else 0.0
+        scored.append(ScoredPrecedent(index=i, similarity=cosine, score=cosine + bonus - penalty))
     return sorted(scored, key=lambda s: (-s.score, library.events[s.index].id))
 
 

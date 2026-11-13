@@ -195,3 +195,17 @@ def test_negative_q_hat_rejected():
             _library([_event("a-shock", "2015-06-01")], [0.0]), E.Calibration(q_hat=-1.0),
             embed=None, parse=None, load_prices=None, sectors=None,
         )
+
+
+def test_nature_penalty_demotes_opposite_events():
+    events = [_event("rescue", "2015-06-01"), _event("crash", "2015-09-01")]
+    events[0] = events[0].model_copy(update={"nature": "favorable"})
+    lib = _library(events, [0.05, -0.05])
+    query = np.array([1.0, 0.9, 0, 0, 0, 0, 0, 0])  # closer to "rescue"
+    parsed = ParsedScenario(search_text="x", nature="adverse")
+    off = E.score_precedents(query, parsed, lib, AS_OF, E.EngineSettings(category_bonus=0.0))
+    on = E.score_precedents(query, parsed, lib, AS_OF, E.EngineSettings(category_bonus=0.0, nature_penalty=0.2))
+    assert [lib.events[s.index].id for s in off] == ["rescue", "crash"]
+    assert [lib.events[s.index].id for s in on] == ["crash", "rescue"]
+    unknown = E.score_precedents(query, ParsedScenario(search_text="x"), lib, AS_OF, E.EngineSettings(nature_penalty=0.2))
+    assert [lib.events[s.index].id for s in unknown] == ["rescue", "crash"]  # no nature parsed: no penalty

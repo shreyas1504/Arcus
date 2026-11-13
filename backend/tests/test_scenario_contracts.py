@@ -143,6 +143,13 @@ def test_category_enum_closed():
         ParsedScenario.model_validate({"category": "alien_invasion", "search_text": "x"})
 
 
+def test_parsed_scenario_nature_is_optional_and_closed():
+    assert ParsedScenario(search_text="x").nature is None
+    assert ParsedScenario(search_text="x", nature="adverse").nature == "adverse"
+    with pytest.raises(ValidationError):
+        ParsedScenario.model_validate({"search_text": "x", "nature": "terrible"})
+
+
 def test_parsed_scenario_cannot_carry_numbers():
     with pytest.raises(ValidationError):
         ParsedScenario.model_validate({"search_text": "oil shock", "expected_return": -0.2})
