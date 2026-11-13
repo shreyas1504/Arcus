@@ -255,5 +255,69 @@ def test_diagnostics_reports_forecast_and_conditional(world, small):
 
 def test_dev_run_never_makes_the_engine_available():
     source = Path(bt.__file__).read_text()
-    assert '"calibration_dev.json"' in source
+    assert '"calibration_forecast_v1_dev.json"' in source
     assert 'EVAL_DIR / "calibration.json").write_text' not in source
+
+
+# ------------------------------------------------------------------ v2 conditional stress test
+
+
+def test_conditional_scores_beat_beta_when_stocks_follow_factors(world, small):
+    cases, _ = _cases(world)
+    rows = [bt.conditional_score(c, 0.1, False) for c in cases]
+    assert np.mean([r.h1_mae for r in rows]) < np.mean([r.h1_base for r in rows])
+    assert np.nanmean([r.h2_rank for r in rows]) > 0.3
+    assert all(r.h3_cases > 0 for r in rows)
+
+
+def test_recovery_known_only_when_observed():
+    truncated = np.array([0.0, -0.05, -0.04] + [np.nan] * 10)
+    assert bt._bucket(truncated) == "unknown"
+    recovered = np.array([0.0, -0.05, 0.01] + [np.nan] * 10)
+    assert bt._bucket(recovered) == "1-21"
+    never = np.array([0.0] + [-0.1] * E.RECOVERY_DAYS)
+    assert bt._bucket(never) == "not_within_504"
+
+
+def test_conditional_uses_pre_event_betas(world, small):
+    library, prices, queries = world
+    clean, _ = _cases(world)
+    target = clean[-1]
+    keep = {pd.Timestamp(d) for d in E._path_dates(target.event.date, E.RECOVERY_DAYS) if d is not None}
+    poisoned = prices.copy()
+    # Poison nothing the scenario needs (the event's own path), everything else after the event.
+    after = (poisoned.index >= pd.Timestamp(target.event.date)) & ~poisoned.index.isin(keep)
+    poisoned.loc[after] = 1e6
+    dirty, _ = bt.build_cases(library, poisoned, SECTORS, queries, only=[target.event.id])
+    for key, betas in target.betas.items():
+        np.testing.assert_allclose(dirty[0].betas[key], betas)
+
+
+def test_tune_v2_refuses_holdout(world, small):
+    cases, _ = _cases(world)
+    cases[0].split = Split.HOLDOUT
+    with pytest.raises(bt.BacktestError, match="holdout"):
+        bt.tune_v2(cases)
+
+
+def _v2_summary(**values) -> dict:
+    base = {"h1_improvement": 0.2, "h2_rank": 0.4, "h3_improvement": 0.2, "h4_within1": 0.8, "h4_exact": 0.5, "h4_exact_base": 0.4}
+    return {k: {"value": v, "ci_low": v, "ci_high": v} for k, v in (base | values).items()}
+
+
+def test_gate_v2_pass_marks():
+    assert all(bt.gate_v2(_v2_summary()).values())
+    failing = bt.gate_v2(_v2_summary(h1_improvement=0.09, h2_rank=0.29, h3_improvement=0.05, h4_exact=0.3))
+    assert not any(failing.values())
+    assert not bt.gate_v2(_v2_summary(h4_within1=0.74))["H4_within_one_bucket_ge_75pct_and_exact_ge_baseline"]
+
+
+def test_control_threshold(world, tmp_path):
+    library, _, _ = world
+    controls = tmp_path / "controls.txt"
+    controls.write_text("# comment\n" + "\n".join(f"question {i}" for i in range(20)) + "\n")
+    rng = np.random.default_rng(5)
+    threshold, ranked = bt.control_threshold(library, lambda texts: rng.normal(size=(len(texts), 16)), controls)
+    assert len(ranked) == 20 and threshold >= 0.5
+    best = [b for _, b in ranked]
+    assert threshold == pytest.approx(max(0.5, float(np.quantile(best, 0.95))))

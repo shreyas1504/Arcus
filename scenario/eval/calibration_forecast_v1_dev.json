@@ -1,0 +1,92 @@
+{
+ "backtest": {
+  "available": false,
+  "coverage_80": null,
+  "gate_passed": null,
+  "holdout_events": null,
+  "mae": null,
+  "mae_best_baseline": null,
+  "rank_corr": null,
+  "results_url": null,
+  "width_ratio": null
+ },
+ "data_sha256": {
+  "library.json": "8ed9d1d0a28d08e137c32e6a2fcb4bfd68ce40016a1857f35b386cb1321944d7",
+  "library.npz": "142e4265564564350be078c53ae880de2df1d16a079124dcb1204a7d1105db0f",
+  "universe manifest": "0a2723a13bd4518bc767379d612973886bff57df390971f8be3e04fea572a2c4"
+ },
+ "dev": {
+  "b1_mae": {
+   "ci_high": 0.06582048910945133,
+   "ci_low": 0.04623226756422821,
+   "value": 0.055373989413287396
+  },
+  "b2_mae": {
+   "ci_high": 0.07113631706942,
+   "ci_low": 0.05007113727258873,
+   "value": 0.060106390860572144
+  },
+  "b3_mae": {
+   "ci_high": 0.0646049355085859,
+   "ci_low": 0.044912042033262746,
+   "value": 0.05425481953844153
+  },
+  "cases": 19776,
+  "coverage_80": {
+   "ci_high": 0.8454186893203882,
+   "ci_low": 0.7525738268608414,
+   "value": 0.8000101132686085
+  },
+  "events": 96,
+  "low_confidence_share": {
+   "ci_high": 0.03125,
+   "ci_low": 0.0,
+   "value": 0.010416666666666666
+  },
+  "mae": {
+   "ci_high": 0.06572367173428438,
+   "ci_low": 0.04685233560177125,
+   "value": 0.05601218016482099
+  },
+  "mae_best_baseline": {
+   "ci_high": 0.06443765023791745,
+   "ci_low": 0.04486582355349454,
+   "value": 0.05425481953844153
+  },
+  "mae_improvement": {
+   "ci_high": 0.026089813692598038,
+   "ci_low": -0.10370064881761787,
+   "value": -0.03239086667930602
+  },
+  "rank_corr": {
+   "ci_high": 0.07418106308970822,
+   "ci_low": -0.018319807753097654,
+   "value": 0.028091069001547602
+  },
+  "width_ratio": {
+   "ci_high": 2.0886633815234306,
+   "ci_low": 1.4454468665585316,
+   "value": 1.7174726145159853
+  }
+ },
+ "dev_gate_preview": {
+  "G1_coverage_75_85": true,
+  "G2_width_ratio_le_0.85": false,
+  "G3_mae_10pct_better": false,
+  "G4_rank_corr_ge_0.30": false
+ },
+ "holdout_ids_sha256": "4914822ab62e9cd8b377c8f26f277b977f902a9f7c899b67baa6f76c3e1e326a",
+ "q_hat": 7.332492237876452,
+ "settings": {
+  "alpha": 1.0,
+  "category_bonus": 0.0,
+  "context_weight": 0.0,
+  "nature_penalty": 0.3,
+  "similarity_threshold": 0.5,
+  "stress_only": false,
+  "top_k": 5,
+  "use_actual": false
+ },
+ "settings_sha256": "646fd3d11491bfd3a2ab734d30e0fd9296c430cddf08e092343d3d50f2f292e2",
+ "stage": "dev"
+}

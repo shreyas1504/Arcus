@@ -1,177 +1,145 @@
-# Scenario Lab backtest results
+# Scenario Lab backtest results (v2: stress test)
 
-## Dev split (1999–2022): tuning and calibration
+Plan v2 measures the claim the page makes: **if a shock like this happens, what does it do to this portfolio?** Each dev event (1999–2022) is the scenario; betas use only prices before it; the estimate uses that event's real factor moves and is compared with the stocks' real moves. Baseline: portfolio beta × the S&P path. Pass marks were fixed in PLAN.md before this run.
 
-**These dev numbers are in-sample for the chosen settings and for the 80% width, so they flatter the method. The honest test is the one-time 2023+ holdout (C5).**
+**Dev results are in-sample for the two tuned choices (ridge strength, stress betas). The one-time 2023+ holdout (C5) is the gate.** The forecast results from C4 are kept in `results_forecast_v1.md`.
 
-- Events scored: **96**; cases (event × portfolio): 19776. Skipped: 16 (fewer than 15 earlier precedents, mostly 1999–2002).
-- Portfolios per event: 200 random equal-weight (5–15 stocks) plus archetypes, from a universe of 125 US large caps.
-- Settings grid: 360 combinations; chosen by lowest event-weighted MAE.
-- Chosen settings: `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.3, "similarity_threshold": 0.5, "stress_only": false, "top_k": 5, "use_actual": false}`
-- Calibrated q_hat (80% width multiplier): **7.332**
+- Events: **96** (16 skipped, mostly 1999–2002 with too few precedents); portfolios per event: 200 random + archetypes from 125 US large caps.
+- Tuned on dev: alpha = 0.1, stress betas = False (by H1 MAE, then H2; all four shown below).
+- Recovery-time cases with a known real recovery: 19776 across 96 events.
 
-| Metric (event-weighted, 90% bootstrap CI) | Tuned | Untuned defaults | No-parse fallback |
+| Gate v2 | Pass mark | Dev result [90% CI] | |
 |---|---|---|---|
-| G1 · 80% range coverage (target 75–85%) | 80.0% [75.3%, 84.5%] | 80.0% [75.7%, 84.1%] | 81.8% [77.3%, 86.1%] |
-| G2 · width ÷ random-window width (≤ 0.85) | 1.72 [1.45, 2.09] | 2.14 [1.96, 2.24] | 2.01 [1.81, 2.26] |
-| Typical-outcome MAE | 5.6% [4.7%, 6.6%] | 6.1% [5.2%, 7.2%] | 5.7% [4.7%, 6.6%] |
-| Best baseline MAE | 5.4% [4.5%, 6.4%] | | |
-| G3 · MAE improvement vs best baseline (≥ 10%) | -3.2% [-10.4%, 2.6%] | -13.1% [-22.6%, -6.0%] | -4.3% [-12.5%, 2.3%] |
-| G4 · rank correlation across stocks (≥ 0.30) | 0.03 [-0.02, 0.07] | 0.01 [-0.02, 0.04] | 0.02 [-0.03, 0.07] |
-| Low-confidence share | 1.0% [0.0%, 3.1%] | 1.0% [0.0%, 3.1%] | 1.0% [0.0%, 3.1%] |
+| H1 · 21-day portfolio MAE, factor vs beta × S&P | ≥ 10% lower | 1.7% [1.6%, 1.8%] vs 2.0% [1.9%, 2.2%]: 19.0% [15.9%, 22.0%] lower | pass |
+| H2 · holding ranking (Spearman) | ≥ 0.30 | 0.46 [0.44, 0.49] | pass |
+| H3 · worst fall within 63 days, MAE | ≥ 10% lower | 1.5% [1.4%, 1.7%] vs 2.0% [1.8%, 2.2%]: 22.0% [17.0%, 26.7%] lower | pass |
+| H4 · recovery time, within one bucket | ≥ 75% and exact ≥ baseline | within one 94.9% [93.4%, 96.3%]; exact 71.8% [69.4%, 74.2%] vs baseline 64.8% [61.1%, 68.5%] | pass |
 
-Baselines (MAE): 1 · average of all past events 5.5% [4.6%, 6.6%]; 2 · beta × category-average S&P move 6.0% [5.0%, 7.1%]; 3 · random 21-day window 5.4% [4.5%, 6.5%]. Baseline 4 (language model guessing) is run on the holdout only.
+H4 buckets: never fell, 1–21, 22–63, 64–126, 127–252, 253–504 trading days, not within 504. Only cases whose real recovery is known (recovered, or observed for all 504 days) are scored.
 
-Gate preview on dev (not the gate; the holdout is): G1_coverage_75_85 pass, G2_width_ratio_le_0.85 FAIL, G3_mae_10pct_better FAIL, G4_rank_corr_ge_0.30 FAIL
+### Ridge strength and stress betas (dev)
+| alpha | stress betas | H1 MAE | H2 rank |
+|---|---|---|---|
+| 0.1 | False | 0.0165 | 0.464 |
+| 0.1 | True | 0.0176 | 0.413 |
+| 1.0 | False | 0.0236 | 0.440 |
+| 1.0 | True | 0.0241 | 0.399 |
 
-### Five best settings on dev MAE
-| MAE | settings |
+### Low-confidence threshold (off-topic controls)
+Threshold = max(0.5, 95th percentile of the controls' best cosine) = **0.523**. Real dev questions (event triggers) above it: 96% (median best cosine 0.643).
+
+| Highest-scoring controls | best cosine |
 |---|---|
-| 0.0560 | `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.3, "similarity_threshold": 0.5, "stress_only": false, "top_k": 5, "use_actual": false}` |
-| 0.0560 | `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.3, "similarity_threshold": 0.5, "stress_only": true, "top_k": 5, "use_actual": false}` |
-| 0.0562 | `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.0, "similarity_threshold": 0.65, "stress_only": false, "top_k": 5, "use_actual": false}` |
-| 0.0562 | `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.0, "similarity_threshold": 0.65, "stress_only": true, "top_k": 5, "use_actual": false}` |
-| 0.0564 | `{"alpha": 1.0, "category_bonus": 0.0, "nature_penalty": 0.1, "similarity_threshold": 0.5, "stress_only": true, "top_k": 5, "use_actual": false}` |
+| What is the rule of offside in football? | 0.536 |
+| What if aliens land in Paris and ask for coffee? | 0.528 |
+| How many moons does Jupiter have? | 0.516 |
+| Why is the sky blue? | 0.516 |
+| What if it rains chocolate tomorrow? | 0.512 |
 
-### Coverage by category (dev)
-| Category | Events | Coverage | MAE |
-|---|---|---|---|
-| disaster_supply | 8 | 94% | 3.5% |
-| election_political | 6 | 85% | 4.0% |
-| energy_oil | 8 | 88% | 3.6% |
-| financial_credit | 11 | 45% | 12.9% |
-| fiscal_debt | 9 | 90% | 4.6% |
-| geopolitical_conflict | 8 | 88% | 3.2% |
-| monetary_policy | 17 | 83% | 6.3% |
-| pandemic_health | 10 | 74% | 8.3% |
-| tech_sector | 3 | 63% | 3.3% |
-| terrorism | 10 | 85% | 2.8% |
-| trade_tariffs | 6 | 86% | 3.2% |
-
-### Per event (dev, tuned settings)
-| Event | Coverage | MAE | Best baseline MAE | Rank | Low conf. | Precedents used |
-|---|---|---|---|---|---|---|
-| worldcom-bankruptcy-2002 | 27% | 10.0% | 9.1% | -0.40 |  | enron-bankruptcy-2001, argentina-debt-default-2001, china-wto-approval-2001, us-china-wto-deal-1999, microsoft-breakup-overturned-2001 |
-| bali-bombing-2002 | 54% | 6.8% | 5.4% | 0.17 | yes | sept-11-attacks-2001, afghanistan-campaign-2001, fed-hike-2000-05, enron-bankruptcy-2001, opec-output-cut-1999 |
-| sars-global-alert-2003 | 16% | 6.2% | 5.8% | 0.21 |  | afghanistan-campaign-2001, bali-bombing-2002 |
-| iraq-war-begins-2003 | 100% | 2.8% | 1.8% | 0.22 |  | afghanistan-campaign-2001, sept-11-attacks-2001, bali-bombing-2002, us-election-contested-2000, fed-hike-2000-05 |
-| sars-contained-2003 | 100% | 1.7% | 1.8% | 0.34 |  | fed-post-911-cut-2001, sars-global-alert-2003, bali-bombing-2002, sept-11-attacks-2001, afghanistan-campaign-2001 |
-| northeast-blackout-2003 | 96% | 1.8% | 1.6% | 0.24 |  | sept-11-attacks-2001, afghanistan-campaign-2001, opec-output-cut-1999, fed-post-911-cut-2001, microsoft-breakup-overturned-2001 |
-| istanbul-bombings-2003 | 17% | 5.9% | 3.2% | -0.25 |  | sept-11-attacks-2001, bali-bombing-2002, fed-post-911-cut-2001 |
-| us-steel-tariffs-repealed-2003 | 33% | 5.7% | 3.3% | -0.25 |  | us-china-wto-deal-1999, china-wto-approval-2001, gore-concedes-2000, fed-post-911-cut-2001, microsoft-breakup-overturned-2001 |
-| madrid-train-bombings-2004 | 97% | 1.6% | 1.5% | 0.18 |  | bali-bombing-2002, istanbul-bombings-2003, northeast-blackout-2003, sept-11-attacks-2001 |
-| fed-first-hike-2004 | 87% | 3.3% | 4.4% | -0.42 |  | fed-hike-2000-05, fed-post-911-cut-2001, fed-intermeeting-cut-2001-01 |
-| google-ipo-2004 | 83% | 2.5% | 1.9% | 0.23 |  | enron-bankruptcy-2001 |
-| bush-reelected-2004 | 70% | 5.5% | 3.7% | 0.06 |  | gore-concedes-2000, us-steel-tariffs-repealed-2003, fed-post-911-cut-2001, us-china-wto-deal-1999, sars-contained-2003 |
-| indian-ocean-tsunami-2004 | 98% | 6.0% | 4.7% | -0.39 |  | bali-bombing-2002, northeast-blackout-2003, sars-global-alert-2003, istanbul-bombings-2003, sept-11-attacks-2001 |
-| london-bombings-2005 | 100% | 3.1% | 2.4% | 0.26 |  | istanbul-bombings-2003, sept-11-attacks-2001, madrid-train-bombings-2004, bali-bombing-2002, indian-ocean-tsunami-2004 |
-| yuan-revaluation-2005 | 100% | 2.1% | 2.4% | -0.24 |  | us-china-wto-deal-1999, china-wto-approval-2001, us-steel-tariffs-repealed-2003, fed-post-911-cut-2001, argentina-debt-default-2001 |
-| hurricane-katrina-2005 | 91% | 3.4% | 1.7% | -0.11 |  | indian-ocean-tsunami-2004, northeast-blackout-2003, sept-11-attacks-2001, bali-bombing-2002 |
-| h5n1-turkey-2005 | 97% | 2.9% | 2.3% | 0.40 |  | sars-global-alert-2003, afghanistan-campaign-2001, indian-ocean-tsunami-2004, istanbul-bombings-2003, bali-bombing-2002 |
-| israel-lebanon-war-2006 | 57% | 3.7% | 2.6% | -0.14 |  | afghanistan-campaign-2001 |
-| uk-airline-plot-2006 | 93% | 1.9% | 1.8% | 0.16 |  | london-bombings-2005, istanbul-bombings-2003, sept-11-attacks-2001, northeast-blackout-2003, afghanistan-campaign-2001 |
-| north-korea-nuclear-test-2006 | 100% | 1.6% | 1.5% | 0.07 |  | intel-revenue-warning-2000, sars-global-alert-2003, northeast-blackout-2003, indian-ocean-tsunami-2004, opec-output-cut-1999 |
-| iphone-unveiled-2007 | 35% | 4.7% | 1.9% | -0.22 |  | aol-time-warner-merger-2000 |
-| bnp-paribas-funds-suspended-2007 | 98% | 2.2% | 4.2% | 0.00 |  | argentina-debt-default-2001, intel-revenue-warning-2000, microsoft-talks-collapse-2000, enron-bankruptcy-2001, opec-output-cut-1999 |
-| fed-discount-rate-cut-2007-08 | 69% | 6.0% | 3.1% | -0.04 |  | fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, yuan-revaluation-2005, fed-hike-2000-05, fed-first-hike-2004 |
-| fed-emergency-cut-2008-01 | 90% | 3.2% | 2.3% | -0.05 |  | fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-discount-rate-cut-2007-08, yuan-revaluation-2005, fed-hike-2000-05 |
-| bear-stearns-rescue-2008 | 94% | 2.2% | 1.5% | -0.02 |  | fed-discount-rate-cut-2007-08, fed-intermeeting-cut-2001-01, google-ipo-2004, fed-post-911-cut-2001, china-wto-approval-2001 |
-| russia-georgia-war-2008 | 92% | 2.3% | 2.4% | 0.07 |  | iraq-war-begins-2003, argentina-debt-default-2001, afghanistan-campaign-2001 |
-| fannie-freddie-conservatorship-2008 | 0% | 16.4% | 15.3% | 0.03 |  | bear-stearns-rescue-2008, fed-first-hike-2004, fed-hike-2000-05 |
-| lehman-bankruptcy-2008 | 24% | 20.6% | 20.2% | -0.27 |  | enron-bankruptcy-2001, worldcom-bankruptcy-2002, bnp-paribas-funds-suspended-2007, argentina-debt-default-2001, opec-output-cut-1999 |
-| aig-rescue-loan-2008 | 0% | 28.0% | 26.9% | -0.37 |  | fed-emergency-cut-2008-01, bear-stearns-rescue-2008, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-discount-rate-cut-2007-08 |
-| house-rejects-rescue-plan-2008 | 12% | 28.3% | 31.0% | 0.06 |  | bnp-paribas-funds-suspended-2007, us-election-contested-2000, microsoft-talks-collapse-2000, fed-emergency-cut-2008-01, fed-intermeeting-cut-2001-01 |
-| house-passes-rescue-plan-2008 | 3% | 14.4% | 13.6% | -0.15 |  | bear-stearns-rescue-2008, fed-emergency-cut-2008-01, fed-discount-rate-cut-2007-08, microsoft-breakup-overturned-2001, fed-post-911-cut-2001 |
-| coordinated-rate-cut-2008-10 | 92% | 6.5% | 5.6% | -0.03 |  | fed-discount-rate-cut-2007-08, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-emergency-cut-2008-01, yuan-revaluation-2005 |
-| fed-mbs-purchases-2008-11 | 70% | 3.5% | 3.5% | 0.20 |  | bear-stearns-rescue-2008, fed-discount-rate-cut-2007-08, fed-post-911-cut-2001, fed-emergency-cut-2008-01, fed-intermeeting-cut-2001-01 |
-| fed-zero-rates-2008-12 | 97% | 4.0% | 3.0% | -0.13 |  | fed-emergency-cut-2008-01, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-discount-rate-cut-2007-08, aig-rescue-loan-2008 |
-| fed-treasury-purchases-2009-03 | 71% | 14.1% | 12.7% | -0.41 |  | aig-rescue-loan-2008, fed-mbs-purchases-2008-11, bear-stearns-rescue-2008, fed-discount-rate-cut-2007-08, fed-post-911-cut-2001 |
-| swine-flu-emergency-2009 | 99% | 3.5% | 2.0% | -0.11 |  | sars-global-alert-2003, h5n1-turkey-2005, indian-ocean-tsunami-2004, afghanistan-campaign-2001, sars-contained-2003 |
-| bank-stress-test-results-2009 | 97% | 5.5% | 2.6% | -0.05 |  | aig-rescue-loan-2008, fed-mbs-purchases-2008-11, coordinated-rate-cut-2008-10, fed-zero-rates-2008-12, bear-stearns-rescue-2008 |
-| h1n1-pandemic-declared-2009 | 96% | 8.3% | 6.0% | -0.22 |  | sars-global-alert-2003, h5n1-turkey-2005, indian-ocean-tsunami-2004, afghanistan-campaign-2001, fed-hike-2000-05 |
-| us-tyre-tariffs-china-2009 | 96% | 1.8% | 1.7% | -0.02 |  | iraq-war-begins-2003, us-steel-tariffs-repealed-2003, us-china-wto-deal-1999, yuan-revaluation-2005, china-wto-approval-2001 |
-| h1n1-vaccines-approved-2009 | 100% | 1.3% | 1.2% | -0.13 |  | sars-contained-2003, us-steel-tariffs-repealed-2003, google-ipo-2004, china-wto-approval-2001, aig-rescue-loan-2008 |
-| iceland-ash-cloud-2010 | 72% | 5.2% | 3.7% | -0.16 |  | uk-airline-plot-2006, london-bombings-2005, indian-ocean-tsunami-2004, istanbul-bombings-2003, northeast-blackout-2003 |
-| deepwater-horizon-2010 | 42% | 7.7% | 7.2% | -0.27 |  | hurricane-katrina-2005, indian-ocean-tsunami-2004, northeast-blackout-2003, bali-bombing-2002 |
-| greece-junk-downgrade-2010 | 23% | 8.4% | 9.2% | 0.34 |  | intel-revenue-warning-2000, bnp-paribas-funds-suspended-2007, argentina-debt-default-2001, opec-output-cut-1999, coordinated-rate-cut-2008-10 |
-| greece-first-bailout-2010 | 100% | 6.0% | 7.5% | 0.39 |  | aig-rescue-loan-2008, coordinated-rate-cut-2008-10, house-passes-rescue-plan-2008, china-wto-approval-2001, bear-stearns-rescue-2008 |
-| flash-crash-2010 | 54% | 5.7% | 1.4% | 0.19 |  | lehman-bankruptcy-2008, bnp-paribas-funds-suspended-2007, sept-11-attacks-2001, enron-bankruptcy-2001, intel-revenue-warning-2000 |
-| uk-hung-parliament-2010 | 100% | 1.7% | 4.9% | 0.27 |  | house-rejects-rescue-plan-2008, us-election-contested-2000, bush-reelected-2004, house-passes-rescue-plan-2008, gore-concedes-2000 |
-| eu-750bn-package-2010 | 100% | 1.6% | 2.8% | 0.10 |  | house-passes-rescue-plan-2008, aig-rescue-loan-2008, coordinated-rate-cut-2008-10, fed-mbs-purchases-2008-11, fed-treasury-purchases-2009-03 |
-| yuan-flexibility-2010 | 100% | 2.4% | 3.2% | -0.30 |  | yuan-revaluation-2005, coordinated-rate-cut-2008-10, fed-zero-rates-2008-12, fed-treasury-purchases-2009-03, fed-discount-rate-cut-2007-08 |
-| fed-qe2-2010-11 | 100% | 3.0% | 1.7% | 0.02 |  | fed-treasury-purchases-2009-03, fed-mbs-purchases-2008-11, aig-rescue-loan-2008, fed-emergency-cut-2008-01, fed-post-911-cut-2001 |
-| yeonpyeong-shelling-2010 | 100% | 4.0% | 3.8% | 0.02 |  | indian-ocean-tsunami-2004, north-korea-nuclear-test-2006, london-bombings-2005, israel-lebanon-war-2006, istanbul-bombings-2003 |
-| libya-oil-shutdowns-2011 | 100% | 1.9% | 2.1% | 0.45 |  | opec-output-cut-1999, intel-revenue-warning-2000, iceland-ash-cloud-2010, flash-crash-2010, uk-airline-plot-2006 |
-| japan-earthquake-tsunami-2011 | 100% | 1.7% | 1.5% | 0.18 |  | indian-ocean-tsunami-2004, northeast-blackout-2003, yeonpyeong-shelling-2010, iceland-ash-cloud-2010, north-korea-nuclear-test-2006 |
-| bin-laden-killed-2011 | 100% | 1.9% | 1.3% | -0.39 |  | us-steel-tariffs-repealed-2003, fed-post-911-cut-2001, sars-contained-2003, bush-reelected-2004, gore-concedes-2000 |
-| iea-oil-stock-release-2011 | 100% | 4.8% | 1.9% | -0.08 |  | fed-treasury-purchases-2009-03, us-china-wto-deal-1999, greece-first-bailout-2010, house-passes-rescue-plan-2008, fed-post-911-cut-2001 |
-| us-debt-ceiling-deal-2011 | 100% | 2.5% | 1.8% | 0.62 |  | house-passes-rescue-plan-2008, coordinated-rate-cut-2008-10, greece-first-bailout-2010, us-china-wto-deal-1999, yuan-flexibility-2010 |
-| us-credit-downgrade-2011 | 100% | 4.1% | 2.7% | 0.55 |  | greece-junk-downgrade-2010, flash-crash-2010, bnp-paribas-funds-suspended-2007, fed-discount-rate-cut-2007-08, fed-emergency-cut-2008-01 |
-| thailand-floods-2011 | 96% | 4.9% | 1.8% | 0.13 |  | libya-oil-shutdowns-2011, indian-ocean-tsunami-2004, iceland-ash-cloud-2010, japan-earthquake-tsunami-2011, northeast-blackout-2003 |
-| eurozone-summit-deal-2011-10 | 98% | 3.0% | 1.2% | 0.22 |  | greece-first-bailout-2010, eu-750bn-package-2010, coordinated-rate-cut-2008-10, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001 |
-| eu-iran-oil-embargo-2012 | 85% | 5.3% | 1.8% | -0.18 |  | opec-output-cut-1999, libya-oil-shutdowns-2011, iceland-ash-cloud-2010, argentina-debt-default-2001, eu-750bn-package-2010 |
-| greek-election-may-2012 | 100% | 2.0% | 3.1% | 0.73 |  | greece-junk-downgrade-2010, uk-hung-parliament-2010, house-rejects-rescue-plan-2008, flash-crash-2010, greece-first-bailout-2010 |
-| greek-election-june-2012 | 97% | 5.2% | 1.5% | 0.30 |  | greece-first-bailout-2010, eu-750bn-package-2010, eurozone-summit-deal-2011-10, uk-hung-parliament-2010 |
-| draghi-whatever-it-takes-2012 | 36% | 8.6% | 3.2% | -0.55 |  | greece-first-bailout-2010, eurozone-summit-deal-2011-10, eu-750bn-package-2010, yuan-flexibility-2010, coordinated-rate-cut-2008-10 |
-| fed-qe3-2012-09 | 100% | 2.7% | 1.5% | -0.00 |  | fed-treasury-purchases-2009-03, fed-qe2-2010-11, fed-mbs-purchases-2008-11, aig-rescue-loan-2008, bear-stearns-rescue-2008 |
-| boston-marathon-bombing-2013 | 95% | 1.9% | 2.0% | 0.25 |  | istanbul-bombings-2003, madrid-train-bombings-2004, london-bombings-2005, bali-bombing-2002, sept-11-attacks-2001 |
-| us-shutdown-2013 | 100% | 6.9% | 4.0% | 0.14 |  | house-rejects-rescue-plan-2008, flash-crash-2010, northeast-blackout-2003, microsoft-talks-collapse-2000, thailand-floods-2011 |
-| fed-taper-announcement-2013 | 98% | 6.1% | 2.0% | -0.19 |  | fed-hike-2000-05, fed-first-hike-2004, us-credit-downgrade-2011, greece-junk-downgrade-2010, flash-crash-2010 |
-| crimea-intervention-2014 | 100% | 2.6% | 1.2% | -0.22 |  | russia-georgia-war-2008, lehman-bankruptcy-2008, eu-iran-oil-embargo-2012, greece-first-bailout-2010, eu-750bn-package-2010 |
-| opec-no-cut-2014 | 86% | 2.1% | 1.4% | -0.15 |  | opec-output-cut-1999, us-debt-ceiling-deal-2011, iea-oil-stock-release-2011 |
-| greece-bailout-referendum-2015 | 100% | 6.4% | 2.2% | 0.47 |  | greek-election-may-2012, house-rejects-rescue-plan-2008, flash-crash-2010, greece-junk-downgrade-2010, us-election-contested-2000 |
-| paris-attacks-2015 | 90% | 2.2% | 1.7% | -0.31 |  | bali-bombing-2002, istanbul-bombings-2003, london-bombings-2005, madrid-train-bombings-2004, boston-marathon-bombing-2013 |
-| fed-first-hike-2015 | 99% | 8.4% | 7.8% | 0.32 |  | fed-hike-2000-05, fed-first-hike-2004, fed-taper-announcement-2013, us-shutdown-2013, flash-crash-2010 |
-| brussels-bombings-2016 | 100% | 1.3% | 1.2% | 0.23 |  | madrid-train-bombings-2004, london-bombings-2005, istanbul-bombings-2003, uk-airline-plot-2006, boston-marathon-bombing-2013 |
-| brexit-referendum-2016 | 45% | 7.4% | 1.9% | 0.28 |  | greece-bailout-referendum-2015, uk-hung-parliament-2010, greek-election-may-2012, us-election-contested-2000, opec-output-cut-1999 |
-| manchester-arena-bombing-2017 | 100% | 1.5% | 1.4% | 0.12 |  | boston-marathon-bombing-2013, istanbul-bombings-2003, bali-bombing-2002, deepwater-horizon-2010, uk-airline-plot-2006 |
-| hurricane-harvey-2017 | 100% | 2.6% | 2.2% | -0.03 |  | hurricane-katrina-2005, deepwater-horizon-2010, northeast-blackout-2003, japan-earthquake-tsunami-2011, indian-ocean-tsunami-2004 |
-| cambridge-analytica-facebook-2018 | 70% | 2.7% | 1.6% | -0.42 |  | uk-airline-plot-2006, bank-stress-test-results-2009 |
-| section-301-china-tariffs-2018 | 96% | 2.6% | 1.8% | 0.11 |  | us-tyre-tariffs-china-2009, iraq-war-begins-2003, fed-taper-announcement-2013, house-rejects-rescue-plan-2008, sept-11-attacks-2001 |
-| italy-government-crisis-2018 | 99% | 2.1% | 1.5% | 0.47 |  | greece-bailout-referendum-2015, bnp-paribas-funds-suspended-2007, flash-crash-2010, argentina-debt-default-2001, libya-oil-shutdowns-2011 |
-| fed-insurance-cut-2019 | 89% | 6.6% | 4.3% | -0.37 |  | fed-emergency-cut-2008-01, fed-zero-rates-2008-12, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-discount-rate-cut-2007-08 |
-| abqaiq-attack-2019 | 100% | 1.6% | 1.9% | 0.02 |  | libya-oil-shutdowns-2011, yeonpyeong-shelling-2010, istanbul-bombings-2003, deepwater-horizon-2010, israel-lebanon-war-2006 |
-| us-china-phase-one-2019 | 92% | 4.6% | 2.5% | 0.15 |  | us-china-wto-deal-1999, yuan-flexibility-2010, yuan-revaluation-2005, us-debt-ceiling-deal-2011, china-wto-approval-2001 |
-| soleimani-strike-2020 | 90% | 2.4% | 1.8% | 0.19 |  | iraq-war-begins-2003, manchester-arena-bombing-2017, afghanistan-campaign-2001, abqaiq-attack-2019, us-tyre-tariffs-china-2009 |
-| covid-italy-lockdown-2020 | 0% | 38.4% | 35.0% | 0.29 |  | sars-global-alert-2003, h5n1-turkey-2005, swine-flu-emergency-2009, h1n1-pandemic-declared-2009, iceland-ash-cloud-2010 |
-| fed-emergency-cut-2020-03-03 | 38% | 16.7% | 18.2% | 0.41 |  | fed-insurance-cut-2019, fed-emergency-cut-2008-01, fed-intermeeting-cut-2001-01, fed-post-911-cut-2001, fed-zero-rates-2008-12 |
-| who-declares-pandemic-2020 | 83% | 7.4% | 4.3% | 0.14 |  | swine-flu-emergency-2009, h1n1-pandemic-declared-2009, sars-global-alert-2003, h5n1-turkey-2005, afghanistan-campaign-2001 |
-| fed-zero-rates-2020-03-16 | 88% | 7.7% | 4.4% | 0.27 |  | fed-insurance-cut-2019, fed-emergency-cut-2008-01, fed-zero-rates-2008-12, fed-post-911-cut-2001, fed-intermeeting-cut-2001-01 |
-| opec-plus-record-cut-2020 | 98% | 3.1% | 3.0% | 0.25 |  | iea-oil-stock-release-2011, us-debt-ceiling-deal-2011, eu-750bn-package-2010, us-china-wto-deal-1999, us-china-phase-one-2019 |
-| pfizer-vaccine-efficacy-2020 | 54% | 10.5% | 10.4% | -0.51 |  | h1n1-vaccines-approved-2009, sars-contained-2003, fed-zero-rates-2020-03-16, fed-emergency-cut-2020-03-03, aig-rescue-loan-2008 |
-| ever-given-suez-2021 | 100% | 2.2% | 3.4% | -0.22 |  | london-bombings-2005, indian-ocean-tsunami-2004, yeonpyeong-shelling-2010, bali-bombing-2002, deepwater-horizon-2010 |
-| omicron-variant-2021 | 100% | 2.3% | 1.8% | 0.15 |  | who-declares-pandemic-2020, sars-global-alert-2003, h1n1-pandemic-declared-2009, swine-flu-emergency-2009, h5n1-turkey-2005 |
-| russia-invades-ukraine-2022 | 63% | 6.3% | 5.4% | -0.26 |  | crimea-intervention-2014, iraq-war-begins-2003, russia-georgia-war-2008, soleimani-strike-2020, afghanistan-campaign-2001 |
-| us-russian-oil-ban-2022 | 96% | 2.5% | 3.1% | 0.04 |  | eu-iran-oil-embargo-2012, section-301-china-tariffs-2018, opec-output-cut-1999, crimea-intervention-2014, us-tyre-tariffs-china-2009 |
-| fed-liftoff-hike-2022 | 89% | 4.9% | 2.8% | 0.42 |  | fed-first-hike-2015, fed-first-hike-2004, fed-hike-2000-05, fed-taper-announcement-2013, section-301-china-tariffs-2018 |
-| fed-75bp-hike-2022 | 100% | 2.4% | 2.4% | 0.19 |  | fed-liftoff-hike-2022, fed-first-hike-2015, fed-first-hike-2004, fed-hike-2000-05, fed-taper-announcement-2013 |
-| uk-mini-budget-2022 | 89% | 2.8% | 2.6% | -0.46 |  | fed-liftoff-hike-2022, fed-taper-announcement-2013, fed-75bp-hike-2022, brexit-referendum-2016, fed-hike-2000-05 |
-| boe-gilt-intervention-2022 | 84% | 8.8% | 7.1% | -0.14 |  | fed-treasury-purchases-2009-03, coordinated-rate-cut-2008-10, yuan-flexibility-2010, fed-qe2-2010-11, fed-mbs-purchases-2008-11 |
-
-### Skipped events
-- opec-output-cut-1999: only 0 eligible precedents
-- us-china-wto-deal-1999: only 1 eligible precedents
-- aol-time-warner-merger-2000: only 1 eligible precedents
-- microsoft-talks-collapse-2000: only 2 eligible precedents
-- fed-hike-2000-05: only 3 eligible precedents
-- intel-revenue-warning-2000: only 5 eligible precedents
-- us-election-contested-2000: only 5 eligible precedents
-- gore-concedes-2000: only 5 eligible precedents
-- fed-intermeeting-cut-2001-01: only 6 eligible precedents
-- microsoft-breakup-overturned-2001: only 9 eligible precedents
-- fed-post-911-cut-2001: only 9 eligible precedents
-- sept-11-attacks-2001: only 9 eligible precedents
-- afghanistan-campaign-2001: only 10 eligible precedents
-- china-wto-approval-2001: only 10 eligible precedents
-- enron-bankruptcy-2001: only 10 eligible precedents
-- argentina-debt-default-2001: only 12 eligible precedents
+### Per event (dev)
+| Event | H1 MAE | baseline | H2 rank | H3 MAE | baseline | H4 within one | H4 exact | baseline exact |
+|---|---|---|---|---|---|---|---|---|
+| worldcom-bankruptcy-2002 | 3.2% | 4.1% | 0.12 | 3.1% | 4.5% | 97.6% | 45.1% | 35.4% |
+| bali-bombing-2002 | 2.8% | 3.2% | 0.41 | — | — | 92.7% | 67.5% | 66.5% |
+| sars-global-alert-2003 | 1.8% | 2.3% | 0.46 | 0.8% | 0.9% | 99.5% | 72.3% | 68.9% |
+| iraq-war-begins-2003 | 1.6% | 1.7% | 0.45 | 0.8% | 0.9% | 100.0% | 85.0% | 85.0% |
+| sars-contained-2003 | 1.8% | 2.1% | 0.41 | — | — | 65.5% | 31.6% | 49.5% |
+| northeast-blackout-2003 | 1.4% | 1.6% | 0.45 | 1.1% | 1.1% | 84.0% | 40.8% | 25.7% |
+| istanbul-bombings-2003 | 1.6% | 2.2% | 0.36 | 1.2% | 1.3% | 100.0% | 96.6% | 96.6% |
+| us-steel-tariffs-repealed-2003 | 1.6% | 2.0% | 0.28 | 1.2% | 1.3% | 99.0% | 76.2% | 66.5% |
+| madrid-train-bombings-2004 | 1.6% | 1.7% | 0.33 | 1.9% | 1.8% | 92.7% | 52.4% | 43.7% |
+| fed-first-hike-2004 | 1.5% | 1.7% | 0.57 | 1.7% | 1.9% | 100.0% | 64.1% | 31.6% |
+| google-ipo-2004 | 1.5% | 1.6% | 0.30 | 1.2% | 1.3% | 98.5% | 71.8% | 67.5% |
+| bush-reelected-2004 | 1.5% | 1.6% | -0.00 | 1.2% | 1.4% | 89.3% | 88.3% | 87.4% |
+| indian-ocean-tsunami-2004 | 1.2% | 1.3% | 0.46 | — | — | 83.5% | 61.2% | 62.6% |
+| london-bombings-2005 | 1.7% | 2.0% | 0.23 | 1.1% | 1.3% | 81.6% | 62.6% | 61.7% |
+| yuan-revaluation-2005 | 1.3% | 1.3% | 0.25 | 1.1% | 1.4% | 88.3% | 59.7% | 59.2% |
+| hurricane-katrina-2005 | 1.7% | 2.0% | 0.26 | 1.0% | 1.4% | 83.5% | 74.3% | 74.3% |
+| h5n1-turkey-2005 | 2.0% | 1.9% | 0.51 | 0.8% | 0.9% | 100.0% | 74.8% | 65.0% |
+| israel-lebanon-war-2006 | 1.6% | 1.9% | 0.42 | 0.8% | 0.9% | 100.0% | 73.3% | 66.0% |
+| uk-airline-plot-2006 | 1.5% | 1.9% | 0.41 | 0.9% | 1.1% | 99.5% | 73.3% | 37.4% |
+| north-korea-nuclear-test-2006 | 1.4% | 1.5% | 0.45 | 1.0% | 1.3% | 91.7% | 56.3% | 44.7% |
+| iphone-unveiled-2007 | 1.4% | 1.6% | 0.39 | 0.8% | 0.8% | 85.4% | 68.0% | 68.9% |
+| bnp-paribas-funds-suspended-2007 | 1.2% | 1.3% | 0.26 | 0.8% | 0.8% | 98.1% | 63.6% | 63.6% |
+| fed-discount-rate-cut-2007-08 | 1.5% | 1.6% | 0.50 | 1.4% | 1.7% | 83.0% | 77.7% | 86.9% |
+| fed-emergency-cut-2008-01 | 1.9% | 2.2% | 0.52 | 1.4% | 1.8% | 93.2% | 66.5% | 63.6% |
+| bear-stearns-rescue-2008 | 1.6% | 1.7% | 0.27 | 1.1% | 1.3% | 99.0% | 81.6% | 81.6% |
+| russia-georgia-war-2008 | 2.2% | 2.6% | 0.65 | 3.1% | 3.3% | 100.0% | 62.1% | 19.9% |
+| fannie-freddie-conservatorship-2008 | 2.6% | 2.9% | 0.58 | 3.5% | 3.5% | 99.5% | 77.2% | 84.5% |
+| lehman-bankruptcy-2008 | 2.6% | 2.8% | 0.44 | 3.4% | 3.1% | 100.0% | 68.9% | 69.9% |
+| aig-rescue-loan-2008 | 2.6% | 3.0% | 0.48 | 3.4% | 3.1% | 99.0% | 72.3% | 71.8% |
+| house-rejects-rescue-plan-2008 | 2.4% | 3.0% | 0.55 | 3.3% | 3.0% | 99.5% | 75.2% | 74.8% |
+| house-passes-rescue-plan-2008 | 2.5% | 2.6% | 0.13 | 3.1% | 3.0% | 99.0% | 59.7% | 27.2% |
+| coordinated-rate-cut-2008-10 | 2.9% | 2.8% | 0.01 | 3.1% | 2.8% | 80.1% | 70.9% | 70.9% |
+| fed-mbs-purchases-2008-11 | 3.1% | 3.4% | 0.31 | 3.0% | 3.4% | 77.7% | 68.4% | 68.0% |
+| fed-zero-rates-2008-12 | 2.8% | 3.1% | 0.36 | 3.4% | 3.8% | 100.0% | 73.3% | 72.3% |
+| fed-treasury-purchases-2009-03 | 3.5% | 4.5% | 0.77 | 1.7% | 2.2% | 100.0% | 77.7% | 76.7% |
+| swine-flu-emergency-2009 | 1.6% | 1.7% | 0.42 | 1.8% | 2.3% | 100.0% | 79.6% | 79.6% |
+| bank-stress-test-results-2009 | 2.0% | 2.0% | 0.22 | 1.5% | 2.0% | 99.5% | 54.9% | 38.8% |
+| h1n1-pandemic-declared-2009 | 1.6% | 2.0% | 0.79 | 1.2% | 1.8% | 100.0% | 93.2% | 92.7% |
+| us-tyre-tariffs-china-2009 | 1.4% | 1.5% | 0.34 | 0.9% | 1.1% | 97.6% | 63.1% | 59.7% |
+| h1n1-vaccines-approved-2009 | 1.1% | 1.3% | 0.40 | 1.0% | 1.1% | 100.0% | 68.4% | 68.4% |
+| iceland-ash-cloud-2010 | 1.4% | 1.5% | 0.50 | 1.9% | 2.1% | 98.1% | 50.0% | 49.0% |
+| deepwater-horizon-2010 | 1.3% | 1.3% | 0.62 | 1.6% | 1.8% | 99.5% | 54.9% | 48.5% |
+| greece-junk-downgrade-2010 | 1.3% | 1.3% | 0.67 | 1.8% | 2.0% | 99.5% | 52.9% | 50.5% |
+| greece-first-bailout-2010 | 1.3% | 1.4% | 0.49 | 1.8% | 2.0% | 99.0% | 62.6% | 70.4% |
+| flash-crash-2010 | 1.3% | 1.4% | 0.34 | 1.4% | 1.5% | 100.0% | 61.2% | 60.7% |
+| uk-hung-parliament-2010 | 1.1% | 1.1% | 0.41 | 1.5% | 1.7% | 99.0% | 63.6% | 64.6% |
+| eu-750bn-package-2010 | 1.3% | 1.3% | 0.39 | 1.5% | 1.7% | 100.0% | 81.1% | 81.1% |
+| yuan-flexibility-2010 | 1.1% | 1.2% | 0.43 | 0.8% | 1.0% | 100.0% | 67.0% | 65.0% |
+| fed-qe2-2010-11 | 1.4% | 1.6% | 0.63 | 0.8% | 0.8% | 100.0% | 81.1% | 82.0% |
+| yeonpyeong-shelling-2010 | 1.3% | 1.5% | 0.55 | 0.7% | 0.9% | 100.0% | 100.0% | 100.0% |
+| libya-oil-shutdowns-2011 | 1.1% | 1.3% | 0.64 | 1.0% | 1.2% | 87.9% | 78.2% | 76.7% |
+| japan-earthquake-tsunami-2011 | 1.0% | 1.2% | 0.38 | 0.9% | 1.0% | 86.9% | 85.9% | 85.0% |
+| bin-laden-killed-2011 | 1.2% | 1.4% | 0.62 | 1.3% | 1.4% | 64.6% | 49.5% | 39.8% |
+| iea-oil-stock-release-2011 | 1.4% | 1.9% | 0.37 | 1.3% | 1.7% | 97.6% | 59.7% | 43.2% |
+| us-debt-ceiling-deal-2011 | 1.5% | 1.7% | 0.75 | 1.4% | 1.6% | 97.6% | 56.3% | 29.6% |
+| us-credit-downgrade-2011 | 1.6% | 1.9% | 0.69 | 1.3% | 1.5% | 100.0% | 58.3% | 55.3% |
+| thailand-floods-2011 | 1.2% | 1.5% | 0.35 | 1.0% | 1.2% | 100.0% | 88.8% | 88.8% |
+| eurozone-summit-deal-2011-10 | 1.1% | 1.2% | 0.49 | 1.0% | 1.0% | 100.0% | 99.5% | 99.5% |
+| eu-iran-oil-embargo-2012 | 1.2% | 1.4% | 0.56 | 0.8% | 0.8% | 94.7% | 67.5% | 67.5% |
+| greek-election-may-2012 | 1.1% | 1.3% | 0.76 | 1.0% | 1.2% | 96.1% | 74.3% | 73.8% |
+| greek-election-june-2012 | 1.3% | 1.6% | 0.32 | 1.2% | 1.3% | 99.5% | 70.4% | 69.4% |
+| draghi-whatever-it-takes-2012 | 1.2% | 1.2% | 0.57 | 0.9% | 1.1% | 96.1% | 93.7% | 93.7% |
+| fed-qe3-2012-09 | 1.0% | 1.4% | 0.63 | 1.6% | 1.6% | 100.0% | 69.9% | 35.0% |
+| boston-marathon-bombing-2013 | 1.7% | 1.7% | 0.41 | 1.0% | 1.1% | 99.5% | 87.4% | 86.4% |
+| us-shutdown-2013 | 1.5% | 1.5% | 0.04 | 0.9% | 0.8% | 100.0% | 99.0% | 99.0% |
+| fed-taper-announcement-2013 | 1.3% | 1.3% | 0.54 | 1.3% | 1.2% | 75.7% | 75.7% | 77.2% |
+| crimea-intervention-2014 | 1.0% | 1.2% | 0.36 | 0.6% | 0.8% | 100.0% | 56.8% | 52.4% |
+| opec-no-cut-2014 | 1.1% | 1.5% | 0.48 | 0.9% | 1.0% | 95.1% | 67.0% | 64.6% |
+| greece-bailout-referendum-2015 | 1.5% | 2.4% | 0.58 | 1.4% | 1.5% | 97.6% | 73.3% | 68.9% |
+| paris-attacks-2015 | 1.4% | 1.7% | 0.51 | 1.6% | 2.3% | 99.5% | 81.1% | 77.2% |
+| fed-first-hike-2015 | 1.0% | 1.5% | 0.79 | 1.6% | 2.0% | 100.0% | 84.5% | 85.4% |
+| brussels-bombings-2016 | 1.0% | 1.1% | 0.74 | 1.1% | 1.1% | 98.5% | 77.2% | 79.6% |
+| brexit-referendum-2016 | 1.2% | 1.3% | 0.40 | 0.8% | 0.9% | 97.6% | 96.6% | 96.6% |
+| manchester-arena-bombing-2017 | 1.1% | 1.5% | 0.50 | 1.2% | 1.5% | 71.4% | 54.9% | 46.6% |
+| hurricane-harvey-2017 | 1.2% | 1.6% | 0.58 | 1.0% | 1.2% | 98.1% | 67.5% | 32.0% |
+| cambridge-analytica-facebook-2018 | 1.2% | 1.7% | 0.51 | 0.8% | 1.1% | 92.2% | 61.2% | 47.1% |
+| section-301-china-tariffs-2018 | 1.1% | 1.5% | 0.57 | 0.7% | 0.8% | 97.1% | 70.4% | 36.4% |
+| italy-government-crisis-2018 | 1.1% | 1.6% | 0.67 | 1.0% | 1.2% | 96.6% | 61.2% | 50.0% |
+| fed-insurance-cut-2019 | 1.8% | 2.1% | 0.70 | 1.3% | 1.8% | 100.0% | 60.2% | 60.2% |
+| abqaiq-attack-2019 | 1.1% | 1.2% | 0.55 | 1.2% | 1.6% | 100.0% | 86.4% | 88.3% |
+| us-china-phase-one-2019 | 1.6% | 1.6% | 0.35 | 2.7% | 4.9% | 100.0% | 69.4% | 47.1% |
+| soleimani-strike-2020 | 1.5% | 1.8% | 0.67 | 3.4% | 5.8% | 100.0% | 73.8% | 24.3% |
+| covid-italy-lockdown-2020 | 3.3% | 5.7% | 0.55 | 3.3% | 5.7% | 100.0% | 66.5% | 35.9% |
+| fed-emergency-cut-2020-03-03 | 2.4% | 4.3% | 0.56 | 3.0% | 5.5% | 100.0% | 78.6% | 72.8% |
+| who-declares-pandemic-2020 | 2.1% | 2.3% | 0.26 | 2.4% | 3.9% | 100.0% | 96.1% | 96.1% |
+| fed-zero-rates-2020-03-16 | 2.0% | 2.3% | 0.36 | 2.3% | 2.8% | 100.0% | 100.0% | 100.0% |
+| opec-plus-record-cut-2020 | 2.2% | 3.4% | 0.69 | 2.1% | 3.6% | 100.0% | 80.1% | 78.2% |
+| pfizer-vaccine-efficacy-2020 | 3.3% | 6.3% | 0.69 | 1.7% | 2.5% | 98.1% | 93.7% | 92.7% |
+| ever-given-suez-2021 | 1.3% | 2.0% | 0.38 | 1.3% | 1.2% | 98.5% | 97.1% | 96.1% |
+| omicron-variant-2021 | 1.5% | 1.9% | 0.53 | 1.8% | 4.3% | 60.2% | 49.0% | 10.2% |
+| russia-invades-ukraine-2022 | 2.0% | 2.5% | 0.34 | 2.2% | 4.8% | 80.6% | 55.3% | 36.4% |
+| us-russian-oil-ban-2022 | 2.2% | 3.7% | 0.19 | 2.0% | 4.8% | 93.2% | 73.3% | 8.7% |
+| fed-liftoff-hike-2022 | 1.4% | 1.7% | 0.48 | 2.1% | 5.4% | 88.3% | 68.4% | 68.4% |
+| fed-75bp-hike-2022 | 1.4% | 3.2% | 0.65 | 0.9% | 1.7% | 99.0% | 81.6% | 79.6% |
+| uk-mini-budget-2022 | 1.6% | 2.8% | 0.64 | 0.9% | 1.1% | 100.0% | 82.0% | 72.3% |
+| boe-gilt-intervention-2022 | 2.2% | 3.9% | 0.67 | 0.8% | 1.0% | 100.0% | 91.7% | 90.3% |
 
 ### Caveats
-- **Survivorship bias:** the stock universe is today's large caps. Stocks that failed or were delisted are missing, which likely makes past portfolios look calmer than real ones.
-- **Oracle parse:** the tuned column assumes the parser classifies category and nature correctly. The no-parse column is the lower bound if it never does.
-- **In-sample:** settings and q_hat were chosen on these same events. Expect the holdout to be worse.
-- **Few events:** about one hundred dev events; the intervals are wide.
-- **Not yet measured:** recovery-range coverage and the language-model baseline (holdout, C5).
+- **Conditional, not a forecast:** these numbers say how well Arcus replays a scenario on a portfolio once the scenario's market path is given. They say nothing about whether or when a shock happens.
+- **Survivorship bias:** the universe is today's large caps.
+- **Few events:** about one hundred; the intervals are wide.
 
 ### Reproducibility
 - library.npz: `142e4265564564350be078c53ae880de2df1d16a079124dcb1204a7d1105db0f`

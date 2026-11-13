@@ -1,7 +1,8 @@
 """Scenario Lab backtest, tuning and calibration (PLAN.md Step 4 and section 2b).
 
     python -m scenario.backtest download-universe   # stock prices + sectors, SHA256 manifest
-    python -m scenario.backtest dev                 # tune on 1999-2022, calibrate, write results
+    python -m scenario.backtest dev                 # v1 forecast (kept as evidence): results_forecast_v1.md
+    python -m scenario.backtest dev-v2              # v2 stress test: H1-H4 on dev, threshold, crises
     python -m scenario.backtest diagnostics         # forecast vs conditional accuracy on dev
     python -m scenario.backtest holdout             # C5 only: refuses unless SCENARIO_RUN_HOLDOUT=1
 
@@ -52,7 +53,9 @@ from scenario.enums import (
     FACTOR_SEMIS,
     FACTOR_SPY,
     HORIZON_DAYS,
+    PATH_DAYS,
     RANGE_LEVEL,
+    RECOVERY_DAYS,
     Sector,
     Split,
     sector_from_yfinance,
@@ -251,6 +254,10 @@ class Case:
     b3_median: np.ndarray  # (P,) baseline 3 (random 21-day window)
     b3_low: np.ndarray
     b3_high: np.ndarray
+    # v2 (conditional stress test): the event as the scenario
+    betas: dict[tuple[float, bool], np.ndarray] = field(default_factory=dict)  # (S, F), NaN rows: no fit
+    scenario_paths: np.ndarray | None = None  # (RECOVERY_DAYS + 1, F) this event's factor paths, SOXX proxied
+    realized_paths: np.ndarray | None = None  # (S, RECOVERY_DAYS + 1) stocks' real cumulative paths, NaN unobserved
 
 
 @dataclass
@@ -371,6 +378,11 @@ def build_cases(
     moves = _moves_21d(library)
     names = list(library.factor_names)
     spy_col = names.index(FACTOR_SPY)
+    scenario_paths_all = library.factor_paths.astype(float).copy()
+    for name, proxy in E.PROXY_FOR.items():
+        col, pcol = names.index(name), names.index(proxy)
+        missing = ~np.isfinite(scenario_paths_all[:, :, col])
+        scenario_paths_all[:, :, col][missing] = scenario_paths_all[:, :, pcol][missing]
     actual_all = np.vstack([_window_returns(prices, e).reindex(prices.columns).to_numpy() for e in library.events])
     columns = list(prices.columns)
 
@@ -391,7 +403,7 @@ def build_cases(
             continue
         cols = [columns.index(s) for s in stocks]
 
-        estimates = {}
+        estimates, beta_sets = {}, {}
         for alpha, stress in FIT_COMBOS:
             fits = fit_betas(daily[stocks], library.factor_history, as_of,
                              sectors={s: sectors[s] for s in stocks}, alpha=alpha, stress_only=stress)
@@ -403,6 +415,7 @@ def build_cases(
                         betas[k, names.index(factor)] = beta
             estimates[(alpha, stress)] = moves[eligible] @ np.nan_to_num(betas).T
             estimates[(alpha, stress)][:, ~np.isfinite(betas).all(axis=1)] = np.nan
+            beta_sets[(alpha, stress)] = betas
 
         window = daily[stocks][(daily.index < pd.Timestamp(as_of))].tail(3 * 252)
         spy = library.factor_history[FACTOR_SPY].reindex(window.index)
@@ -420,6 +433,12 @@ def build_cases(
         port_past = np.where(valid, np.nan_to_num(past) @ weights.T, np.nan)
         b3_low, b3_median, b3_high = np.nanquantile(port_past, [LOW_Q, 0.5, HIGH_Q], axis=0)
 
+        path_dates = [pd.Timestamp(d) if d is not None else None for d in E._path_dates(event.date, RECOVERY_DAYS)]
+        realized_levels = np.full((len(stocks), RECOVERY_DAYS + 1), np.nan)
+        for t, d in enumerate(path_dates):
+            if d is not None and d in prices.index:
+                realized_levels[:, t] = prices.loc[d, stocks].to_numpy(dtype=float)
+        realized_paths = realized_levels / realized_levels[:, :1] - 1.0
         cases.append(
             Case(
                 event=event,
@@ -440,6 +459,9 @@ def build_cases(
                 b3_median=b3_median,
                 b3_low=b3_low,
                 b3_high=b3_high,
+                betas=beta_sets,
+                scenario_paths=scenario_paths_all[j],
+                realized_paths=realized_paths,
             )
         )
     return cases, skipped
@@ -785,6 +807,337 @@ def write_diagnostics(path: Path, table: pd.DataFrame, settings: Settings) -> No
     path.write_text("\n".join(lines))
 
 
+# --------------------------------------------------------------------------- v2: conditional stress test
+
+
+BUCKET_ORDER = [b for b in E.RECOVERY_BUCKETS if b != "unknown"]
+CONTROLS_PATH = EVAL_DIR / "controls.txt"
+
+
+def _rows_drawdown(paths: np.ndarray) -> np.ndarray:
+    """Worst fall per row of cumulative paths (rows must be finite)."""
+    wealth = 1.0 + paths
+    return np.minimum(0.0, np.min(wealth / np.maximum.accumulate(wealth, axis=1) - 1.0, axis=1))
+
+
+def _bucket(path: np.ndarray) -> str:
+    values = [float(v) if np.isfinite(v) else None for v in path]
+    days = E.recovery_days(values)
+    known = days is not None or all(v is not None for v in values)
+    return E.recovery_bucket(days, known)
+
+
+def _portfolio_paths(stock_paths: np.ndarray, held: np.ndarray) -> np.ndarray:
+    """(P, T) portfolio paths; NaN wherever any held stock is unobserved."""
+    finite = np.isfinite(stock_paths)
+    counts = finite.T.astype(float) @ (held > 0).T.astype(float)  # (T, P)
+    paths = (np.nan_to_num(stock_paths).T @ held.T)  # (T, P)
+    paths[counts < (held > 0).sum(axis=1)] = np.nan
+    return paths.T
+
+
+@dataclass
+class ConditionalScores:
+    event_id: str
+    category: str
+    n_portfolios: int
+    h1_mae: float
+    h1_base: float
+    h2_rank: float
+    h3_mae: float
+    h3_base: float
+    h3_cases: int
+    h4_cases: int
+    h4_within1: float
+    h4_exact: float
+    h4_exact_base: float
+
+
+def conditional_score(case: Case, alpha: float, stress: bool) -> ConditionalScores:
+    """Score one event as a scenario: pre-event betas x the event's real factor paths,
+    against the stocks' real moves (PLAN v2 gate). Baseline: portfolio beta x the S&P path."""
+    betas = case.betas[(alpha, stress)]
+    usable = np.all(np.isfinite(betas), axis=1)
+    held = case.weights * usable
+    held = np.divide(held, held.sum(axis=1, keepdims=True), out=np.zeros_like(held), where=held.sum(axis=1, keepdims=True) > 0)
+
+    stock_paths = np.nan_to_num(betas) @ case.scenario_paths.T  # (S, T); NaN where the scenario path is NaN
+    stock_paths[:, ~np.all(np.isfinite(case.scenario_paths), axis=1)] = np.nan
+    estimate = _portfolio_paths(stock_paths, held)
+    spy = case.scenario_paths[:, FACTOR_NAMES.index(FACTOR_SPY)]
+    baseline = (held @ case.beta_spy)[:, None] * spy[None, :]
+    real = _portfolio_paths(case.realized_paths, held)
+
+    y = held @ case.y_stock
+    h1 = float(np.mean(np.abs(y - estimate[:, HORIZON_DAYS])))
+    h1_base = float(np.mean(np.abs(y - baseline[:, HORIZON_DAYS])))
+    h2 = _spearman(stock_paths[usable, HORIZON_DAYS], case.y_stock[usable])
+
+    window = slice(0, PATH_DAYS + 1)
+    ok = np.all(np.isfinite(real[:, window]), axis=1) & np.all(np.isfinite(estimate[:, window]), axis=1)
+    if ok.any():
+        dd_real = _rows_drawdown(real[ok, window])
+        h3 = float(np.mean(np.abs(_rows_drawdown(estimate[ok, window]) - dd_real)))
+        h3_base = float(np.mean(np.abs(_rows_drawdown(baseline[ok, window]) - dd_real)))
+    else:
+        h3 = h3_base = math.nan
+
+    within, exact, exact_base = [], [], []
+    for p in range(len(held)):
+        truth = _bucket(real[p])
+        if truth == "unknown":
+            continue
+        guess, base = _bucket(estimate[p]), _bucket(baseline[p])
+        exact.append(guess == truth)
+        exact_base.append(base == truth)
+        within.append(guess != "unknown" and abs(BUCKET_ORDER.index(guess) - BUCKET_ORDER.index(truth)) <= 1)
+    return ConditionalScores(
+        event_id=case.event.id, category=case.event.category.value, n_portfolios=len(held),
+        h1_mae=h1, h1_base=h1_base, h2_rank=h2, h3_mae=h3, h3_base=h3_base, h3_cases=int(ok.sum()),
+        h4_cases=len(exact),
+        h4_within1=float(np.mean(within)) if within else math.nan,
+        h4_exact=float(np.mean(exact)) if exact else math.nan,
+        h4_exact_base=float(np.mean(exact_base)) if exact_base else math.nan,
+    )
+
+
+def summarize_v2(scores: Sequence[ConditionalScores], *, resamples: int = BOOTSTRAP_RESAMPLES, seed: int = SEED) -> dict:
+    table = pd.DataFrame([asdict(s) for s in scores])
+
+    def stats(frame: pd.DataFrame) -> dict[str, float]:
+        return {
+            "h1_mae": frame["h1_mae"].mean(),
+            "h1_base": frame["h1_base"].mean(),
+            "h1_improvement": 1 - frame["h1_mae"].mean() / frame["h1_base"].mean(),
+            "h2_rank": frame["h2_rank"].mean(),
+            "h3_mae": frame["h3_mae"].mean(),
+            "h3_base": frame["h3_base"].mean(),
+            "h3_improvement": 1 - frame["h3_mae"].mean() / frame["h3_base"].mean(),
+            "h4_within1": frame["h4_within1"].mean(),
+            "h4_exact": frame["h4_exact"].mean(),
+            "h4_exact_base": frame["h4_exact_base"].mean(),
+        }
+
+    point = stats(table)
+    rng = np.random.default_rng(seed)
+    draws = [stats(table.iloc[rng.integers(0, len(table), len(table))]) for _ in range(resamples)]
+    out = {}
+    for key, value in point.items():
+        samples = np.array([d[key] for d in draws], dtype=float)
+        out[key] = {"value": float(value), "ci_low": float(np.nanquantile(samples, 0.05)),
+                    "ci_high": float(np.nanquantile(samples, 0.95))}
+    out["events"] = int(len(table))
+    out["h4_events"] = int(table["h4_within1"].notna().sum())
+    out["h4_cases"] = int(table["h4_cases"].sum())
+    return out
+
+
+def gate_v2(summary: dict) -> dict[str, bool]:
+    """PLAN v2 gate H1-H4 (pass marks fixed 2026-11-13). H5 compares dev and holdout in C5."""
+    return {
+        "H1_factor_10pct_better_than_beta": summary["h1_improvement"]["value"] >= 0.10,
+        "H2_rank_ge_0.30": summary["h2_rank"]["value"] >= 0.30,
+        "H3_drawdown_10pct_better_than_beta": summary["h3_improvement"]["value"] >= 0.10,
+        "H4_within_one_bucket_ge_75pct_and_exact_ge_baseline": (
+            summary["h4_within1"]["value"] >= 0.75 and summary["h4_exact"]["value"] >= summary["h4_exact_base"]["value"]
+        ),
+    }
+
+
+def tune_v2(cases: Sequence[Case]) -> tuple[tuple[float, bool], dict]:
+    """Ridge strength and stress betas by event-weighted H1 MAE, then H2 (dev only)."""
+    if any(c.split is not Split.DEV for c in cases):
+        raise BacktestError("tune_v2() was given a holdout event; tuning must only see dev")
+    table = {}
+    for combo in FIT_COMBOS:
+        rows = [conditional_score(c, *combo) for c in cases]
+        table[combo] = (float(np.mean([r.h1_mae for r in rows])), float(np.nanmean([r.h2_rank for r in rows])))
+    best = min(table, key=lambda k: (round(table[k][0], 10), -table[k][1]))
+    return best, table
+
+
+def control_threshold(library: E.Library, embed, controls_path: Path = CONTROLS_PATH) -> tuple[float, list[tuple[str, float]]]:
+    """max(0.5, 95th percentile of each off-topic control's best cosine against the library)."""
+    questions = [line.strip() for line in controls_path.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    vectors = np.asarray(embed(questions), dtype=float)
+    vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    best = (vectors @ library.embeddings.astype(float).T).max(axis=1)
+    return max(0.5, float(np.quantile(best, 0.95))), sorted(zip(questions, best.tolist()), key=lambda r: -r[1])
+
+
+def proposed_crisis_episodes(library: E.Library, as_of: date) -> list[int]:
+    """For the user's decision only (not the contract): episodes where the S&P fell 10% or
+    more within 21 trading days; events within 63 trading days of each other are one
+    episode, named by its adverse event with the deepest 21-day fall."""
+    from scenario import trading_calendar
+
+    spy = library.factor_names.index(FACTOR_SPY)
+
+    def fall(i: int) -> float:
+        return E._drawdown([float(v) for v in library.factor_paths[i, : HORIZON_DAYS + 1, spy]])
+
+    qualifying = sorted((i for i in E.eligible_precedents(library.events, as_of) if fall(i) <= -0.10),
+                        key=lambda k: (library.events[k].date, library.events[k].id))
+    episodes: list[list[int]] = []
+    for i in qualifying:
+        if episodes and library.events[i].date <= trading_calendar.add_trading_days(
+            library.events[episodes[-1][-1]].date, PATH_DAYS - 1
+        ):
+            episodes[-1].append(i)
+        else:
+            episodes.append([i])
+    named = []
+    for members in episodes:
+        adverse = [i for i in members if library.events[i].nature.value == "adverse"] or members
+        named.append(min(adverse, key=lambda i: (fall(i), library.events[i].date, library.events[i].id)))
+    return named
+
+
+def write_v2_reports(*, library, cases, skipped, combo, tuning, summary, threshold, controls, real_best,
+                     hashes, universe_size) -> None:
+    gate = gate_v2(summary)
+
+    def f(key: str, pct: bool = True) -> str:
+        return _fmt(summary[key], pct)
+
+    lines = [
+        "# Scenario Lab backtest results (v2: stress test)",
+        "",
+        "Plan v2 measures the claim the page makes: **if a shock like this happens, what does it do to this "
+        "portfolio?** Each dev event (1999–2022) is the scenario; betas use only prices before it; the estimate "
+        "uses that event's real factor moves and is compared with the stocks' real moves. Baseline: portfolio "
+        "beta × the S&P path. Pass marks were fixed in PLAN.md before this run.",
+        "",
+        "**Dev results are in-sample for the two tuned choices (ridge strength, stress betas). The one-time "
+        "2023+ holdout (C5) is the gate.** The forecast results from C4 are kept in `results_forecast_v1.md`.",
+        "",
+        f"- Events: **{summary['events']}** ({len(skipped)} skipped, mostly 1999–2002 with too few precedents); "
+        f"portfolios per event: {N_RANDOM} random + archetypes from {universe_size} US large caps.",
+        f"- Tuned on dev: alpha = {combo[0]}, stress betas = {combo[1]} "
+        "(by H1 MAE, then H2; all four shown below).",
+        f"- Recovery-time cases with a known real recovery: {summary['h4_cases']} across {summary['h4_events']} events.",
+        "",
+        "| Gate v2 | Pass mark | Dev result [90% CI] | |",
+        "|---|---|---|---|",
+        f"| H1 · 21-day portfolio MAE, factor vs beta × S&P | ≥ 10% lower | {f('h1_mae')} vs {f('h1_base')}: "
+        f"{f('h1_improvement')} lower | {'pass' if gate['H1_factor_10pct_better_than_beta'] else 'FAIL'} |",
+        f"| H2 · holding ranking (Spearman) | ≥ 0.30 | {f('h2_rank', False)} | {'pass' if gate['H2_rank_ge_0.30'] else 'FAIL'} |",
+        f"| H3 · worst fall within 63 days, MAE | ≥ 10% lower | {f('h3_mae')} vs {f('h3_base')}: {f('h3_improvement')} lower | "
+        f"{'pass' if gate['H3_drawdown_10pct_better_than_beta'] else 'FAIL'} |",
+        f"| H4 · recovery time, within one bucket | ≥ 75% and exact ≥ baseline | within one {f('h4_within1')}; exact "
+        f"{f('h4_exact')} vs baseline {f('h4_exact_base')} | "
+        f"{'pass' if gate['H4_within_one_bucket_ge_75pct_and_exact_ge_baseline'] else 'FAIL'} |",
+        "",
+        "H4 buckets: never fell, 1–21, 22–63, 64–126, 127–252, 253–504 trading days, not within 504. "
+        "Only cases whose real recovery is known (recovered, or observed for all 504 days) are scored.",
+        "",
+        "### Ridge strength and stress betas (dev)",
+        "| alpha | stress betas | H1 MAE | H2 rank |",
+        "|---|---|---|---|",
+        *[f"| {a} | {st} | {m:.4f} | {r:.3f} |" for (a, st), (m, r) in tuning.items()],
+        "",
+        "### Low-confidence threshold (off-topic controls)",
+        f"Threshold = max(0.5, 95th percentile of the controls' best cosine) = **{threshold:.3f}**. "
+        f"Real dev questions (event triggers) above it: {np.mean([b >= threshold for b in real_best]):.0%} "
+        f"(median best cosine {np.median(real_best):.3f}).",
+        "",
+        "| Highest-scoring controls | best cosine |",
+        "|---|---|",
+        *[f"| {q} | {b:.3f} |" for q, b in controls[:5]],
+        "",
+        "### Per event (dev)",
+        "| Event | H1 MAE | baseline | H2 rank | H3 MAE | baseline | H4 within one | H4 exact | baseline exact |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for c in cases:
+        r = conditional_score(c, *combo)
+        def pct(v): return "—" if v != v else f"{v:.1%}"
+        def num(v): return "—" if v != v else f"{v:.2f}"
+        lines.append(f"| {r.event_id} | {pct(r.h1_mae)} | {pct(r.h1_base)} | {num(r.h2_rank)} | {pct(r.h3_mae)} | "
+                     f"{pct(r.h3_base)} | {pct(r.h4_within1)} | {pct(r.h4_exact)} | {pct(r.h4_exact_base)} |")
+    lines += [
+        "",
+        "### Caveats",
+        "- **Conditional, not a forecast:** these numbers say how well Arcus replays a scenario on a portfolio "
+        "once the scenario's market path is given. They say nothing about whether or when a shock happens.",
+        "- **Survivorship bias:** the universe is today's large caps.",
+        "- **Few events:** about one hundred; the intervals are wide.",
+        "",
+        "### Reproducibility",
+        *[f"- {k}: `{v}`" for k, v in hashes.items()],
+        "",
+    ]
+    (EVAL_DIR / "results.md").write_text("\n".join(lines))
+
+    today = date.today()
+    contract = E.crisis_events(library, today)
+    proposed = proposed_crisis_episodes(library, today)
+    spy = library.factor_names.index(FACTOR_SPY)
+
+    def falls(i: int) -> str:
+        path = [float(v) for v in library.factor_paths[i, :, spy]]
+        return f"{E._drawdown(path[: HORIZON_DAYS + 1]):+.1%} / {E._drawdown(path[: PATH_DAYS + 1]):+.1%}"
+
+    crisis_lines = [
+        "# Crisis replay set",
+        "",
+        f"As of {today}. S&P worst fall within 21 / 63 trading days shown for each event.",
+        "",
+        f"## Contract rule (PLAN v2): S&P fell 10% or more within 63 days, first per cluster: {len(contract)} events",
+        "",
+        "The 63-day window also catches events that only preceded a later crash (for example the December 2019 "
+        "US–China deal, two months before COVID), and same-day events count twice.",
+        "",
+        *[f"- {library.events[i].date} {library.events[i].id} ({falls(i)})" for i in contract],
+        "",
+        f"## Proposed rule (for the user's decision): S&P fell 10% or more within 21 days, events within 63 trading "
+        f"days merged into one episode, named by its adverse event with the deepest fall: {len(proposed)} episodes",
+        "",
+        *[f"- {library.events[i].date} {library.events[i].id} ({falls(i)})" for i in proposed],
+        "",
+    ]
+    (EVAL_DIR / "crises.md").write_text("\n".join(crisis_lines))
+
+
+def run_dev_v2() -> dict:
+    from research.embedder import shared_embedder
+
+    t0 = time.time()
+    library, prices, cases, skipped, hashes = _prepare([Split.DEV])
+    print(f"built {len(cases)} dev cases ({len(skipped)} skipped) in {time.time() - t0:.0f}s", flush=True)
+    combo, tuning = tune_v2(cases)
+    summary = summarize_v2([conditional_score(c, *combo) for c in cases])
+    embedder = shared_embedder()
+    threshold, controls = control_threshold(library, lambda texts: embedder.encode(texts))
+    real_best = [float(np.max(c.cosine)) for c in cases]
+    write_v2_reports(library=library, cases=cases, skipped=skipped, combo=combo, tuning=tuning, summary=summary,
+                     threshold=threshold, controls=controls, real_best=real_best, hashes=hashes,
+                     universe_size=prices.shape[1])
+    v1_dev = json.loads((EVAL_DIR / "calibration_forecast_v1_dev.json").read_text())["settings"]
+    settings = E.EngineSettings(
+        alpha=combo[0], stress_only=combo[1], category_bonus=v1_dev["category_bonus"], context_weight=0.0,
+        similarity_threshold=threshold, top_k=5, nature_penalty=v1_dev["nature_penalty"], use_actual=True,
+    )
+    calibration = {
+        "stage": "dev",
+        "version": 2,
+        "q_hat": 0.0,
+        "settings": asdict(settings),
+        "settings_sha256": _sha256(json.dumps(asdict(settings), sort_keys=True).encode()),
+        "holdout_ids_sha256": holdout_ids_hash(library),
+        "data_sha256": hashes,
+        "dev_v2": summary,
+        "dev_gate_v2": gate_v2(summary),
+        "backtest": BacktestSummary(available=False).model_dump(),
+        "backtest_v2": {"available": False},
+    }
+    (EVAL_DIR / "calibration_dev.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
+    print(f"done in {time.time() - t0:.0f}s; combo {combo}; threshold {threshold:.3f}")
+    print(json.dumps({k: v for k, v in summary.items() if isinstance(v, dict)}, indent=1))
+    print(json.dumps(gate_v2(summary), indent=1))
+    return calibration
+
+
 # --------------------------------------------------------------------------- CLI
 
 
@@ -831,7 +1184,7 @@ def run_dev() -> dict:
     fallback_summary = summarize([score_event(c, settings, q_hat) for c in fallback_cases])
 
     write_dev_report(
-        EVAL_DIR / "results.md", settings=settings, q_hat=q_hat, summary=summary,
+        EVAL_DIR / "results_forecast_v1.md", settings=settings, q_hat=q_hat, summary=summary,
         default_summary=default_summary, fallback_summary=fallback_summary, scores=scores,
         skipped=skipped, tuning=tuning, hashes=hashes, universe_size=prices.shape[1],
     )
@@ -848,7 +1201,7 @@ def run_dev() -> dict:
     }
     # The engine serves only from calibration.json, which only an approved holdout run (C5)
     # writes. Dev output never makes the engine "available".
-    (EVAL_DIR / "calibration_dev.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
+    (EVAL_DIR / "calibration_forecast_v1_dev.json").write_text(json.dumps(calibration, indent=1, sort_keys=True) + "\n")
     print(f"done in {time.time() - t0:.0f}s; settings {asdict(settings)}; q_hat {q_hat:.3f}")
     print(json.dumps({k: v for k, v in summary.items() if isinstance(v, dict)}, indent=1))
     return calibration
@@ -856,7 +1209,7 @@ def run_dev() -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["download-universe", "dev", "diagnostics", "holdout"])
+    parser.add_argument("command", choices=["download-universe", "dev", "dev-v2", "diagnostics", "holdout"])
     args = parser.parse_args(argv)
     if args.command == "download-universe":
         manifest = download_universe()
@@ -865,10 +1218,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "dev":
         run_dev()
         return 0
+    if args.command == "dev-v2":
+        run_dev_v2()
+        return 0
     if args.command == "diagnostics":
         library, prices, cases, _, _ = _prepare([Split.DEV])
         _, sectors, _ = load_universe()
-        dev = json.loads((EVAL_DIR / "calibration_dev.json").read_text())
+        dev = json.loads((EVAL_DIR / "calibration_forecast_v1_dev.json").read_text())
         settings = Settings(**{k: dev["settings"][k] for k in asdict(DEFAULT_SETTINGS)})
         table = diagnostics(library, prices, sectors, cases, settings)
         write_diagnostics(EVAL_DIR / "diagnostics.md", table, settings)

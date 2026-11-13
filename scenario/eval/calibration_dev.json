@@ -10,83 +10,88 @@
   "results_url": null,
   "width_ratio": null
  },
+ "backtest_v2": {
+  "available": false
+ },
  "data_sha256": {
   "library.json": "8ed9d1d0a28d08e137c32e6a2fcb4bfd68ce40016a1857f35b386cb1321944d7",
   "library.npz": "142e4265564564350be078c53ae880de2df1d16a079124dcb1204a7d1105db0f",
   "universe manifest": "0a2723a13bd4518bc767379d612973886bff57df390971f8be3e04fea572a2c4"
  },
- "dev": {
-  "b1_mae": {
-   "ci_high": 0.06582048910945133,
-   "ci_low": 0.04623226756422821,
-   "value": 0.055373989413287396
-  },
-  "b2_mae": {
-   "ci_high": 0.07113631706942,
-   "ci_low": 0.05007113727258873,
-   "value": 0.060106390860572144
-  },
-  "b3_mae": {
-   "ci_high": 0.0646049355085859,
-   "ci_low": 0.044912042033262746,
-   "value": 0.05425481953844153
-  },
-  "cases": 19776,
-  "coverage_80": {
-   "ci_high": 0.8454186893203882,
-   "ci_low": 0.7525738268608414,
-   "value": 0.8000101132686085
-  },
+ "dev_gate_v2": {
+  "H1_factor_10pct_better_than_beta": true,
+  "H2_rank_ge_0.30": true,
+  "H3_drawdown_10pct_better_than_beta": true,
+  "H4_within_one_bucket_ge_75pct_and_exact_ge_baseline": true
+ },
+ "dev_v2": {
   "events": 96,
-  "low_confidence_share": {
-   "ci_high": 0.03125,
-   "ci_low": 0.0,
-   "value": 0.010416666666666666
+  "h1_base": {
+   "ci_high": 0.022026028017226838,
+   "ci_low": 0.018844086124524994,
+   "value": 0.020386401599381074
   },
-  "mae": {
-   "ci_high": 0.06572367173428438,
-   "ci_low": 0.04685233560177125,
-   "value": 0.05601218016482099
+  "h1_improvement": {
+   "ci_high": 0.22010650091747203,
+   "ci_low": 0.15930858451456606,
+   "value": 0.18994916154883557
   },
-  "mae_best_baseline": {
-   "ci_high": 0.06443765023791745,
-   "ci_low": 0.04486582355349454,
-   "value": 0.05425481953844153
+  "h1_mae": {
+   "ci_high": 0.017513771211774342,
+   "ci_low": 0.0155398442794036,
+   "value": 0.0165140217085808
   },
-  "mae_improvement": {
-   "ci_high": 0.026089813692598038,
-   "ci_low": -0.10370064881761787,
-   "value": -0.03239086667930602
+  "h2_rank": {
+   "ci_high": 0.4925106790918121,
+   "ci_low": 0.4357414844377593,
+   "value": 0.4644720146314507
   },
-  "rank_corr": {
-   "ci_high": 0.07418106308970822,
-   "ci_low": -0.018319807753097654,
-   "value": 0.028091069001547602
+  "h3_base": {
+   "ci_high": 0.02215849097311429,
+   "ci_low": 0.017685194444026667,
+   "value": 0.01981193437822839
   },
-  "width_ratio": {
-   "ci_high": 2.0886633815234306,
-   "ci_low": 1.4454468665585316,
-   "value": 1.7174726145159853
+  "h3_improvement": {
+   "ci_high": 0.26665626244793184,
+   "ci_low": 0.16999164540940223,
+   "value": 0.21996795082304998
+  },
+  "h3_mae": {
+   "ci_high": 0.016889279471149734,
+   "ci_low": 0.014133633851531645,
+   "value": 0.015453943771208753
+  },
+  "h4_cases": 19776,
+  "h4_events": 96,
+  "h4_exact": {
+   "ci_high": 0.7417576860841423,
+   "ci_low": 0.6943770226537217,
+   "value": 0.7179915048543689
+  },
+  "h4_exact_base": {
+   "ci_high": 0.6852978357605177,
+   "ci_low": 0.610988066343042,
+   "value": 0.6480582524271844
+  },
+  "h4_within1": {
+   "ci_high": 0.962987965210356,
+   "ci_low": 0.9343573017799353,
+   "value": 0.9490291262135923
   }
  },
- "dev_gate_preview": {
-  "G1_coverage_75_85": true,
-  "G2_width_ratio_le_0.85": false,
-  "G3_mae_10pct_better": false,
-  "G4_rank_corr_ge_0.30": false
- },
  "holdout_ids_sha256": "4914822ab62e9cd8b377c8f26f277b977f902a9f7c899b67baa6f76c3e1e326a",
- "q_hat": 7.332492237876452,
+ "q_hat": 0.0,
  "settings": {
-  "alpha": 1.0,
+  "alpha": 0.1,
   "category_bonus": 0.0,
   "context_weight": 0.0,
   "nature_penalty": 0.3,
-  "similarity_threshold": 0.5,
+  "similarity_threshold": 0.5226724866629816,
   "stress_only": false,
   "top_k": 5,
-  "use_actual": false
+  "use_actual": true
  },
- "settings_sha256": "646fd3d11491bfd3a2ab734d30e0fd9296c430cddf08e092343d3d50f2f292e2",
- "stage": "dev"
+ "settings_sha256": "c18c4f7f43470d89bb36f5782880b39e63b934d9bce88ddf02976f5e9b9d1b57",
+ "stage": "dev",
+ "version": 2
 }

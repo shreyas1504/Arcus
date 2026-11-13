@@ -105,6 +105,7 @@ from scenario.schemas import (
     Event,
     ExposureRank,
     Resilience,
+    ScenarioHolding,
     ScenarioReplay,
     WhatIfResponseV2,
     HoldingImpact,
@@ -177,6 +178,7 @@ class Calibration:
     q_hat: float
     settings: EngineSettings = field(default_factory=EngineSettings)
     backtest: BacktestSummary = field(default_factory=lambda: BacktestSummary(available=False))
+    backtest_v2: BacktestSummaryV2 = field(default_factory=lambda: BacktestSummaryV2(available=False))
 
 
 @dataclass(frozen=True)
@@ -311,7 +313,21 @@ def crisis_events(library: Library, as_of: date) -> list[int]:
     library's cumulative FACTOR_SPY path. Only the earliest qualifying event per cluster_id is
     kept; an event without a cluster_id is its own cluster. Ties on date go by event id.
     """
-    raise NotImplementedError
+    spy = library.factor_names.index(FACTOR_SPY)
+    qualifying = []
+    for i in eligible_precedents(library.events, as_of):
+        path = [float(v) for v in library.factor_paths[i, : PATH_DAYS + 1, spy]]
+        if _drawdown(path) <= CRISIS_DRAWDOWN:
+            qualifying.append(i)
+    seen: set[str] = set()
+    out = []
+    for i in sorted(qualifying, key=lambda k: (library.events[k].date, library.events[k].id)):
+        event = library.events[i]
+        cluster = event.cluster_id or f"event:{event.id}"
+        if cluster not in seen:
+            seen.add(cluster)
+            out.append(i)
+    return out
 
 
 def recovery_bucket(days: int | None, known: bool) -> str:
@@ -322,7 +338,18 @@ def recovery_bucket(days: int | None, known: bool) -> str:
     days is None and not known -> "unknown". Raises ValueError for negative days, for days
     above RECOVERY_DAYS, or for days given with known=False.
     """
-    raise NotImplementedError
+    if days is None:
+        return "not_within_504" if known else "unknown"
+    if not known:
+        raise ValueError("days given with known=False")
+    if days < 0 or days > RECOVERY_DAYS:
+        raise ValueError(f"recovery days must be 0..{RECOVERY_DAYS}")
+    if days == 0:
+        return "never_fell"
+    for upper, label in ((21, "1-21"), (63, "22-63"), (126, "64-126"), (252, "127-252")):
+        if days <= upper:
+            return label
+    return "253-504"
 
 
 def exposure_ranking(replays: Sequence[ScenarioReplay]) -> list[ExposureRank]:
@@ -334,7 +361,24 @@ def exposure_ranking(replays: Sequence[ScenarioReplay]) -> list[ExposureRank]:
     below 0 (ties: the alphabetically first ticker). Sorted by mean_contribution ascending
     (most damage first), then ticker. Empty input -> [].
     """
-    raise NotImplementedError
+    contributions: dict[str, list[float]] = {}
+    counts: dict[str, int] = {}
+    for replay in replays:
+        rows = sorted(replay.holdings, key=lambda h: (h.contribution, h.ticker))
+        if rows and rows[0].contribution < 0:
+            counts[rows[0].ticker] = counts.get(rows[0].ticker, 0) + 1
+        for holding in replay.holdings:
+            contributions.setdefault(holding.ticker, []).append(holding.contribution)
+    ranks = [
+        ExposureRank(
+            ticker=ticker,
+            mean_contribution=float(sum(values) / len(values)),
+            most_exposed_count=counts.get(ticker, 0),
+            scenarios=len(values),
+        )
+        for ticker, values in contributions.items()
+    ]
+    return sorted(ranks, key=lambda r: (r.mean_contribution, r.ticker))
 
 
 def resilience_summary(crises: Sequence[ScenarioReplay]) -> Resilience:
@@ -345,7 +389,22 @@ def resilience_summary(crises: Sequence[ScenarioReplay]) -> Resilience:
     tickers from exposure_ranking(crises) with most_exposed_count > 0, ordered by
     most_exposed_count descending, then mean_contribution ascending, then ticker.
     """
-    raise NotImplementedError
+    compared = [c for c in crises if c.sp500_worst_drawdown_63d is not None]
+    worse = sum(1 for c in compared if c.worst_drawdown_63d < c.sp500_worst_drawdown_63d)
+    drivers = sorted(
+        (r for r in exposure_ranking(crises) if r.most_exposed_count > 0),
+        key=lambda r: (-r.most_exposed_count, r.mean_contribution, r.ticker),
+    )
+    return Resilience(worse_than_sp500=worse, crises_total=len(compared), top_drivers=[r.ticker for r in drivers[:2]])
+
+
+def _render_v2_or_empty(render, response: WhatIfResponseV2) -> str:
+    """render_v2 is Cursor's (U4b). Until it lands, the stub raises; the page then shows
+    the structured replays without a narrative rather than an invented sentence."""
+    try:
+        return render(response)
+    except NotImplementedError:
+        return ""
 
 
 # --------------------------------------------------------------------------- engine
@@ -416,6 +475,41 @@ class WhatIfEngine:
                 return value, ImpactSource.ESTIMATED_LOW_HISTORY if low else ImpactSource.ESTIMATED
         return None
 
+    def _holding_path(
+        self,
+        ticker: str,
+        event_index: int,
+        horizon: int,
+        prices: pd.DataFrame,
+        fits: Mapping[str, BetaFit],
+        as_of: date,
+    ) -> tuple[np.ndarray, str]:
+        """One holding's cumulative path t = 0..horizon and where it came from:
+        "actual" (closes on every observed day), "estimated" (factor path), "partial"
+        (closes with gaps, no fit) or "none"."""
+        dates = _path_dates(self.library.events[event_index].date, horizon)
+        observed = [d is not None and d < as_of for d in dates]
+        n_obs = sum(observed)
+        series = prices[ticker] if ticker in prices.columns else None
+        closes = np.array([self._close(series, d) if ok else math.nan for d, ok in zip(dates, observed)])
+        use_actual = self.calibration.settings.use_actual or ticker not in fits
+        if use_actual and n_obs and np.all(np.isfinite(closes[:n_obs])) and closes[0] > 0:
+            return closes / closes[0] - 1.0, "actual"
+        if ticker in fits:
+            return np.array([self._factor_estimate(fits[ticker], event_index, t) for t in range(horizon + 1)]), "estimated"
+        if math.isfinite(closes[0]) and closes[0] > 0:
+            return closes / closes[0] - 1.0, "partial"
+        return np.full(horizon + 1, math.nan), "none"
+
+    def _mask(self, event_index: int, horizon: int, values: np.ndarray, as_of: date) -> list[float | None]:
+        dates = _path_dates(self.library.events[event_index].date, horizon)
+        out: list[float | None] = [
+            float(values[t]) if d is not None and d < as_of and math.isfinite(float(values[t])) else None
+            for t, d in enumerate(dates)
+        ]
+        out[0] = 0.0
+        return out
+
     def _portfolio_path(
         self,
         event_index: int,
@@ -425,30 +519,11 @@ class WhatIfEngine:
         fits: Mapping[str, BetaFit],
         as_of: date,
     ) -> list[float | None]:
-        dates = _path_dates(self.library.events[event_index].date, horizon)
-        observed = [d is not None and d < as_of for d in dates]
-        n_obs = sum(observed)
         total = np.zeros(horizon + 1)
         for ticker, weight in weights.items():
-            series = prices[ticker] if ticker in prices.columns else None
-            closes = np.array([self._close(series, d) if ok else math.nan for d, ok in zip(dates, observed)])
-            use_actual = self.calibration.settings.use_actual or ticker not in fits
-            if use_actual and n_obs and np.all(np.isfinite(closes[:n_obs])) and closes[0] > 0:
-                path = closes / closes[0] - 1.0
-            elif ticker in fits:
-                path = np.array(
-                    [self._factor_estimate(fits[ticker], event_index, t) for t in range(horizon + 1)]
-                )
-            elif math.isfinite(closes[0]) and closes[0] > 0:
-                path = closes / closes[0] - 1.0
-            else:
-                path = np.full(horizon + 1, math.nan)
+            path, _ = self._holding_path(ticker, event_index, horizon, prices, fits, as_of)
             total = total + weight * path
-        out: list[float | None] = [
-            float(total[t]) if ok and math.isfinite(float(total[t])) else None for t, ok in enumerate(observed)
-        ]
-        out[0] = 0.0
-        return out
+        return self._mask(event_index, horizon, total, as_of)
 
     def run_v2(
         self,
@@ -483,7 +558,124 @@ class WhatIfEngine:
           listed in `skipped` and the rest are renormalized (as in run()).
         - narrative = narrative.render_v2(response).
         """
-        raise NotImplementedError
+        from scenario.narrative import render_v2
+
+        as_of = as_of or date.today()
+        settings = self.calibration.settings
+        parsed = parsed if parsed is not None else self._parse(request.scenario)
+        query = np.asarray(self._embed(parsed.search_text), dtype=float)
+        scored = score_precedents(query, parsed, self.library, as_of, settings)
+        selected = [s for s in scored if s.similarity >= settings.similarity_threshold][: settings.top_k]
+        confidence = Confidence.NORMAL if selected else Confidence.LOW
+        crisis_rows = crisis_events(self.library, as_of)
+        needed = sorted({s.index for s in selected} | set(crisis_rows))
+
+        base = {
+            "scenario": request.scenario,
+            "parsed": parsed,
+            "as_of": as_of,
+            "confidence": confidence,
+            "backtest": self.calibration.backtest_v2,
+            "narrative": "",
+        }
+        tickers = [h.ticker for h in request.holdings]
+        if not needed:
+            response = WhatIfResponseV2(**base)
+            return response.model_copy(update={"narrative": _render_v2_or_empty(render_v2, response)})
+
+        sector_map = {t: s for t, s in dict(self._sectors(tickers)).items() if t in tickers}
+        earliest = min(_path_dates(self.library.events[i].date, 0)[0] for i in needed)
+        start = min(earliest, as_of - timedelta(days=BETA_WINDOW_DAYS))
+        prices = self._clean_prices(self._load_prices(tickers, start, as_of), tickers, as_of)
+        fits: dict[str, BetaFit] = {}
+        if not prices.empty:
+            fits = fit_betas(
+                prices.pct_change(fill_method=None), self.library.factor_history, as_of,
+                sectors=sector_map, alpha=settings.alpha, stress_only=settings.stress_only,
+            )
+
+        values: dict[str, dict[int, tuple[float, ImpactSource]]] = {}
+        skipped: list[SkippedTicker] = []
+        for ticker in tickers:
+            series = prices[ticker] if ticker in prices.columns else None
+            row = {}
+            for i in needed:
+                value = self._holding_21d(series, fits.get(ticker), i)
+                if value is None:
+                    break
+                row[i] = value
+            if len(row) == len(needed):
+                values[ticker] = row
+            elif series is None:
+                skipped.append(SkippedTicker(ticker=ticker, reason="no price data"))
+            else:
+                skipped.append(SkippedTicker(ticker=ticker, reason="not enough price history to estimate"))
+        if not values:
+            response = WhatIfResponseV2(**base, skipped=skipped)
+            return response.model_copy(update={"narrative": _render_v2_or_empty(render_v2, response)})
+
+        raw = {h.ticker: h.weight for h in request.holdings if h.ticker in values}
+        weights = {t: w / sum(raw.values()) for t, w in raw.items()}
+        actual_only = self.calibration.backtest_v2.recovery_shown_from == "actual_only"
+
+        def replay(i: int, similarity: float | None) -> ScenarioReplay:
+            event = self.library.events[i]
+            holdings = []
+            total_path = np.zeros(RECOVERY_DAYS + 1)
+            kinds = []
+            for ticker, weight in weights.items():
+                ret, source = values[ticker][i]
+                path, kind = self._holding_path(ticker, i, RECOVERY_DAYS, prices, fits, as_of)
+                kinds.append(kind)
+                total_path = total_path + weight * path
+                own = recovery_days(self._mask(i, RECOVERY_DAYS, path, as_of))
+                price_based = kind in ("actual", "partial")
+                holdings.append(
+                    ScenarioHolding(
+                        ticker=ticker, weight=weight, sector=sector_map.get(ticker, Sector.BROAD),
+                        return_21d=ret, contribution=weight * ret, source=source,
+                        recovery_days=None if (actual_only and not price_based) else own,
+                    )
+                )
+            long_path = self._mask(i, RECOVERY_DAYS, total_path, as_of)
+            days = recovery_days(long_path)
+            known = days is not None or all(v is not None for v in long_path)
+            if all(k in ("actual", "partial") for k in kinds):
+                recovery_source = "actual"
+            elif all(k == "estimated" for k in kinds):
+                recovery_source = "estimated"
+            else:
+                recovery_source = "mixed"
+            if actual_only and recovery_source != "actual":
+                days, known = None, False
+            spy_path = [float(v) for v in self.library.factor_paths[i, : PATH_DAYS + 1, self._factor_index[FACTOR_SPY]]]
+            spy_21 = spy_path[HORIZON_DAYS] if len(spy_path) > HORIZON_DAYS else math.nan
+            spy_finite = all(math.isfinite(v) for v in spy_path)
+            return ScenarioReplay(
+                event_id=event.id, name=event.name, date=event.date, category=event.category,
+                nature=event.nature, trigger=event.trigger, similarity=similarity, source_url=event.source_url,
+                portfolio_return_21d=float(sum(h.contribution for h in holdings)),
+                sp500_return_21d=spy_21 if math.isfinite(spy_21) else None,
+                worst_drawdown_63d=_drawdown(long_path[: PATH_DAYS + 1]),
+                sp500_worst_drawdown_63d=_drawdown(spy_path) if spy_finite else None,
+                recovery_days=days, recovery_known=known, recovery_source=recovery_source,
+                path=long_path[: PATH_DAYS + 1], holdings=holdings,
+            )
+
+        scenarios = [replay(s.index, s.similarity) for s in selected]
+        crises = [replay(i, None) for i in crisis_rows]
+        returns = [r.portfolio_return_21d for r in scenarios]
+        response = WhatIfResponseV2(
+            **base,
+            scenarios=scenarios,
+            span_low=min(returns) if returns else None,
+            span_high=max(returns) if returns else None,
+            exposure=exposure_ranking(scenarios),
+            crises=crises,
+            resilience=resilience_summary(crises) if crises else None,
+            skipped=skipped,
+        )
+        return response.model_copy(update={"narrative": _render_v2_or_empty(render_v2, response)})
 
     @staticmethod
     def _clean_prices(prices: pd.DataFrame | None, tickers: list[str], as_of: date) -> pd.DataFrame:
@@ -691,7 +883,8 @@ def load_calibration(path: Path) -> Calibration:
     return Calibration(
         q_hat=float(data["q_hat"]),
         settings=settings,
-        backtest=BacktestSummary.model_validate(data["backtest"]),
+        backtest=BacktestSummary.model_validate(data.get("backtest", {"available": False})),
+        backtest_v2=BacktestSummaryV2.model_validate(data.get("backtest_v2", {"available": False})),
     )
 
 
