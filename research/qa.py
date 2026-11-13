@@ -195,9 +195,9 @@ class ResearchQA:
 
                 self._collection = chroma_client(self.chroma_dir).get_collection(COLLECTION_NAME)
             if self._embedder is None:
-                from research.embedder import OnnxEmbedder
+                from research.embedder import shared_embedder
 
-                self._embedder = OnnxEmbedder()
+                self._embedder = shared_embedder()
 
     def ready(self) -> bool:
         try:

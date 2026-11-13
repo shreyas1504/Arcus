@@ -22,3 +22,6 @@ frontend/package-lock.json
 frontend/playwright-fixture.ts
 frontend/playwright.config.ts
 linkedin-screenshots/
+
+# Scenario Lab raw data snapshot (scenario/data.py)
+scenario/raw/

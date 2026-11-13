@@ -7,6 +7,7 @@ normalization, 512-token truncation.
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -50,3 +51,21 @@ class OnnxEmbedder:
             cls = hidden[0, 0]
             vectors.append(cls / max(np.linalg.norm(cls), 1e-12))
         return np.asarray(vectors, dtype=np.float32)
+
+
+_shared: OnnxEmbedder | None = None
+_shared_lock = threading.Lock()
+
+
+def shared_embedder() -> OnnxEmbedder:
+    """The one OnnxEmbedder per process, shared by Research QA and Scenario Lab.
+
+    Loaded on first call from DEFAULT_MODEL_DIR; later calls return the same instance,
+    so the model sits in memory once (PLAN.md section 9).
+    """
+    global _shared
+    if _shared is None:
+        with _shared_lock:
+            if _shared is None:
+                _shared = OnnxEmbedder()
+    return _shared
