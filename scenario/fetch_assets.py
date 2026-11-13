@@ -23,7 +23,10 @@ ASSET_URL = os.getenv(
     "SCENARIO_ASSET_URL",
     "https://github.com/shreyas1504/Arcus/releases/download/scenario-assets-v1/arcus-scenario-assets-v1.tar.gz",
 )
-ASSET_SHA256 = os.getenv("SCENARIO_ASSET_SHA256", "")
+ASSET_SHA256 = os.getenv(
+    "SCENARIO_ASSET_SHA256",
+    "f7bffba12059a0de26f9a1364592cb41c1ecafb8d6578c0c238d2a61ed492b0a",
+)
 MEMBERS = ("library.npz", "library.json", "factor_history.npz", "calibration.json")
 
 
