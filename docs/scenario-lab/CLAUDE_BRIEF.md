@@ -2,6 +2,36 @@
 
 You are building the **numerical core** of Arcus Scenario Lab: contracts, data, library build, factor model, engine and backtest, plus the deploy. Cursor builds the parser, narrative, API, frontend and CI in parallel. `PLAN.md` in this folder is the spec. This brief tells you what to do and in what order.
 
+> ## ⚠️ v2 UPDATE (2026-11-13): read this first; it overrides the task list below where they differ
+> The user chose **plan v2: a stress test, not a forecast** (PLAN.md section "v2"). The C4 dev backtest proved forecasts were no better than guessing, while conditional replays are accurate. Tasks U4, U5 and C5 below are **redefined**, and the new tasks C4b and U4b come first. Pass marks H1–H5 and their fallbacks are fixed in PLAN v2 and **must not be changed** by either tool.
+>
+> **Staged hand-off.** CI stays green at every merge because v1 stays in place until the switch:
+> 1. **Stage 1: C4b-contract (Claude).** Adds the v2 models **next to** v1 in `scenario/schemas.py`:
+>    - `ScenarioHolding`, `ScenarioReplay`, `ExposureRank`, `Resilience`, `BacktestSummaryV2`, `WhatIfResponseV2`
+>    - stubs with exact docstrings: `WhatIfEngine.run_v2`, `crisis_events`, `recovery_bucket`, `exposure_ranking`, `resilience_summary` in `engine.py`, and `render_v2` in `narrative.py`
+>    - `FakeEngine.run_v2`, serving `frontend/src/lib/__fixtures__/whatif-response-v2.json`
+>    - contract tests
+>    
+>    Merged, then STATUS says **"C4b contract merged"**.
+> 2. **Stage 2, in parallel:**
+>    - **Claude (C4b-engine):** implements engine v2, the crisis set (`scenario/eval/crises.md`), the off-topic threshold (from `scenario/eval/controls.txt`), and the conditional backtest H1–H4 with recovery buckets. Then a dev run, `results.md` v2 and `calibration_dev.json` v2. **Doesn't read Cursor's v2 tests** until done.
+>    - **Cursor (U4b):**
+>      1. blind tests `backend/tests/test_scenario_engine_v2.py`, written from PLAN v2 and the stubs before the engine lands, marked `xfail(raises=NotImplementedError)`
+>      2. `render_v2` and its tests
+>      3. router: `POST /api/scenario/whatif` returns `WhatIfResponseV2` from `engine.run_v2` (FakeEngine with `SCENARIO_FAKE=1` until the real engine lands)
+>      4. page v2 + types + page tests against the v2 fixture
+> 3. **Stage 3:**
+>    - **U4 (Cursor):** the leakage review of the conditional backtest (PLAN v2 checklist).
+>    - **C5 (Claude):** the one-time holdout, only after the user writes "run holdout". It applies the pre-registered fallbacks, and writes `calibration.json`, the only file that makes the engine available.
+>    - **Then** U5, C6, U6.
+>    
+>    v1 `run()` and its tests stay until C6 cleanup; the page and router use v2 only.
+>
+> **Rules that still hold:**
+> - **Files:** own files only; blind tests are never edited by the implementer; disputes go in STATUS.md.
+> - **Release:** local merges only; nothing is pushed; `scripts/local_ci.sh` before every "ready to merge".
+> - **Data:** no fabricated data; no event facts from memory.
+
 ## Before every session
 1. Read `docs/scenario-lab/PLAN.md` in full, and `/Users/shreyas/Desktop/portfolio-risk-tracker/docs/scenario-lab/STATUS.md`.
 2. Find the first task below that isn't checked off in `STATUS.md` and whose "Needs" are met.
