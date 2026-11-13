@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_BASE_PATH?: string;
   /** Exposes the Arcus Research route and navigation item when set to "true". */
   readonly VITE_ENABLE_RESEARCH?: string;
+  readonly VITE_ENABLE_SCENARIOS?: string;
 }
 
 interface ImportMeta {

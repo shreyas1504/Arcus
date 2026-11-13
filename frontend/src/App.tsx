@@ -15,9 +15,11 @@ import Pricing from "./pages/Pricing.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import SandboxView from "./pages/SandboxView.tsx";
 import Research from "./pages/Research.tsx";
+import ScenarioLab from "./pages/ScenarioLab.tsx";
 
 const queryClient = new QueryClient();
 const researchEnabled = import.meta.env.VITE_ENABLE_RESEARCH === "true";
+const scenariosEnabled = import.meta.env.VITE_ENABLE_SCENARIOS === "true";
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -37,6 +39,7 @@ const App = () => (
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           {researchEnabled && <Route path="/dashboard/research" element={<Research />} />}
+          {scenariosEnabled && <Route path="/dashboard/scenarios" element={<ScenarioLab />} />}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
