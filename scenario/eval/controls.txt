@@ -1,0 +1,32 @@
+# Off-topic control questions (written 2026-11-13, before the low-confidence threshold was measured).
+# None of these describes a market shock. The threshold is max(0.5, 95th percentile of their best cosine).
+What is the best recipe for banana bread?
+How do I teach my dog to sit?
+Who painted the Mona Lisa?
+What if aliens land in Paris and ask for coffee?
+How many moons does Jupiter have?
+What is the plot of Hamlet?
+How do I fix a squeaky door hinge?
+What if my cat learns to play the piano?
+Which planet is closest to the sun?
+How long should I boil an egg?
+What if it rains chocolate tomorrow?
+How do penguins stay warm?
+What is the capital of Australia?
+How do I tie a bowline knot?
+What if dinosaurs came back to life in a theme park?
+Who wrote Pride and Prejudice?
+How do bees make honey?
+What if I paint my kitchen blue?
+How tall is Mount Everest?
+What is the rule of offside in football?
+How do I grow tomatoes on a balcony?
+What if a unicorn won the marathon?
+Why is the sky blue?
+How do I learn to juggle three balls?
+What if my neighbour builds a treehouse?
+What language is spoken in Brazil?
+How do I make sourdough starter?
+What if the moon were made of cheese?
+How do I clean a cast iron pan?
+What is the speed of sound in air?

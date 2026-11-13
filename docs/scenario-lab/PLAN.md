@@ -1,4 +1,4 @@
-# Arcus Scenario Lab: Phase 1 plan (final)
+# Arcus Scenario Lab: Phase 1 plan (v2: stress test)
 
 This replaces the Cursor plan `arcus_scenario_lab_236c8e25.plan.md`. Both Claude Code and Cursor build from this file. If the plan changes, change it here first.
 
@@ -12,8 +12,71 @@ This replaces the Cursor plan `arcus_scenario_lab_236c8e25.plan.md`. Both Claude
 ## Approved changes (newest first)
 | Date | Change | Why |
 |---|---|---|
+| 2026-11-13 | **Phase 1 becomes a stress test, not a forecast** (section "v2" below). The forecast gate in section 2b is superseded. Adds a crisis replay and a recovery-time accuracy test. | C4 dev backtest: forecasts were no better than predicting zero (MAE 5.60% vs 5.54%, rank 0.03), while conditional replays were strong (MAE 1.65% vs 2.04% for beta × S&P, rank 0.46). |
 | 2026-11-13 | **Adverse vs favorable in the question.** `ParsedScenario.nature` (optional). The parser classifies the question; the engine subtracts `nature_penalty` from precedents of the opposite nature. Default 0; C4 tunes it on dev and keeps it only if it helps. | A real-data run matched "China blockades Taiwan" to the 2025 US–China *truce*. |
 | 2026-11-13 | **Recovery is measured from the trough within the 63-day shock window**, not over the whole 504 days. | Over 504 days a later, unrelated crash (2008 after an Aug 2006 precedent) counted as "never recovered" from a 2006 shock that recovered in 4 days. |
+
+## v2. The stress test (approved 2026-11-13; supersedes the forecast product)
+
+### What the user gets
+Arcus answers **"if something like this happens, what does it do to my portfolio, company by company?"** It doesn't answer "what will happen next".
+
+1. **Scenario replay.** For the question, Arcus shows the closest past shocks (up to 5), each replayed on the user's holdings:
+   - **Each holding's 21-day move:** `actual` if it traded then, otherwise `estimated` from its factor betas × that shock's real factor moves.
+   - **The portfolio:** its 21-day move, worst fall within 3 months, and time to get back to the start.
+   - **Comparison:** the S&P 500's move in the same shock.
+2. **Exposure ranking.** Which holdings take the biggest share of the damage across those scenarios, for example "NVDA was your most exposed holding in 4 of 5".
+3. **Historical span.** "Across these N shocks your portfolio moved between X and Y." This is the min and max of the replays. It's labelled as history; there's **no calibrated forecast range and no "typical outcome"**.
+4. **Crisis replay.** A fixed set of major crises (rule below) replayed on the holdings, with the worst fall in 3 months, recovery time, the most exposed holding, and a comparison with the S&P.
+5. **Resilience summary.** For example, "your portfolio fell more than the S&P in 3 of 5 crises; 2 holdings drove most of the damage".
+6. **Plain-words limits** on the page: Arcus can't predict whether or when a crisis happens. Each replay shows what happened, applied to today's holdings.
+
+**Crisis set rule** (fixed now, computed from the library, never hand-picked): an event is a crisis if the S&P's worst fall within its 63-day window was −10% or worse. Only the first event per `cluster_id` counts. The list is published in `scenario/eval/crises.md`.
+
+**Low confidence.** Shown when no past shock is close enough. The threshold is calibrated on dev before the holdout: it's the larger of 0.5 and the 95th percentile of the best cosine for 30 off-topic control questions (in `scenario/eval/controls.txt`, written before the threshold is measured). Low confidence then shows the crisis replay only, with "no close precedent".
+
+### Accuracy gate v2 (pass marks fixed 2026-11-13, before any test against them)
+Everything is measured **conditionally**:
+- Each test event is treated as the scenario.
+- Betas are fitted only on prices before it.
+- The estimate uses that event's real factor moves.
+- The estimate is compared with the stocks' real moves.
+
+That's exactly the claim the page makes. As before, metrics are event-weighted with 90% event-bootstrap intervals, over the same portfolios as C4.
+
+| # | Metric | Pass mark | Dev (C4 diagnostics) |
+|---|---|---|---|
+| H1 | 21-day portfolio MAE, factor estimate vs beta × S&P | ≥ 10% lower | 1.65% vs 2.04% (19% lower), at α 0.1 |
+| H2 | Holding ranking (Spearman, within each scenario) | ≥ 0.30 | 0.46 |
+| H3 | Worst fall within 63 days, MAE, factor vs beta × S&P path | ≥ 10% lower | not yet measured |
+| H4 | **Recovery time.** Buckets: never fell, 1–21, 22–63, 64–126, 127–252, 253–504 days, not within 504. Estimated (factor path) vs actual, on cases whose real recovery is known. | within one bucket ≥ 75% **and** exact-bucket rate ≥ the beta × S&P baseline's | not yet measured |
+| H5 | H1–H3 point the same way on dev and holdout | must match | |
+
+**Pre-registered fallbacks:**
+- **If H4 fails:** recovery time is shown only where it comes from **actual** prices. Estimated holdings show "recovery not estimated", and the crisis replay says so.
+- **If H1, H2 or H3 fail:** stop again, and the user decides.
+
+**Tuning (dev only):** ridge `alpha` (0.1 or 1.0) and stress betas (on or off), by H1 then H2. `category_bonus` and `nature_penalty` affect relevance, not accuracy; they stay at the dev-tuned values from C4 (0.0 and 0.3), and the off-topic controls check them.
+
+### Response contract v2 (replaces `PortfolioOutcome`, `HoldingImpact` and `PathSeries` in the answer)
+- `ScenarioHolding`: `ticker`, `weight`, `sector`, `return_21d`, `contribution`, `source` (`actual`, `estimated` or `estimated_low_history`), `recovery_days` (`int`, or `None` if not recovered or not estimated).
+- `ScenarioReplay`:
+  - **Event:** `event_id`, `name`, `date`, `category`, `nature`, `trigger`, `similarity` (`None` for crisis rows), `source_url`
+  - **Portfolio:** `portfolio_return_21d`, `sp500_return_21d`, `worst_drawdown_63d`, `sp500_worst_drawdown_63d`, `recovery_days`, `recovery_known` (bool), `recovery_source` (`actual`, `estimated` or `mixed`), `path` (0–63)
+  - **Holdings:** `holdings: list[ScenarioHolding]`
+- `ExposureRank`: `ticker`, `mean_contribution`, `most_exposed_count`, `scenarios`.
+- `WhatIfResponse` v2: `scenario`, `parsed`, `as_of`, `confidence`, `scenarios: list[ScenarioReplay]` (up to 5), `span_low`, `span_high` (min and max of `portfolio_return_21d`; `None` if no scenarios), `exposure: list[ExposureRank]`, `crises: list[ScenarioReplay]`, `resilience` (`worse_than_sp500`, `crises_total`, `top_drivers`), `skipped`, `narrative`, `backtest` (v2 metrics H1–H4 with confidence intervals), `remaining_today`.
+- **Narrative v2:** per-scenario sentences ("If it plays out like Lehman (2008), your portfolio moved −18%; NVDA and JPM drove 70% of it"), the span sentence, the resilience sentence, and the limits sentence. Every number is still traceable, and there are still no advice words.
+
+### Tasks v2 (the Wave 5+ table in section 4 is replaced by this)
+| Task | Owner | Needs | What |
+|---|---|---|---|
+| C4b | Claude | this plan | Contract v2 (schemas and fixture) **first**, so Cursor can start. Then engine v2 (scenario replays, exposure, crises, resilience), the crisis set, off-topic controls and threshold, and the conditional backtest H1–H4 with recovery buckets. Then a dev run, `results.md` v2 and `calibration_dev.json` v2. |
+| U4b | Cursor | C4b contract merged | Page v2 (scenario table per holding, exposure ranking, historical span, crisis replay panel, resilience summary, limits text), API types, narrative v2, page tests |
+| U4 | Cursor | C4b done | Leakage review of the conditional backtest (the U4 checklist, plus: estimates use pre-event betas only; recovery "known" means observed, never assumed) |
+| C5 | Claude | U4 and the user's "run holdout" | One holdout run of H1–H5. Apply the pre-registered fallbacks. Write `calibration.json` (this alone makes the engine available). |
+| U5, C6, U6 | as before | | Accuracy panel (v2 metrics), deploy, Phase 1b |
+
 
 ## 0. Where things stand (checked 2026-11-13)
 
@@ -54,7 +117,7 @@ This replaces the Cursor plan `arcus_scenario_lab_236c8e25.plan.md`. Both Claude
 
 Precedents for any event come only from events dated before it, with overlapping windows purged. This holds in dev and holdout alike.
 
-## 2b. Accuracy targets (the ship gate)
+## 2b. Accuracy targets (the ship gate) — SUPERSEDED by gate v2 above (the forecast failed on dev in C4)
 
 The goal is **not** to predict the exact return. It is:
 - an honest range
