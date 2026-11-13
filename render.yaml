@@ -4,7 +4,9 @@ services:
     runtime: python
     # Research serves from a prebuilt index and an ONNX embedder downloaded at
     # build time (research/fetch_assets.py), so it fits the free plan's 512 MB.
-    buildCommand: pip install -r backend/requirements-research.txt && python -m research.fetch_assets
+    # Scenario Lab downloads its event library and calibration the same way
+    # (scenario/fetch_assets.py, SHA256-checked); it adds about 5-15 MB.
+    buildCommand: pip install -r backend/requirements-research.txt && python -m research.fetch_assets && python -m scenario.fetch_assets
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: NVIDIA_API_KEY
@@ -15,6 +17,11 @@ services:
         value: "true"
       - key: RESEARCH_DATA_DIR
         value: research/data
+      # Scenario Lab stays off until the user turns it on (with VITE_ENABLE_SCENARIOS).
+      - key: SCENARIO_ENABLED
+        value: "false"
+      - key: SCENARIO_ASSETS_DIR
+        value: scenario/assets
       - key: AUTOMATION_KEY
         sync: false
       - key: RATE_LIMIT_SALT

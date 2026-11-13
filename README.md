@@ -422,6 +422,79 @@ depending on which filing is retrieved.
 
 ---
 
+## Arcus Scenario Lab
+
+Ask "what if China blockades Taiwan?" and Scenario Lab replays the closest **real**
+past market shocks on your exact holdings, company by company:
+
+- each holding's 21-day move in that shock: its **actual** move if it traded then,
+  otherwise an **estimate** from its sensitivity to the S&P 500, its sector, rates and oil
+- the portfolio's move, its worst fall within three months, and how long it took to recover
+- which holdings drove the damage, and a replay of seven major crises (2000, 9/11, 2008,
+  2010, 2011, COVID, 2025 tariffs) with how often the portfolio fell harder than the S&P
+
+**It is a stress test, not a forecast.** The language model only interprets the question;
+every number comes from price history or a tested factor model. Arcus cannot predict
+whether or when a shock happens. An early version that tried to forecast the next month
+was no better than predicting no change, so it was dropped
+(`scenario/eval/results_forecast_v1.md`).
+
+```mermaid
+flowchart LR
+    Q[Question] --> P[Nemotron parse: category, adverse or favorable]
+    P --> R[BGE search over 144 verified shocks]
+    R --> H[Per-holding replay: actual prices or factor betas x the shock's real moves]
+    H --> O[Portfolio move, worst fall, recovery, exposure]
+    C[Crisis set: S&P -10% within 21 days] --> H
+    O --> N[Template narrative, numbers only from the replay]
+    N --> UI[Scenario Lab page]
+```
+
+### Accuracy (tested once on 32 unseen 2023+ shocks)
+
+Each test shock is treated as the scenario: betas use only prices before it, the estimate
+uses that shock's real factor moves, and the result is compared with what the stocks
+actually did, over 200 random portfolios and 6 archetypes per shock. The pass marks were
+fixed before any test (`docs/scenario-lab/PLAN.md`, section v2).
+
+| Check | 2023+ holdout [90% CI] | Pass mark |
+|---|---|---|
+| Portfolio 21-day move vs beta × S&P | 24% lower error [20, 29] (1.6% vs 2.2%) | ≥ 10% lower |
+| Ranking which holdings get hit hardest | Spearman 0.47 [0.42, 0.51] | ≥ 0.30 |
+| Worst fall within 63 days vs beta × S&P | 23% lower error [19, 27] | ≥ 10% lower |
+| Recovery time (7 buckets) | within one bucket 93%; exact 70% vs 59% for beta | ≥ 75%, and beat beta |
+
+The 1999–2022 dev results are similar (`scenario/eval/results.md`). Caveats: the stock
+universe is today's large caps (survivorship bias), and 128 events were scored (96 dev, 32 holdout),
+so intervals are wide. See `scenario/MODEL_CARD.md`.
+
+### How it's built
+
+- **Event library:** 144 shocks from 1999 to 2026, each with a source page and a verbatim
+  quote, written by one tool and verified by another (`scenario/events/`,
+  `scripts/verify_event_sources.py`). Dates follow the 4 pm, weekend and holiday rule.
+- **Market data:** SPY, nine sector ETFs, SOXX, the 10-year yield, Brent, VIX, the credit
+  spread, and the daily geopolitical-risk and policy-uncertainty indexes, snapshotted
+  with SHA256 (`scenario/data.py`). Nothing is filled in or interpolated.
+- **Library build:** 504-day factor paths, day -1 market context and an embedding per
+  event; byte-identical rebuilds (`scenario/build_library.py`).
+- **Engine:** ridge factor model on the three years before the question
+  (`scenario/factors.py`) and the replay engine (`scenario/engine.py`).
+- **Backtest:** `scenario/backtest.py` (`dev-v2`, then a one-time `holdout`).
+
+### Local setup
+
+```bash
+python -m scenario.data                 # market data snapshot -> scenario/raw/
+python -m scenario.build_library        # -> scenario/assets/
+python -m scenario.backtest download-universe
+python -m scenario.backtest dev-v2      # dev results, threshold, crisis set
+export SCENARIO_ENABLED=true VITE_ENABLE_SCENARIOS=true
+```
+
+To serve from the published library instead of rebuilding it, run
+`python -m scenario.fetch_assets`.
+
 ## Disclaimer
 
 This tool is for educational and demonstration purposes only. It does not constitute financial advice. Always do your own research before making investment decisions.
