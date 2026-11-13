@@ -102,6 +102,9 @@ def _top_driver_names(replay: ScenarioReplay, *, limit: int = 2) -> tuple[list[s
 def _scenario_sentence(replay: ScenarioReplay) -> str:
     year = replay.date.year
     moved = _pct(replay.portfolio_return_21d)
+    # When the move rounds to 0.0%, naming a "gain" or "loss" driver is misleading.
+    if moved == "0.0%":
+        return f"If it plays out like {replay.name} ({year}), this portfolio moved {moved}."
     drivers, kind = _top_driver_names(replay)
     if drivers and kind:
         who = " and ".join(drivers)

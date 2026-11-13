@@ -86,6 +86,9 @@ describe('ScenarioLab v2', () => {
     expect(screen.getByTestId('exposure-DEMO1')).toHaveTextContent('3 of 3');
 
     expect(screen.getByTestId('crisis-replay')).toBeInTheDocument();
+    expect(screen.getByTestId('crisis-rule')).toHaveTextContent(/within 21 trading days/i);
+    expect(screen.getByTestId('crisis-rule')).toHaveTextContent(/overlapping events merged/i);
+    expect(screen.getByTestId('crisis-rule')).not.toHaveTextContent(/within 63 days/i);
     expect(screen.getByTestId('crisis-example-bank-collapse')).toHaveTextContent('Example: bank collapse');
     expect(screen.getByTestId('crisis-example-pandemic-crash')).toBeInTheDocument();
 
@@ -99,7 +102,12 @@ describe('ScenarioLab v2', () => {
     const accuracy = screen.getByTestId('accuracy-panel');
     expect(accuracy).toBeInTheDocument();
     expect(screen.getByTestId('accuracy-holdout-note')).toHaveTextContent(/32 events from 2023/i);
-    expect(screen.getByTestId('accuracy-gate')).toHaveTextContent(/holdout gate passed/i);
+    const gate = screen.getByTestId('accuracy-gate');
+    expect(gate).toHaveTextContent(/holdout gate passed/i);
+    // Readable contrast: foreground text on background, not low-contrast green-on-green.
+    expect(gate.className).toMatch(/text-foreground/);
+    expect(gate.className).toMatch(/bg-background/);
+    expect(gate.className).not.toMatch(/bg-emerald/);
     expect(screen.getByTestId('accuracy-holdout-events')).toHaveTextContent('32');
     expect(screen.getByTestId('accuracy-h1')).toHaveTextContent(/1\.6 pts/);
     expect(screen.getByTestId('accuracy-h2')).toHaveTextContent('0.47');
@@ -122,6 +130,26 @@ describe('ScenarioLab v2', () => {
 
     expect(await screen.findByTestId('accuracy-gate')).toHaveTextContent(/did not pass/i);
     expect(screen.getByTestId('accuracy-gate')).toHaveTextContent(/where it missed/i);
+  });
+
+  it('labels a flat most-exposed holding as about flat, not −0.0%', async () => {
+    const crisis = response.crises[0];
+    const flatHoldings = crisis.holdings.map((holding, index) => ({
+      ...holding,
+      return_21d: index === 0 ? -0.0004 : 0.0002,
+      contribution: index === 0 ? -0.0002 : 0.0001,
+    }));
+    // Renormalize so contributions sum to the portfolio return field the schema requires.
+    const total = flatHoldings.reduce((sum, h) => sum + h.contribution, 0);
+    mockFetch(jsonResponse({
+      ...response,
+      crises: [{ ...crisis, holdings: flatHoldings, portfolio_return_21d: total }],
+    }));
+    renderPage();
+    ask();
+
+    expect(await screen.findByTestId(`crisis-most-exposed-${crisis.event_id}`)).toHaveTextContent(/about flat/i);
+    expect(screen.queryByText('−0.0%')).not.toBeInTheDocument();
   });
 
   it('tags holdings in the scenario table as actual or estimated', async () => {

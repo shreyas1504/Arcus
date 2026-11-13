@@ -49,11 +49,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   election_political: 'Election and political',
 };
 
-const formatReturn = (value: number | null | undefined): string => {
+/** Round to one decimal for display; values that round to zero show as "0.0%" (not "−0.0%"). */
+export const formatReturn = (value: number | null | undefined): string => {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
   const pct = value * 100;
-  const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
-  return `${sign}${Math.abs(pct).toFixed(1)}%`;
+  const rounded = Math.abs(pct).toFixed(1);
+  if (rounded === '0.0') return '0.0%';
+  const sign = pct > 0 ? '+' : '−';
+  return `${sign}${rounded}%`;
 };
 
 const formatRecovery = (replay: ScenarioReplay): string => {
@@ -64,9 +67,13 @@ const formatRecovery = (replay: ScenarioReplay): string => {
 };
 
 const returnTone = (value: number | null | undefined): string => {
-  if (value === null || value === undefined || value === 0) return 'text-foreground';
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'text-foreground';
+  if (Math.abs(value * 100).toFixed(1) === '0.0') return 'text-foreground';
   return value < 0 ? 'text-destructive' : 'text-emerald-500';
 };
+
+const roundsToFlat = (value: number | null | undefined): boolean =>
+  value !== null && value !== undefined && Number.isFinite(value) && Math.abs(value * 100).toFixed(1) === '0.0';
 
 function holdingMap(replay: ScenarioReplay): Map<string, ScenarioReplay['holdings'][number]> {
   return new Map(replay.holdings.map((holding) => [holding.ticker, holding]));
@@ -190,11 +197,17 @@ function CrisisPanel({ crises }: { crises: ScenarioReplay[] }) {
   return (
     <div className="space-y-3" data-testid="crisis-replay">
       <h2 className="font-display text-sm font-semibold text-foreground">Crisis replay</h2>
-      <p className="text-xs leading-5 text-muted-foreground">
-        Fixed major crises (S&amp;P worst fall of −10% or worse within 63 days), replayed on your holdings.
+      <p className="text-xs leading-5 text-muted-foreground" data-testid="crisis-rule">
+        Fixed major crises (S&amp;P worst fall of −10% or worse within 21 trading days, overlapping events
+        merged), replayed on your holdings.
       </p>
       {crises.map((crisis) => {
         const mostExposed = [...crisis.holdings].sort((a, b) => a.contribution - b.contribution || a.ticker.localeCompare(b.ticker))[0];
+        const mostExposedLabel = !mostExposed
+          ? '—'
+          : roundsToFlat(mostExposed.contribution)
+            ? `${mostExposed.ticker} (about flat)`
+            : mostExposed.ticker;
         return (
           <Card key={crisis.event_id} className="p-4" data-testid={`crisis-${crisis.event_id}`}>
             <div className="flex items-start justify-between gap-3">
@@ -245,7 +258,9 @@ function CrisisPanel({ crises }: { crises: ScenarioReplay[] }) {
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Most exposed</dt>
-                <dd className="font-mono">{mostExposed?.ticker ?? '—'}</dd>
+                <dd className="font-mono" data-testid={`crisis-most-exposed-${crisis.event_id}`}>
+                  {mostExposedLabel}
+                </dd>
               </div>
             </dl>
           </Card>
@@ -316,10 +331,10 @@ function AccuracyPanel({ backtest }: { backtest: BacktestSummaryV2 }) {
           <div
             role="status"
             data-testid="accuracy-gate"
-            className={`rounded-lg border px-3 py-2 text-sm ${
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
               backtest.gate_passed
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                : 'border-destructive/30 bg-destructive/10 text-destructive'
+                ? 'border-foreground/40 bg-background text-foreground'
+                : 'border-destructive bg-destructive/10 text-destructive'
             }`}
           >
             {backtest.gate_passed

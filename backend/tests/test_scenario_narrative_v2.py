@@ -119,6 +119,38 @@ def test_gain_names_positive_contributors():
     assert "drove most of the loss" not in text
 
 
+def test_flat_move_omits_driver_clause():
+    # A tiny negative that rounds to 0.0% must not say someone "drove most of the loss".
+    response = _base()
+    replay = response.scenarios[0]
+    holdings = [
+        replay.holdings[0].model_copy(update={
+            "ticker": "AAPL", "weight": 0.5, "return_21d": -0.0004, "contribution": -0.0002,
+        }),
+        replay.holdings[1].model_copy(update={
+            "ticker": "XOM", "weight": 0.5, "return_21d": 0.0002, "contribution": 0.0001,
+        }),
+    ]
+    # Drop the third holding so contributions sum to portfolio_return_21d.
+    port = sum(h.contribution for h in holdings)
+    replay = replay.model_copy(update={
+        "holdings": holdings,
+        "portfolio_return_21d": port,
+        "path": [0.0] + [port * t / 63 for t in range(1, 63)] + [port],
+    })
+    response = response.model_copy(update={
+        "scenarios": [replay],
+        "span_low": port,
+        "span_high": port,
+        "exposure": [],
+        "crises": [],
+        "resilience": None,
+    })
+    text = render_v2(response)
+    assert "this portfolio moved 0.0%" in text
+    assert "drove most of" not in text
+
+
 def test_resilience_sentence():
     text = render_v2(_base())
     assert "fell more than the S&P in 1 of 2 crises" in text
